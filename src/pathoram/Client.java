@@ -1,6 +1,8 @@
 package pathoram;
 
 
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,12 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
 
 import org.apache.commons.lang3.SerializationUtils;
 
@@ -22,7 +30,11 @@ public class Client {
 	private static final Integer TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
 	private static Server s;
 	private static Random r = new Random();
-	public static void main(String[] args) {
+	private static SecretKey key;
+	public static void main(String[] args) throws NoSuchAlgorithmException {
+		KeyGenerator kg = KeyGenerator.getInstance("AES");
+		kg.init(128);
+		key = kg.generateKey();
 		s=new Server(TREE_SIZE);
 		
 		Scanner sc=new Scanner(System.in);
@@ -54,17 +66,17 @@ public class Client {
 		}
 	}
 	private static Short access(Operation op,Short a, Short newData) {
-		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(s.getPositionMap());
+		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(decrypt(s.getPositionMap()));
 		Integer oldPosition = positionMap.get(a);
 		if(oldPosition==null)
 			oldPosition=r.nextInt(TREE_SIZE/2+1);
 		positionMap.put(a, r.nextInt(TREE_SIZE/2+1));
-		TreeMap<Short, Short> stash=SerializationUtils.deserialize(s.getStash());
+		TreeMap<Short, Short> stash=SerializationUtils.deserialize(decrypt(s.getStash()));
 		List<Bucket> path = new ArrayList<>(1);
 		if(oldPosition!=null) {
 			path = s.getData(oldPosition).stream()
-					.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(b))
-					.toList();
+					.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
+					.collect(Collectors.toList());
 		}
 		for(Bucket b : path) {
 			if(b!=null)
@@ -93,17 +105,17 @@ public class Client {
 					.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 					.collect(Collectors.toList()));
 			
-			newPath.put(l, SerializationUtils.serialize(b));
+			newPath.put(l, encrypt(SerializationUtils.serialize(b)));
 		}
 		System.out.println("positionMap"+positionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.collect(Collectors.toList()));
-		s.doEviction(SerializationUtils.serialize(positionMap),
-				SerializationUtils.serialize(stash), oldPosition,
+		s.doEviction(encrypt(SerializationUtils.serialize(positionMap)),
+				encrypt(SerializationUtils.serialize(stash)), oldPosition,
 				newPath);
 		List<Bucket> tree = s.getTree().stream()
-				.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(b))
-				.toList();
+				.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
+				.collect(Collectors.toList());
 		System.out.println("TREE");
 		for (Bucket bucket : tree) {
 			if(bucket!=null) {
@@ -116,15 +128,50 @@ public class Client {
 				
 			
 		}
-		/*s.getTree().stream()
-				.map(b -> v.addAll(((Bucket)SerializationUtils.deserialize(b)).readBucket().entrySet()));
-		System.out.println("Tree"+v.stream()
-				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
-				.collect(Collectors.toList()));*/
 		return data;
 	}
 	 
 	
+	private static byte[] decrypt(byte[] strToDecrypt) {
+	    try {
+	    	Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+		    cipher.init(Cipher.DECRYPT_MODE, key);
+			return cipher.doFinal(strToDecrypt);
+		} catch (IllegalBlockSizeException | BadPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NoSuchPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	private static byte[] encrypt(byte[] strToEncrypt) {
+	    try {
+	    	Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+		    cipher.init(Cipher.ENCRYPT_MODE, key);
+			return cipher.doFinal(strToEncrypt);
+		} catch (IllegalBlockSizeException | BadPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NoSuchPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
 	private static List<Integer> checkPaths(Integer oldPosition, int level) {
 		ArrayList<Integer> a = new ArrayList<Integer>();
 		if(level==TREE_LEVELS-1) {
