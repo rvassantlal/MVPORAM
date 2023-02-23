@@ -28,7 +28,6 @@ import structure.Operation;
 public class Client {
 	private static final Integer TREE_SIZE = 7;
 	private static final Integer TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
-	private static Server s;
 	private static Random r = new Random();
 	private static SecretKey key;
 	public static void main(String[] args) throws NoSuchAlgorithmException {

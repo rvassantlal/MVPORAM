@@ -11,13 +11,18 @@ private static Integer TREE_LEVELS;
 private byte[] positionMap = SerializationUtils.serialize(new TreeMap<Short,Integer>());
 private byte[] stash = SerializationUtils.serialize(new TreeMap<Short,Short>());
 private TreeMap<Integer,byte[]> tree= new TreeMap<>();
+private final ServiceReplica replica;
 
-public Server(int size) {
+public static void main(String[] args) {
+    new Server(Integer.parseInt(args[1]),Integer.parseInt(args[0]));
+}
+public Server(int size,int id) {
 	TREE_SIZE=size;
 	TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
 	for (int i = 0; i <TREE_SIZE; i++) {
 		tree.put(i, null);
 	}
+	replica = new ServiceReplica(id, this, this);
 }
 public byte[] getPositionMap() {
 	return positionMap;
