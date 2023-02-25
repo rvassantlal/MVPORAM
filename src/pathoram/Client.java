@@ -2,14 +2,11 @@ package pathoram;
 
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -28,9 +25,7 @@ import javax.crypto.SecretKey;
 
 import org.apache.commons.lang3.SerializationUtils;
 
-import bftsmart.demo.pathoram.structure.Bucket;
-import bftsmart.demo.pathoram.structure.FourTuple;
-import bftsmart.demo.pathoram.structure.Operation;
+import structure.*;
 import bftsmart.tom.ServiceProxy;
 
 public class Client {
@@ -38,9 +33,9 @@ public class Client {
 	private static final Integer TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
 	private static Random r = new Random();
 	private static SecretKey key;
-	private static ServiceProxy pathOramProxy;
+	private static ServiceProxy pathOramProxy = null;
 	public static void main(String[] args) throws NoSuchAlgorithmException {
-		ServiceProxy pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));
+		pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));
 		KeyGenerator kg = KeyGenerator.getInstance("AES");
 		kg.init(128);
 		key = kg.generateKey();
@@ -136,7 +131,7 @@ public class Client {
         	ByteArrayOutputStream out = new ByteArrayOutputStream();
             ObjectOutputStream oout = new ObjectOutputStream(out);
 			oout.writeInt(ServerOperationType.EVICT);
-			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple(encrypt(SerializationUtils.serialize(positionMap)),
+			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>>(encrypt(SerializationUtils.serialize(positionMap)),
 					encrypt(SerializationUtils.serialize(stash)), oldPosition,
 					newPath);
 	        oout.write(SerializationUtils.serialize(obj));
