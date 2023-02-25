@@ -1,11 +1,22 @@
 package pathoram;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
 import org.apache.commons.lang3.SerializationUtils;
 
-public class Server {
+import bftsmart.demo.pathoram.structure.FourTuple;
+import bftsmart.tom.MessageContext;
+import bftsmart.tom.ServiceReplica;
+import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
+
+public class Server extends DefaultSingleRecoverable{
 private static Integer TREE_SIZE;
 private static Integer TREE_LEVELS;
 private byte[] positionMap = SerializationUtils.serialize(new TreeMap<Short,Integer>());
@@ -58,6 +69,56 @@ private void put(Integer pathID, TreeMap<Integer,byte[]> newPath) {
 		location=location%2==0?location-2:location-1;
 		location/=2;
 	}
+}
+@Override
+public void installSnapshot(byte[] state) {
+	// TODO Auto-generated method stub
+	
+}
+@Override
+public byte[] getSnapshot() {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public byte[] appExecuteOrdered(byte[] command, MessageContext msgCtx) {
+	ByteArrayInputStream in = new ByteArrayInputStream(command);
+    int cmd;
+	try {
+		cmd = new DataInputStream(in).readInt();
+		ByteArrayOutputStream out;
+		switch (cmd) {
+			case ServerOperationType.GET_POSITION_MAP:
+	    		return getPositionMap();
+			case ServerOperationType.GET_STASH:
+				return getStash();
+			case ServerOperationType.GET_DATA:
+				int pathId = new DataInputStream(in).readInt();
+				out = new ByteArrayOutputStream();
+                new ObjectOutputStream(out).writeObject(getData(pathId));
+				return out.toByteArray();
+			case ServerOperationType.EVICT:
+				FourTuple<byte[],byte[],Integer,TreeMap<Integer,byte[]>> evict = SerializationUtils.deserialize(in.readAllBytes());
+				doEviction(evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth());
+				out = new ByteArrayOutputStream();
+                new ObjectOutputStream(out).writeBoolean(true);
+				return out.toByteArray();
+			case ServerOperationType.GET_TREE:
+				out = new ByteArrayOutputStream();
+                new ObjectOutputStream(out).writeObject(getTree());
+				return out.toByteArray();
+	    	
+	    }
+	} catch (IOException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
+    return null;
+}
+@Override
+public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
+	// TODO Auto-generated method stub
+	return null;
 }
 
 }

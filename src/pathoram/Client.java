@@ -1,9 +1,15 @@
 package pathoram;
 
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,19 +28,22 @@ import javax.crypto.SecretKey;
 
 import org.apache.commons.lang3.SerializationUtils;
 
-import structure.Bucket;
-import structure.Operation;
+import bftsmart.demo.pathoram.structure.Bucket;
+import bftsmart.demo.pathoram.structure.FourTuple;
+import bftsmart.demo.pathoram.structure.Operation;
+import bftsmart.tom.ServiceProxy;
 
 public class Client {
 	private static final Integer TREE_SIZE = 7;
 	private static final Integer TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
 	private static Random r = new Random();
 	private static SecretKey key;
+	private static ServiceProxy pathOramProxy;
 	public static void main(String[] args) throws NoSuchAlgorithmException {
+		ServiceProxy pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));
 		KeyGenerator kg = KeyGenerator.getInstance("AES");
 		kg.init(128);
 		key = kg.generateKey();
-		s=new Server(TREE_SIZE);
 		
 		Scanner sc=new Scanner(System.in);
 		Boolean execute=true;
@@ -65,17 +74,31 @@ public class Client {
 		}
 	}
 	private static Short access(Operation op,Short a, Short newData) {
-		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(decrypt(s.getPositionMap()));
+		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(
+				decrypt(pathOramProxy.invokeOrdered(
+						SerializationUtils.serialize(ServerOperationType.GET_POSITION_MAP))));
 		Integer oldPosition = positionMap.get(a);
 		if(oldPosition==null)
 			oldPosition=r.nextInt(TREE_SIZE/2+1);
 		positionMap.put(a, r.nextInt(TREE_SIZE/2+1));
-		TreeMap<Short, Short> stash=SerializationUtils.deserialize(decrypt(s.getStash()));
+		TreeMap<Short, Short> stash=SerializationUtils.deserialize(
+				decrypt(pathOramProxy.invokeOrdered(
+						SerializationUtils.serialize(ServerOperationType.GET_STASH))));
 		List<Bucket> path = new ArrayList<>(1);
 		if(oldPosition!=null) {
-			path = s.getData(oldPosition).stream()
-					.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
-					.collect(Collectors.toList());
+			try {
+				ByteArrayOutputStream out = new ByteArrayOutputStream();
+	            ObjectOutputStream oout = new ObjectOutputStream(out);
+				oout.writeInt(ServerOperationType.GET_DATA);
+				oout.writeInt(oldPosition);
+				path = ((List<byte[]>) SerializationUtils.deserialize(pathOramProxy.invokeOrdered(out.toByteArray()))).stream()
+						.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
+						.collect(Collectors.toList());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+            
 		}
 		for(Bucket b : path) {
 			if(b!=null)
@@ -109,10 +132,23 @@ public class Client {
 		System.out.println("positionMap"+positionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.collect(Collectors.toList()));
-		s.doEviction(encrypt(SerializationUtils.serialize(positionMap)),
-				encrypt(SerializationUtils.serialize(stash)), oldPosition,
-				newPath);
-		List<Bucket> tree = s.getTree().stream()
+        try {
+        	ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ObjectOutputStream oout = new ObjectOutputStream(out);
+			oout.writeInt(ServerOperationType.EVICT);
+			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple(encrypt(SerializationUtils.serialize(positionMap)),
+					encrypt(SerializationUtils.serialize(stash)), oldPosition,
+					newPath);
+	        oout.write(SerializationUtils.serialize(obj));
+			pathOramProxy.invokeOrdered(out.toByteArray());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        
+		/* FOR DEBUG PURPOSES, can be used in junit
+		 * List<Bucket> tree = ((List<byte[]>) SerializationUtils.deserialize(pathOramProxy.invokeOrdered(
+				SerializationUtils.serialize(ServerOperationType.GET_TREE)))).stream()
 				.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
 				.collect(Collectors.toList());
 		System.out.println("TREE");
@@ -126,7 +162,7 @@ public class Client {
 			}
 				
 			
-		}
+		}*/
 		return data;
 	}
 	 
