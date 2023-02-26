@@ -4,8 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.TreeMap;
 
 import org.apache.commons.lang3.SerializationUtils;
@@ -17,6 +15,7 @@ import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 
 public class Server extends DefaultSingleRecoverable{
 	
+	@SuppressWarnings("unused")
 	private ServiceReplica replica = null;
 	private Oram serverOram;
 

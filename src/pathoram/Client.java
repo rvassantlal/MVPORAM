@@ -86,7 +86,8 @@ public class Client {
 	            ObjectOutputStream oout = new ObjectOutputStream(out);
 				oout.writeInt(ServerOperationType.GET_DATA);
 				oout.writeInt(oldPosition);
-				path = ((List<byte[]>) SerializationUtils.deserialize(pathOramProxy.invokeOrdered(out.toByteArray()))).stream()
+				List<byte[]> list = SerializationUtils.deserialize(pathOramProxy.invokeOrdered(out.toByteArray()));
+				path =	list.stream()
 						.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
 						.collect(Collectors.toList());
 			} catch (IOException e) {

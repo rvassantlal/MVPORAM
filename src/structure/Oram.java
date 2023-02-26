@@ -9,6 +9,7 @@ import org.apache.commons.lang3.SerializationUtils;
 
 
 public class Oram implements Serializable{
+	private static final long serialVersionUID = -4459879580826094264L;
 	private static Integer TREE_SIZE;
 	private static Integer TREE_LEVELS;
 	private byte[] positionMap = SerializationUtils.serialize(new TreeMap<Short,Integer>());
