@@ -29,11 +29,10 @@ import structure.*;
 import bftsmart.tom.ServiceProxy;
 
 public class Client {
-	private static final Integer TREE_SIZE = 7;
-	private static final Integer TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
 	private static Random r = new Random();
 	private static SecretKey key;
 	private static ServiceProxy pathOramProxy = null;
+	
 	public static void main(String[] args) throws NoSuchAlgorithmException {
 		pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));
 		KeyGenerator kg = KeyGenerator.getInstance("AES");
@@ -73,9 +72,11 @@ public class Client {
 				decrypt(pathOramProxy.invokeOrdered(
 						SerializationUtils.serialize(ServerOperationType.GET_POSITION_MAP))));
 		Integer oldPosition = positionMap.get(a);
+		int tree_size = positionMap.size();
+		int tree_levels = (int)(Math.log(tree_size+1) / Math.log(2));
 		if(oldPosition==null)
-			oldPosition=r.nextInt(TREE_SIZE/2+1);
-		positionMap.put(a, r.nextInt(TREE_SIZE/2+1));
+			oldPosition=r.nextInt(tree_size/2+1);
+		positionMap.put(a, r.nextInt(tree_size/2+1));
 		TreeMap<Short, Short> stash=SerializationUtils.deserialize(
 				decrypt(pathOramProxy.invokeOrdered(
 						SerializationUtils.serialize(ServerOperationType.GET_STASH))));
@@ -107,10 +108,10 @@ public class Client {
 		}
 		Set<Entry<Short, Short>> stashValues = stash.entrySet();
 		TreeMap<Integer,byte[]> newPath = new TreeMap<>();
-		for (int level = TREE_LEVELS-1; level >= 0; level--) {
+		for (int level = tree_levels-1; level >= 0; level--) {
 			int l = level;
 			
-			List<Integer> compatiblePaths = checkPaths(oldPosition,l);
+			List<Integer> compatiblePaths = checkPaths(oldPosition,l,tree_size,tree_levels);
 			Map<Short,Short> tempStash = stashValues.parallelStream()
 					.filter(val -> compatiblePaths.contains(positionMap.get(val.getKey())))
 					.limit(Bucket.MAX_SIZE)
@@ -203,14 +204,14 @@ public class Client {
 		}
 		return null;
 	}
-	private static List<Integer> checkPaths(Integer oldPosition, int level) {
+	private static List<Integer> checkPaths(Integer oldPosition, int level, int tree_size, int tree_levels) {
 		ArrayList<Integer> a = new ArrayList<Integer>();
-		if(level==TREE_LEVELS-1) {
+		if(level==tree_levels-1) {
 			a.add(oldPosition);
 		}else {
-			for (int i = 0; i < TREE_SIZE/2+1; i++) {
-				if((int)(i/Math.pow(2,(TREE_LEVELS-1-level)))
-						==(int)(oldPosition/Math.pow(2,(TREE_LEVELS-1-level))))
+			for (int i = 0; i < tree_size/2+1; i++) {
+				if((int)(i/Math.pow(2,(tree_levels-1-level)))
+						==(int)(oldPosition/Math.pow(2,(tree_levels-1-level))))
 					a.add(i);
 			}
 		}
