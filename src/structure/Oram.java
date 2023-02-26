@@ -12,10 +12,16 @@ public class Oram implements Serializable{
 	private static final long serialVersionUID = -4459879580826094264L;
 	private static Integer TREE_SIZE;
 	private static Integer TREE_LEVELS;
+	private static int OPERATION_THRESHOLD = 60*1000; // 1 minute
+	private static int SESSION_THRESHOLD = 5*60*1000; //5 minutes
+	private Boolean activeSession=false;
+	private long sessionOpeningTimestamp;
+	private Integer sessionOpenedBy; //userID
+	private long lastOperationTimestamp;
 	private byte[] positionMap = SerializationUtils.serialize(new TreeMap<Short,Integer>());
 	private byte[] stash = SerializationUtils.serialize(new TreeMap<Short,Short>());
 	private TreeMap<Integer,byte[]> tree= new TreeMap<>();
-	
+
 	public Oram(int size) {
 		TREE_SIZE=size;
 		TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
@@ -57,5 +63,23 @@ public class Oram implements Serializable{
 			location=location%2==0?location-2:location-1;
 			location/=2;
 		}
+	}
+
+	public boolean openSession(Integer userId,long msgTimestamp) {
+		if (activeSession==false || msgTimestamp-lastOperationTimestamp>OPERATION_THRESHOLD 
+				|| msgTimestamp-sessionOpeningTimestamp>SESSION_THRESHOLD) { 
+			activeSession=true;
+			sessionOpeningTimestamp=msgTimestamp;
+			sessionOpenedBy=userId;
+			return true;
+		}
+		return false;
+	}
+	public boolean authorizeOperation(Integer userId,long msgTimestamp) {
+		if (activeSession==true && sessionOpenedBy.equals(userId)) { 
+			lastOperationTimestamp=msgTimestamp;
+			return true;
+		}
+		return false;
 	}
 }
