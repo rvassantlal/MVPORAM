@@ -8,4 +8,5 @@ public class ServerOperationType {
 	static final int EVICT = 4;
 	static final int GET_TREE = 5;
 	static final int OPEN_SESSION = 6;
+	static final int CLOSE_SESSION = 7;
 }

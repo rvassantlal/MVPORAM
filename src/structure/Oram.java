@@ -82,4 +82,12 @@ public class Oram implements Serializable{
 		}
 		return false;
 	}
+	public boolean closeSession(Integer userId) {
+		if (activeSession==true && sessionOpenedBy.equals(userId)) { 
+			activeSession=false;
+			sessionOpenedBy=null;
+			return true;
+		}
+		return false;
+	}
 }

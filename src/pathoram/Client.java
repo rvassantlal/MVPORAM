@@ -41,14 +41,24 @@ public class Client {
 		
 		Scanner sc=new Scanner(System.in);
 		Boolean execute=true;
+		System.out.println("Do you already have an ORAM? (Y for yes, N for no)");
+		String nLine = sc.nextLine();
+		if(nLine.toUpperCase().contentEquals("Y")) {
+			System.out.println("Insert size:");
+			int size = sc.nextInt();
+			String msg=createOram(size)?"ORAM created! Session automatically opened for you.":"There was an error, this ORAM already exists!";
+			System.out.println(msg);
+		}else {
+			System.out.println("Opening your session");
+		}
 		while(execute) {
 			Operation op=null;
 			while(op==null) {
 				System.out.println("Choose operation (read or write)");
 				String nextLine = sc.nextLine();
-				if(nextLine.contentEquals("read"))
+				if(nextLine.toLowerCase().contentEquals("read"))
 					op=Operation.READ;
-				if(nextLine.contentEquals("write"))
+				if(nextLine.toLowerCase().contentEquals("write"))
 					op=Operation.WRITE;
 			}
 			System.out.println("Insert key (is a short)");
@@ -58,18 +68,46 @@ public class Client {
 				System.out.println("Insert new value (is a short)");
 				value = sc.nextShort();
 			}
-			System.out.println("Answer from server: "+access(op, key, value));
+			sc.nextLine();
+			try {
+				Short answer = access(op, key, value);
+				System.out.println("Answer from server: "+answer);
+			} catch (NullPointerException e) {
+				System.out.println("Your session is closed! Please open your session, please");
+			}		
 			System.out.println("Do you want to exit (write yes to exit)?");
 			String nextLine = sc.nextLine();
-			if(nextLine.contentEquals("yes")) {
+			if(nextLine.toLowerCase().contentEquals("yes")) {
+				closeSession();
 				sc.close();
 				execute=false;
 			}
 		}
 	}
+	private static void openSession() {
+		pathOramProxy.invokeOrdered(
+				SerializationUtils.serialize(ServerOperationType.OPEN_SESSION));	
+	}
+	private static void closeSession() {
+		pathOramProxy.invokeOrdered(
+				SerializationUtils.serialize(ServerOperationType.CLOSE_SESSION));	
+	}
+	private static boolean createOram(int size) {
+		try {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+	        ObjectOutputStream oout = new ObjectOutputStream(out);
+			oout.writeInt(ServerOperationType.CREATE_ORAM);
+			oout.writeInt(size);
+			return SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return false;
+	}
 	private static Short access(Operation op,Short a, Short newData) {
 		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(
-				decrypt(pathOramProxy.invokeOrdered(
+				decrypt(pathOramProxy.invokeUnordered(
 						SerializationUtils.serialize(ServerOperationType.GET_POSITION_MAP))));
 		Integer oldPosition = positionMap.get(a);
 		int tree_size = positionMap.size();
@@ -78,7 +116,7 @@ public class Client {
 			oldPosition=r.nextInt(tree_size/2+1);
 		positionMap.put(a, r.nextInt(tree_size/2+1));
 		TreeMap<Short, Short> stash=SerializationUtils.deserialize(
-				decrypt(pathOramProxy.invokeOrdered(
+				decrypt(pathOramProxy.invokeUnordered(
 						SerializationUtils.serialize(ServerOperationType.GET_STASH))));
 		List<Bucket> path = new ArrayList<>(1);
 		if(oldPosition!=null) {
@@ -87,7 +125,7 @@ public class Client {
 	            ObjectOutputStream oout = new ObjectOutputStream(out);
 				oout.writeInt(ServerOperationType.GET_DATA);
 				oout.writeInt(oldPosition);
-				List<byte[]> list = SerializationUtils.deserialize(pathOramProxy.invokeOrdered(out.toByteArray()));
+				List<byte[]> list = SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
 				path =	list.stream()
 						.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
 						.collect(Collectors.toList());

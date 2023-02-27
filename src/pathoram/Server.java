@@ -54,10 +54,16 @@ public class Server extends DefaultSingleRecoverable{
 					out = new ByteArrayOutputStream();
 					new ObjectOutputStream(out).writeBoolean(true);
 					return out.toByteArray();
+				}else {
+					return unauthorizedMessage();
 				}
 			case ServerOperationType.OPEN_SESSION:
 				out = new ByteArrayOutputStream();
 				new ObjectOutputStream(out).writeBoolean(serverOram.openSession(msgCtx.getSender(), msgCtx.getTimestamp()));
+				return out.toByteArray();
+			case ServerOperationType.CLOSE_SESSION:
+				out = new ByteArrayOutputStream();
+				new ObjectOutputStream(out).writeBoolean(serverOram.closeSession(msgCtx.getSender()));
 				return out.toByteArray();
 			}
 		} catch (IOException e) {
@@ -65,6 +71,11 @@ public class Server extends DefaultSingleRecoverable{
 			e.printStackTrace();
 		}
 		return null;
+	}
+	private byte[] unauthorizedMessage() throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		new ObjectOutputStream(out).write(null);
+		return out.toByteArray();
 	}
 	@Override
 	public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
