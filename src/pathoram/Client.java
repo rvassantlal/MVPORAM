@@ -4,8 +4,11 @@ package pathoram;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +25,10 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.apache.commons.lang3.SerializationUtils;
 
@@ -29,21 +36,26 @@ import structure.*;
 import bftsmart.tom.ServiceProxy;
 
 public class Client {
-	private static Random r = new Random();
+	private static SecureRandom r = new SecureRandom();
 	private static SecretKey key;
 	private static ServiceProxy pathOramProxy = null;
+	private static byte[] iv = new byte[16];
+	private static byte[] salt = new byte[32];
 	
-	public static void main(String[] args) throws NoSuchAlgorithmException {
-		pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));
-		KeyGenerator kg = KeyGenerator.getInstance("AES");
-		kg.init(128);
-		key = kg.generateKey();
-		
+	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException {
+		pathOramProxy = new ServiceProxy(Integer.parseInt(args[0]));		
 		Scanner sc=new Scanner(System.in);
 		Boolean execute=true;
+		System.out.println("Insert your password please:");
+		String pass = sc.nextLine();
+		r.nextBytes(salt);
+		r.nextBytes(iv);
+		PBEKeySpec keySpec = new PBEKeySpec(pass.toCharArray(), salt, 100,256); // pass, salt, iterations
+		SecretKeyFactory kf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+		key = new SecretKeySpec(kf.generateSecret(keySpec).getEncoded(),"AES");
 		System.out.println("Do you already have an ORAM? (Y for yes, N for no)");
 		String nLine = sc.nextLine();
-		if(nLine.toUpperCase().contentEquals("Y")) {
+		if(nLine.toUpperCase().contentEquals("N")) {
 			System.out.println("Insert size:");
 			int size = sc.nextInt();
 			String msg=createOram(size)?"ORAM created! Session automatically opened for you.":"There was an error, this ORAM already exists!";
@@ -51,6 +63,7 @@ public class Client {
 		}else {
 			System.out.println("Opening your session");
 		}
+		openSession();
 		while(execute) {
 			Operation op=null;
 			while(op==null) {
@@ -72,7 +85,8 @@ public class Client {
 			try {
 				Short answer = access(op, key, value);
 				System.out.println("Answer from server: "+answer);
-			} catch (NullPointerException e) {
+			} catch (Exception e) {
+				e.printStackTrace();
 				System.out.println("Your session is closed! Please open your session, please");
 			}		
 			System.out.println("Do you want to exit (write yes to exit)?");
@@ -85,12 +99,10 @@ public class Client {
 		}
 	}
 	private static void openSession() {
-		pathOramProxy.invokeOrdered(
-				SerializationUtils.serialize(ServerOperationType.OPEN_SESSION));	
+		pathOramProxy.invokeOrdered(createRequest(ServerOperationType.OPEN_SESSION));	
 	}
 	private static void closeSession() {
-		pathOramProxy.invokeOrdered(
-				SerializationUtils.serialize(ServerOperationType.CLOSE_SESSION));	
+		pathOramProxy.invokeOrdered(createRequest(ServerOperationType.CLOSE_SESSION));	
 	}
 	private static boolean createOram(int size) {
 		try {
@@ -98,34 +110,42 @@ public class Client {
 	        ObjectOutputStream oout = new ObjectOutputStream(out);
 			oout.writeInt(ServerOperationType.CREATE_ORAM);
 			oout.writeInt(size);
-			return SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
+			oout.flush();
+			return (boolean) SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return false;
 	}
-	private static Short access(Operation op,Short a, Short newData) {
-		TreeMap<Short,Integer> positionMap = SerializationUtils.deserialize(
-				decrypt(pathOramProxy.invokeUnordered(
-						SerializationUtils.serialize(ServerOperationType.GET_POSITION_MAP))));
+	private static Short access(Operation op,Short a, Short newData) throws IOException {
+		byte[] rawPositionMap = pathOramProxy.invokeUnordered(createRequest(ServerOperationType.GET_POSITION_MAP));
+		TreeMap<Short,Integer> positionMap = rawPositionMap==null? new TreeMap<Short,Integer>():
+			(TreeMap<Short, Integer>) SerializationUtils.deserialize(decrypt(rawPositionMap));
 		Integer oldPosition = positionMap.get(a);
+		if(oldPosition==null && op==Operation.READ) {
+			return null;
+		}
 		int tree_size = positionMap.size();
 		int tree_levels = (int)(Math.log(tree_size+1) / Math.log(2));
-		if(oldPosition==null)
+		Boolean alreadyInORAM=true;
+		if(oldPosition==null) {
 			oldPosition=r.nextInt(tree_size/2+1);
+			alreadyInORAM=false;
+		}
 		positionMap.put(a, r.nextInt(tree_size/2+1));
-		TreeMap<Short, Short> stash=SerializationUtils.deserialize(
-				decrypt(pathOramProxy.invokeUnordered(
-						SerializationUtils.serialize(ServerOperationType.GET_STASH))));
+		byte[] rawStash=pathOramProxy.invokeUnordered(createRequest(ServerOperationType.GET_STASH));
+		TreeMap<Short, Short> stash= rawStash==null ? new TreeMap<Short,Short>():
+			(TreeMap<Short, Short>) SerializationUtils.deserialize(decrypt(rawStash));
 		List<Bucket> path = new ArrayList<>(1);
-		if(oldPosition!=null) {
+		if(alreadyInORAM) {
 			try {
 				ByteArrayOutputStream out = new ByteArrayOutputStream();
 	            ObjectOutputStream oout = new ObjectOutputStream(out);
 				oout.writeInt(ServerOperationType.GET_DATA);
 				oout.writeInt(oldPosition);
-				List<byte[]> list = SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
+				oout.flush();
+				List<byte[]> list = (List<byte[]>) SerializationUtils.deserialize(pathOramProxy.invokeUnordered(out.toByteArray()));
 				path =	list.stream()
 						.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
 						.collect(Collectors.toList());
@@ -174,7 +194,9 @@ public class Client {
 			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>>(encrypt(SerializationUtils.serialize(positionMap)),
 					encrypt(SerializationUtils.serialize(stash)), oldPosition,
 					newPath);
-	        oout.write(SerializationUtils.serialize(obj));
+	        oout.writeObject(obj);
+	        oout.flush();
+	        out.flush();
 			pathOramProxy.invokeOrdered(out.toByteArray());
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -202,11 +224,27 @@ public class Client {
 	}
 	 
 	
+	private static byte[] createRequest(int operation) {
+        try {
+        	ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ObjectOutputStream oout = new ObjectOutputStream(out);
+            oout.writeInt(operation);
+			oout.flush();
+			return out.toByteArray();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+		
+	}
 	private static byte[] decrypt(byte[] strToDecrypt) {
 	    try {
-	    	Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		    cipher.init(Cipher.DECRYPT_MODE, key);
-			return cipher.doFinal(strToDecrypt);
+	    	
+	    	Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		    cipher.init(Cipher.DECRYPT_MODE, key,new IvParameterSpec(iv));
+			byte[] answer = strToDecrypt==null? null :cipher.doFinal(strToDecrypt);
+			return answer;
 		} catch (IllegalBlockSizeException | BadPaddingException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -219,13 +257,16 @@ public class Client {
 		} catch (NoSuchPaddingException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (InvalidAlgorithmParameterException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 		return null;
 	}
 	private static byte[] encrypt(byte[] strToEncrypt) {
 	    try {
-	    	Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		    cipher.init(Cipher.ENCRYPT_MODE, key);
+	    	Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		    cipher.init(Cipher.ENCRYPT_MODE, key,new IvParameterSpec(iv));
 			return cipher.doFinal(strToEncrypt);
 		} catch (IllegalBlockSizeException | BadPaddingException e) {
 			// TODO Auto-generated catch block
@@ -237,6 +278,9 @@ public class Client {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (NoSuchPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidAlgorithmParameterException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}

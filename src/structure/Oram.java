@@ -18,8 +18,8 @@ public class Oram implements Serializable{
 	private long sessionOpeningTimestamp;
 	private Integer sessionOpenedBy; //userID
 	private long lastOperationTimestamp;
-	private byte[] positionMap = SerializationUtils.serialize(new TreeMap<Short,Integer>());
-	private byte[] stash = SerializationUtils.serialize(new TreeMap<Short,Short>());
+	private byte[] positionMap;
+	private byte[] stash;
 	private TreeMap<Integer,byte[]> tree= new TreeMap<>();
 
 	public Oram(int size) {

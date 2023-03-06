@@ -1,8 +1,9 @@
 package pathoram;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
+import java.io.ObjectInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.TreeMap;
 
@@ -12,12 +13,7 @@ import structure.*;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
-/*
- * openSession (OramID) 
-guardar timestamp
-locks database
-cada cliente tem a sua tree
- */
+
 public class Server extends DefaultSingleRecoverable{
 
 	@SuppressWarnings("unused")
@@ -29,10 +25,11 @@ public class Server extends DefaultSingleRecoverable{
 	}
 	public Server(int id) {
 		replica = new ServiceReplica(id, this, this);
+		serverOrams=new TreeMap<>();
 	}
 	@Override
 	public void installSnapshot(byte[] state) {
-		serverOrams = SerializationUtils.deserialize(state);
+		serverOrams = (TreeMap<Integer, Oram>) SerializationUtils.deserialize(state);
 	}
 	@Override
 	public byte[] getSnapshot() {
@@ -44,32 +41,36 @@ public class Server extends DefaultSingleRecoverable{
 		int cmd;
 		Oram serverOram = serverOrams.get(msgCtx.getSender());
 		try {
-			cmd = new DataInputStream(in).readInt();
+			ObjectInputStream objin = new ObjectInputStream(in);
+			cmd = objin.readInt();
 			ByteArrayOutputStream out;
 			switch (cmd) {
-			case ServerOperationType.EVICT:
-				if(serverOram.authorizeOperation(msgCtx.getSender(), msgCtx.getTimestamp())) {
-					FourTuple<byte[],byte[],Integer,TreeMap<Integer,byte[]>> evict = SerializationUtils.deserialize(in.readAllBytes());
-					serverOram.doEviction(evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth());
+				case ServerOperationType.EVICT:
+					if(serverOram.authorizeOperation(msgCtx.getSender(), msgCtx.getTimestamp())) {
+						FourTuple<byte[],byte[],Integer,TreeMap<Integer,byte[]>> evict = (FourTuple<byte[], byte[], Integer, TreeMap<Integer, byte[]>>) objin.readObject();
+						serverOram.doEviction(evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth());
+						out = new ByteArrayOutputStream();
+						new ObjectOutputStream(out).writeBoolean(true);
+						return out.toByteArray();
+					}else {
+						return unauthorizedMessage();
+					}
+				case ServerOperationType.OPEN_SESSION:
 					out = new ByteArrayOutputStream();
-					new ObjectOutputStream(out).writeBoolean(true);
+					new ObjectOutputStream(out).writeBoolean(serverOram.openSession(msgCtx.getSender(), msgCtx.getTimestamp()));
 					return out.toByteArray();
-				}else {
-					return unauthorizedMessage();
-				}
-			case ServerOperationType.OPEN_SESSION:
-				out = new ByteArrayOutputStream();
-				new ObjectOutputStream(out).writeBoolean(serverOram.openSession(msgCtx.getSender(), msgCtx.getTimestamp()));
-				return out.toByteArray();
-			case ServerOperationType.CLOSE_SESSION:
-				out = new ByteArrayOutputStream();
-				new ObjectOutputStream(out).writeBoolean(serverOram.closeSession(msgCtx.getSender()));
-				return out.toByteArray();
+				case ServerOperationType.CLOSE_SESSION:
+					out = new ByteArrayOutputStream();
+					new ObjectOutputStream(out).writeBoolean(serverOram.closeSession(msgCtx.getSender()));
+					return out.toByteArray();
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
 		return null;
 	}
 	private byte[] unauthorizedMessage() throws IOException {
@@ -82,35 +83,36 @@ public class Server extends DefaultSingleRecoverable{
 		ByteArrayInputStream in = new ByteArrayInputStream(command);
 		int cmd;
 		Oram serverOram = serverOrams.get(msgCtx.getSender());
-
 		try {
-			cmd = new DataInputStream(in).readInt();
+			ObjectInputStream ois = new ObjectInputStream(in);
+			cmd = ois.readInt();
 			ByteArrayOutputStream out;
-			if((serverOram==null && cmd==ServerOperationType.CREATE_ORAM) || serverOram.authorizeOperation(msgCtx.getSender(), msgCtx.getTimestamp()) ) {
+			if(serverOram==null) {
+				int size = ois.readInt();
+				if(serverOram==null) {
+					serverOrams.put(msgCtx.getSender(), new Oram(size));
+				}
+				return SerializationUtils.serialize(serverOram==null);
+			}else if(serverOram.authorizeOperation(msgCtx.getSender(), msgCtx.getTimestamp()) ) {
+				System.out.println("HERE");
 				switch (cmd) {
-				case ServerOperationType.CREATE_ORAM:
-					int size = new DataInputStream(in).readInt();
-					if(serverOram==null) {
-						serverOrams.put(msgCtx.getSender(), new Oram(size));
-					}
-					out = new ByteArrayOutputStream();
-					new ObjectOutputStream(out).writeBoolean(serverOram==null);
-					return out.toByteArray();
-				case ServerOperationType.GET_POSITION_MAP:
-					return serverOram.getPositionMap();
-				case ServerOperationType.GET_STASH:
-					return serverOram.getStash();
-				case ServerOperationType.GET_DATA:
-					int pathId = new DataInputStream(in).readInt();
-					out = new ByteArrayOutputStream();
-					new ObjectOutputStream(out).writeObject(serverOram.getData(pathId));
-					return out.toByteArray();
-				case ServerOperationType.GET_TREE:
-					out = new ByteArrayOutputStream();
-					new ObjectOutputStream(out).writeObject(serverOram.getTree());
-					return out.toByteArray();
+					case ServerOperationType.GET_POSITION_MAP:
+						return serverOram.getPositionMap();
+					case ServerOperationType.GET_STASH:
+						return serverOram.getStash();
+					case ServerOperationType.GET_DATA:
+						int pathId = ois.readInt();
+						out = new ByteArrayOutputStream();
+						new ObjectOutputStream(out).writeObject(serverOram.getData(pathId));
+						return out.toByteArray();
+					case ServerOperationType.GET_TREE:
+						out = new ByteArrayOutputStream();
+						new ObjectOutputStream(out).writeObject(serverOram.getTree());
+						return out.toByteArray();
 
 				}
+			}else {
+				return unauthorizedMessage();
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
