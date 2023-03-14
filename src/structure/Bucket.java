@@ -19,4 +19,8 @@ public class Bucket implements Serializable{
 			blocks.putAll(newBucketElements);
 	}
 	
+	public String toString() {
+		return blocks.toString();
+	}
+	
 }
