@@ -9,7 +9,6 @@ import structure.Operation;
 public class ClientInterface {
 	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException {		
 		Scanner sc=new Scanner(System.in);
-		Boolean execute=true;
 		System.out.println("Insert your password please:");
 		String pass = sc.nextLine();
 		Client me = new Client(Integer.parseInt(args[0]),pass);
@@ -29,7 +28,7 @@ public class ClientInterface {
 			System.out.println("Opening your session");
 		}
 		//openSession();
-		while(execute) {
+		while(true) {
 			Operation op=null;
 			while(op==null) {
 				System.out.println("Choose operation (read or write)");
@@ -48,13 +47,8 @@ public class ClientInterface {
 			}
 			sc.nextLine();
 			try {
-				Short answer = me.access(op, key, value);
+				Short answer = me.access(op, key, value,false);
 				System.out.println("Answer from server: "+answer);
-				/*FOR PARALLEL TESTING PURPOSES
-				 * for (short i = 0; i < key; i++) {
-					Short answer = me.access(op, i, value);
-					System.out.println("Answer from server: "+answer);
-				}*/
 				
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -65,7 +59,7 @@ public class ClientInterface {
 			if(nextLine.toLowerCase().contentEquals("yes")) {
 				//closeSession();
 				sc.close();
-				System.exit(0);;
+				System.exit(0);
 			}
 		}
 	}

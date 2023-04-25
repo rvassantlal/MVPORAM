@@ -17,23 +17,29 @@ public class Server extends DefaultSingleRecoverable{
 
 	@SuppressWarnings("unused")
 	private ServiceReplica replica = null;
-	private TreeMap<Integer,Oram> serverOrams;
+	private TreeMap<Integer, Oram> serverOrams;
 
 	public static void main(String[] args) {
 		new Server(Integer.parseInt(args[0]));
 	}
+
 	public Server(int id) {
 		replica = new ServiceReplica(id, this, this);
-		serverOrams=new TreeMap<Integer,Oram>();
+		serverOrams=new TreeMap<Integer, Oram>();
 	}
+
 	@Override
 	public void installSnapshot(byte[] state) {
+		//TODO: ADD POSMAP AND STASH
 		serverOrams = (TreeMap<Integer, Oram>) SerializationUtils.deserialize(state);
 	}
+
 	@Override
 	public byte[] getSnapshot() {
+		//TODO: ADD POSMAP AND STASH
 		return SerializationUtils.serialize(serverOrams);
 	}
+
 	@Override
 	public byte[] appExecuteOrdered(byte[] command, MessageContext msgCtx) {
 		ByteArrayInputStream in = new ByteArrayInputStream(command);
@@ -49,22 +55,20 @@ public class Server extends DefaultSingleRecoverable{
 				case ServerOperationType.EVICT:
 					int version = objin.readInt();
 					FourTuple<byte[],byte[],Integer,TreeMap<Integer,byte[]>> evict = (FourTuple<byte[], byte[], Integer, TreeMap<Integer, byte[]>>) objin.readObject();
-					boolean bool = serverOram.doEviction(version,evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth());
+					boolean bool = serverOram.doEviction(version,evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth(), msgCtx.getSender());
 					out = new ByteArrayOutputStream();
 					oout = new ObjectOutputStream(out);
 					oout.writeBoolean(bool);
 					oout.flush();
 					return out.toByteArray();
 			}
-		} catch (IOException e) {
+		} catch (IOException | ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} 
+		}
 		return null;
 	}
+
 	@Override
 	public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
 		ByteArrayInputStream in = new ByteArrayInputStream(command);
@@ -75,34 +79,29 @@ public class Server extends DefaultSingleRecoverable{
 			Oram serverOram = serverOrams.get(oramName);
 			cmd = ois.readInt();
 			ByteArrayOutputStream out;
-			if(serverOram==null) {
+			if(serverOram ==null) {
 				int size = ois.readInt();
-				if(serverOram==null) {
-					serverOrams.put(oramName, new Oram(size));
-				}
-				return SerializationUtils.serialize(serverOram==null);
+				serverOrams.put(oramName, new Oram(size, msgCtx.getSender()));
+				return SerializationUtils.serialize(true);
 			}else {
 				ObjectOutputStream oout;
 				switch (cmd) {
-					case ServerOperationType.GET_PATH_STASH:
+					case ServerOperationType.GET_PATH_STASH -> {
 						int v = ois.readInt();
 						int pathID = ois.readInt();
-						return serverOram.getPathAndStash(v,pathID);
-					case ServerOperationType.GET_POSITION_MAP:
+						return serverOram.getPathAndStash(v, pathID);
+					}
+					case ServerOperationType.GET_POSITION_MAP -> {
 						return serverOram.getPositionMap();
-					case ServerOperationType.GET_DATA:
-						int pathId = ois.readInt();
-						int versionData = ois.readInt();
-						out = new ByteArrayOutputStream();
-						new ObjectOutputStream(out).writeObject(serverOram.getData(versionData,pathId));
-						return out.toByteArray();
-					case ServerOperationType.GET_TREE:
+					}
+					case ServerOperationType.GET_TREE -> {
+						int v = ois.readInt();
 						out = new ByteArrayOutputStream();
 						oout = new ObjectOutputStream(out);
-						oout.writeObject(serverOram.getTree());
+						oout.writeObject(serverOram.getTree(v));
 						oout.flush();
 						return out.toByteArray();
-
+					}
 				}
 			}
 		} catch (IOException e) {
