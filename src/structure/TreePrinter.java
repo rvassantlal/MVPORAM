@@ -24,7 +24,7 @@ public class TreePrinter {
         while (level <= height) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < levelSize; i++) {
-                TreeNode node = nodes.get(index + i);
+                TreeNode node = index+i<nodes.size()?nodes.get(index + i):null;
                 if (node != null) {
                     printNode(sb, itemWidth, node.val);
                 } else {

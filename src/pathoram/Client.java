@@ -1,53 +1,34 @@
 package pathoram;
 
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.spec.InvalidKeySpecException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
-
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
-import javax.crypto.spec.SecretKeySpec;
-
-import org.apache.commons.lang3.SerializationUtils;
-
-import structure.*;
 import bftsmart.tom.ServiceProxy;
+import org.apache.commons.lang3.SerializationUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import structure.Bucket;
+import structure.FourTuple;
+import structure.Operation;
+import structure.TreePrinter;
+
+import java.io.*;
+import java.lang.System.Logger;
+import java.security.SecureRandom;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Client {
 	private SecureRandom r = new SecureRandom();
-	private SecretKey key;
-	private ServiceProxy pathOramProxy = null;
-	private static final byte[] iv = {109,15,57,79,75,112,50,91,18,18,107,127,65,68,12,69};
-	private byte[] salt = {0x56, 0x1a, 0x7e, 0x23, (byte) 0xb3, 0x21, 0x12, (byte) 0xf6, (byte) 0xe1, 0x4d, 0x58, (byte) 0xd9, 0x0a, 0x59, (byte) 0xee, (byte) 0xe5, 
-			0x3b, 0x61, 0x78, 0x27, 0x1e, (byte) 0xad, 0x52, 0x41, 0x2c, 0x4b, (byte) 0xb6, 0x7b, (byte) 0xcd, 0x3a, (byte) 0xe9, (byte) 0x9c};
+
+	private ServiceProxy pathOramProxy;
+	private EncryptionAbstraction encryptor;
 	private int oramName;
-	private TreeMap<Short, Integer> currentpositionMap;
-	private int positionMapVersion=0;
+
 	private int tree_size=-1;
-	
-	protected Client (int name,String pass) throws NoSuchAlgorithmException, InvalidKeySpecException {
+
+	protected Client (int name,String pass){
 		pathOramProxy = new ServiceProxy(name);
-		PBEKeySpec keySpec = new PBEKeySpec(pass.toCharArray(), salt, 65536,256);
-		SecretKeyFactory kf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-		key = new SecretKeySpec(kf.generateSecret(keySpec).getEncoded(),"AES");
-		
+		encryptor = new EncryptionAbstraction(pass);
 	}
 	protected void associateOram(int oramName) {
 		this.oramName=oramName;
@@ -60,69 +41,96 @@ public class Client {
 		return SerializationUtils.deserialize(pathOramProxy.invokeUnordered(createRequest(reqArgs)));
 
 	}
-	protected Short access(Operation op,Short a, Short newData, Boolean debugMode) throws IOException {
+	protected Short access(Operation op,Short a, Short newData, Boolean debugMode) throws IOException, ClassNotFoundException {
 		if (debugMode)
 			debugPrintTree();
-		List<TreeMap<Short, Integer>> temppositionMaps=null;
-		if(currentpositionMap == null) {
-			byte[] rawPositionMap = pathOramProxy.invokeUnordered(createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
-			ByteArrayInputStream in = new ByteArrayInputStream(rawPositionMap);
-			ObjectInputStream ois = new ObjectInputStream(in);
-			positionMapVersion = ois.readInt();
-			tree_size = ois.readInt();
-			try {
-				temppositionMaps = positionMapVersion==0 ? new ArrayList<TreeMap<Short, Integer>>():
-					(List<TreeMap<Short, Integer>>) SerializationUtils.deserialize(decrypt((byte[]) ois.readObject()));
-			} catch (ClassNotFoundException | IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+		List<TreeMap<Short, Integer>> temppositionMaps;
+		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
+		ByteArrayInputStream in = new ByteArrayInputStream(rawPositionMaps);
+		ObjectInputStream ois = new ObjectInputStream(in);
+		tree_size = ois.readInt();
+		List<byte[]> posMaps = (List<byte[]>) ois.readObject();
+		temppositionMaps = new ArrayList<>();
+		if(posMaps.size()>0)
+			temppositionMaps=posMaps.stream().map(pm ->pm.length==0?null:(TreeMap<Short, Integer>)SerializationUtils.deserialize(encryptor.decrypt(pm)))
+			.filter(Objects::nonNull)
+			.toList();
+		List<Double> snapIds = (List<Double>) ois.readObject();
+		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
+		TreeMap<Short, Integer> currentpositionMap = new TreeMap<>();
+		TreeMap<Short, Short> stash = new TreeMap<>();
+		for (TreeMap<Short, Integer> map : temppositionMaps) {
+			for (Entry<Short, Integer> entry : map.entrySet()) {
+				Short key = entry.getKey();
+				if (key.equals(a)) {
+					Integer val = entry.getValue();
+					oldPositions.put(snapIds.get(temppositionMaps.indexOf(map)),val);
+				}
+					
+					/*if (currentpositionMap.containsKey(key) && !currentpositionMap.get(key).contains(val)) {
+						currentpositionMap.get(key).add(val);
+					} else {
+						ArrayList<Integer> al=new ArrayList<>();
+						al.add(val);
+						currentpositionMap.put(key, al);
+					}*/
 			}
-		}
-		if (temppositionMaps!=null) {
-			for (TreeMap<Short, Integer> map : temppositionMaps) {
-				currentpositionMap.putAll(map);
-			}
+			currentpositionMap.putAll(map);
 		}
 
-		Integer oldPosition = currentpositionMap.get(a);
-		if((oldPosition==null && op==Operation.READ) || tree_size==-1) {
+		if((oldPositions.size()==0 && op==Operation.READ) || tree_size==-1) {
 			return null;
 		}
 		int tree_levels = (int)(Math.log(tree_size+1) / Math.log(2));
 		TreeMap<Short, Integer> tempPositionMap = SerializationUtils.clone(currentpositionMap);
-		if(oldPosition==null) {
-			oldPosition=r.nextInt(tree_size/2+1);
+		if(oldPositions.size()==0){
+			oldPositions.put(0.0,r.nextInt(tree_size/2+1));
 		}
 		tempPositionMap.put(a, r.nextInt(tree_size/2+1));
-		byte[] rawStash = null;
-		ArrayList<byte[]> rawPath = new ArrayList<>();
+		ByteArrayOutputStream pathout = new ByteArrayOutputStream();
 		try {
-			List<Integer> args = Arrays.asList(oramName,ServerOperationType.GET_PATH_STASH,
-					positionMapVersion,oldPosition);
-			byte[] answer = pathOramProxy.invokeUnordered(createRequest(args));
-			if(answer==null) {
-				currentpositionMap = null;
-				return access(op,a,newData,debugMode);
-			}
-			ByteArrayInputStream in = new ByteArrayInputStream(answer);
-			ObjectInputStream ois = new ObjectInputStream(in);
-			rawStash = ois.readBoolean()?(byte[]) ois.readObject():null;
-			rawPath = positionMapVersion==0 ? new ArrayList<>() : (ArrayList<byte[]>) ois.readObject();
-
-		} catch (IOException | ClassNotFoundException e) {
+			ObjectOutputStream pathoout = new ObjectOutputStream(pathout);
+			pathoout.writeInt(oramName);
+			pathoout.writeInt(ServerOperationType.GET_PATH_STASH);
+			pathoout.writeObject(snapIds);
+			pathoout.writeObject(new ArrayList<Integer>(oldPositions.values()));
+			pathoout.flush();
+			
+		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		TreeMap<Short, Short> stash = rawStash==null ? new TreeMap<>():
-			(TreeMap<Short, Short>) SerializationUtils.deserialize(decrypt(rawStash));
-		List<Bucket> path =	rawPath.stream()
-				.map(b -> b==null ? null : (Bucket)SerializationUtils.deserialize(decrypt(b)))
-				.toList();
-		for(Bucket b : path) {
-			if(b!=null)
-				stash.putAll(b.readBucket());
+		byte[] answer = pathOramProxy.invokeUnordered(pathout.toByteArray());
+		ByteArrayInputStream in2 = new ByteArrayInputStream(answer);
+		ObjectInputStream ois2 = new ObjectInputStream(in2);
+		if (!ois2.readBoolean())
+			return null;
+		for (int i = 0; i < snapIds.size(); i++) {
+			TreeMap<Double,byte[]> rawStash = null;
+			TreeMap<Double,byte[]> rawPath = null;
+			try {
+				rawStash =(TreeMap<Double,byte[]>) ois2.readObject();
+				rawPath = (TreeMap<Double,byte[]>) ois2.readObject();
+			} catch (IOException | ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			TreeMap<Short, Pair<Double, Short>> intermediateStash = new TreeMap<Short, Pair<Double, Short>>();
+			rawStash.forEach((key,val) -> {
+				if(val.length>0)
+					mergeStashes(intermediateStash,(TreeMap<Short, Short>) SerializationUtils.deserialize(encryptor.decrypt(val)),key);}
+			);
+			intermediateStash.forEach((key,val) -> stash.put(key,val.getRight()));
+
+			TreeMap<Short, Pair<Double, Short>> intermediatePath = new TreeMap<>();
+			rawPath.forEach((key,val) -> {
+				if(val.length>0)
+					mergePaths(intermediatePath,
+							(Bucket) SerializationUtils.deserialize(encryptor.decrypt(val)), key);});
+			intermediatePath.forEach((key,val) -> stash.put(key,val.getRight()));
 		}
 		Short data = stash.get(a);
+		Integer oldPosition = oldPositions.get(oldPositions.lowerKey(Double.MAX_VALUE));
 		if(op.equals(Operation.WRITE)) {
 			stash.put(a,newData);
 			data=newData;
@@ -130,7 +138,7 @@ public class Client {
 		Set<Entry<Short, Short>> stashValues = stash.entrySet();
 		TreeMap<Integer,byte[]> newPath = new TreeMap<>();
 		for (int level = tree_levels-1; level >= 0; level--) {
-			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_size,tree_levels);
+			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_levels);
 			Map<Short,Short> tempStash = stashValues.parallelStream()
 					.filter(val -> compatiblePaths.contains(tempPositionMap.get(val.getKey())))
 					.limit(Bucket.MAX_SIZE)
@@ -141,26 +149,23 @@ public class Client {
 			Bucket b = new Bucket();
 			b.writeBucket(tempStash);
 
-			newPath.put(level, encrypt(SerializationUtils.serialize(b)));
+			newPath.put(level, encryptor.encrypt(SerializationUtils.serialize(b)));
 		}
 		if (debugMode)
 			debugPrintPositionMap(tempPositionMap);
-		
+
 		try {
 			ByteArrayOutputStream evictout = new ByteArrayOutputStream();
 			ObjectOutputStream evictoout = new ObjectOutputStream(evictout);
 			evictoout.writeInt(oramName);
 			evictoout.writeInt(ServerOperationType.EVICT);
-			evictoout.writeInt(positionMapVersion+1);
-			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple<>(encrypt(SerializationUtils.serialize(tempPositionMap)),
-					encrypt(SerializationUtils.serialize(stash)), oldPosition,
+			evictoout.writeObject(snapIds);
+			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple<>(encryptor.encrypt(SerializationUtils.serialize(tempPositionMap)),
+					encryptor.encrypt(SerializationUtils.serialize(stash)), oldPosition,
 					newPath);
 			evictoout.writeObject(obj);
 			evictoout.flush();
-			byte[] evictionAnswer = pathOramProxy.invokeOrdered(evictout.toByteArray());
-			ByteArrayInputStream in = new ByteArrayInputStream(evictionAnswer);
-
-
+			pathOramProxy.invokeOrdered(evictout.toByteArray());
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -169,19 +174,36 @@ public class Client {
 		return data;
 	}
 
+	private void mergePaths(TreeMap<Short, Pair<Double, Short>> intermediatePath, Bucket deserializedBucket, Double snapId) {
+		Map<Short, Short> elements = deserializedBucket.readBucket();
+		elements.forEach((key, value) -> {
+			if (!intermediatePath.containsKey(key) || intermediatePath.get(key).getKey() < snapId) {
+				intermediatePath.put(key, Pair.of(snapId, value));
+			}
+		});
+	}
+
+	private void mergeStashes(TreeMap<Short, Pair<Double, Short>> intermediateStash, TreeMap<Short, Short> deserializedStash, Double snapId) {
+		deserializedStash.forEach((key, value) -> {
+			if (!intermediateStash.containsKey(key) || intermediateStash.get(key).getKey() < snapId) {
+				intermediateStash.put(key, Pair.of(snapId, value));
+			}
+		});
+	}
+
 
 	private void debugPrintPositionMap(TreeMap<Short, Integer> tempPositionMap) {
 		System.out.println("positionMap"+tempPositionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.toList());
-		
+
 	}
 	private void debugPrintTree() {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
 				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)));
 		if (rawTree!=null) {
 			List<String> tree = ((List<byte[]>) SerializationUtils.deserialize(rawTree)).stream()
-					.map(b -> b==null ? null : (SerializationUtils.deserialize(decrypt(b))).toString())
+					.map(b -> b==null ? null : (SerializationUtils.deserialize(encryptor.decrypt(b))).toString())
 					.collect(Collectors.toList());
 			TreePrinter.print(tree);
 		}
@@ -202,30 +224,8 @@ public class Client {
 		return null;
 
 	}
-	private byte[] decrypt(byte[] strToDecrypt) {
-		try {
 
-			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			cipher.init(Cipher.DECRYPT_MODE, key,new IvParameterSpec(iv));
-			return strToDecrypt==null? null :cipher.doFinal(strToDecrypt);
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} 
-		return null;
-	}
-	private byte[] encrypt(byte[] strToEncrypt) {
-		try {
-			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			cipher.init(Cipher.ENCRYPT_MODE, key,new IvParameterSpec(iv));
-			return cipher.doFinal(strToEncrypt);
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return null;
-	}
-	private List<Integer> checkPaths(Integer oldPosition, int level, int tree_size, int tree_levels) {
+	private List<Integer> checkPaths(Integer oldPosition, int level, int tree_levels) {
 		ArrayList<Integer> a = new ArrayList<>();
 		if(level==tree_levels-1) {
 			a.add(oldPosition);

@@ -31,7 +31,7 @@ public class ClientTester {
 			}
 			System.exit(0);
 
-		} catch (IOException e) {
+		} catch (IOException | ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		}
 	}

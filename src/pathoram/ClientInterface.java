@@ -47,7 +47,7 @@ public class ClientInterface {
 			}
 			sc.nextLine();
 			try {
-				Short answer = me.access(op, key, value,false);
+				Short answer = me.access(op, key, value,true);
 				System.out.println("Answer from server: "+answer);
 				
 			} catch (Exception e) {
