@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Main-Class: pathoram.Server
-Class-Path: -cp "lib/*" -Djava.security.properties="./config/java.securi
- ty" -Dlogback.configurationFile=config\logback.xml
-
