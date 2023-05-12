@@ -1,6 +1,7 @@
-package pathoram;
+package testers;
 
-import structure.Operation;
+import pathoram.Client;
+import utils.Operation;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;

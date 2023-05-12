@@ -1,4 +1,4 @@
-package structure;
+package utils;
 
 import java.io.Serializable;
 

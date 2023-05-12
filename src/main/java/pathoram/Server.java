@@ -9,7 +9,7 @@ import java.util.TreeMap;
 
 import org.apache.commons.lang3.SerializationUtils;
 
-import structure.*;
+import utils.*;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;

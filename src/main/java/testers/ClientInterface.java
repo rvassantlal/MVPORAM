@@ -1,10 +1,11 @@
-package pathoram;
+package testers;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Scanner;
 
-import structure.Operation;
+import pathoram.Client;
+import utils.Operation;
 
 public class ClientInterface {
 	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException {		

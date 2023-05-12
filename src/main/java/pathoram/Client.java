@@ -4,17 +4,15 @@ package pathoram;
 import bftsmart.tom.ServiceProxy;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import structure.Bucket;
-import structure.FourTuple;
-import structure.Operation;
-import structure.TreePrinter;
+import security.EncryptionAbstraction;
+import clientStructure.*;
+import utils.*;
 
 import java.io.*;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Client {
 	private SecureRandom r = new SecureRandom();
@@ -43,27 +41,27 @@ public class Client {
 	protected Short access(Operation op,Short a, Short newData, Boolean debugMode) throws IOException, ClassNotFoundException {
 		if (debugMode)
 			debugPrintTree();
-		List<TreeMap<Short, Integer>> temppositionMaps;
+		List<ClientPositionMap> temppositionMapClients;
 		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
 		ByteArrayInputStream in = new ByteArrayInputStream(rawPositionMaps);
 		ObjectInputStream ois = new ObjectInputStream(in);
 		tree_size = ois.readInt();
 		List<byte[]> posMaps = (List<byte[]>) ois.readObject();
-		temppositionMaps = new ArrayList<>();
+		temppositionMapClients = new ArrayList<>();
 		if(posMaps.size()>0)
-			temppositionMaps=posMaps.stream().map(pm ->pm.length==0?null:(TreeMap<Short, Integer>)SerializationUtils.deserialize(encryptor.decrypt(pm)))
+			temppositionMapClients =posMaps.stream().map(pm ->pm.length==0?null:(TreeMap<Short, Integer>)SerializationUtils.deserialize(encryptor.decrypt(pm)))
 			.filter(Objects::nonNull)
 			.collect(Collectors.toList());
 		List<Double> snapIds = (List<Double>) ois.readObject();
 		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
-		TreeMap<Short, Integer> currentpositionMap = new TreeMap<>();
-		TreeMap<Short, Short> stash = new TreeMap<>();
-		for (TreeMap<Short, Integer> map : temppositionMaps) {
+		ClientPositionMap currentpositionMapClient = new ClientPositionMap();
+		ClientStash clientStash = new ClientStash();
+		for (ClientPositionMap map : temppositionMapClients) {
 			for (Entry<Short, Integer> entry : map.entrySet()) {
 				Short key = entry.getKey();
 				if (key.equals(a)) {
 					Integer val = entry.getValue();
-					oldPositions.put(snapIds.get(temppositionMaps.indexOf(map)),val);
+					oldPositions.put(snapIds.get(temppositionMapClients.indexOf(map)),val);
 				}
 					
 					/*if (currentpositionMap.containsKey(key) && !currentpositionMap.get(key).contains(val)) {
@@ -74,14 +72,14 @@ public class Client {
 						currentpositionMap.put(key, al);
 					}*/
 			}
-			currentpositionMap.putAll(map);
+			currentpositionMapClient.putAll(map);
 		}
 
 		if((oldPositions.size()==0 && op==Operation.READ) || tree_size==-1) {
 			return null;
 		}
 		int tree_levels = (int)(Math.log(tree_size+1) / Math.log(2));
-		TreeMap<Short, Integer> tempPositionMap = SerializationUtils.clone(currentpositionMap);
+		TreeMap<Short, Integer> tempPositionMap = SerializationUtils.clone(currentpositionMapClient);
 		if(oldPositions.size()==0){
 			oldPositions.put(0.0,r.nextInt(tree_size/2+1));
 		}
@@ -119,34 +117,34 @@ public class Client {
 				if(val.length>0)
 					mergeStashes(intermediateStash,(TreeMap<Short, Short>) SerializationUtils.deserialize(encryptor.decrypt(val)),key);}
 			);
-			intermediateStash.forEach((key,val) -> stash.put(key,val.getRight()));
+			intermediateStash.forEach((key,val) -> clientStash.put(key,val.getRight()));
 
 			TreeMap<Short, Pair<Double, Short>> intermediatePath = new TreeMap<>();
 			rawPath.forEach((key,val) -> {
 				if(val.length>0)
 					mergePaths(intermediatePath,
 							(Bucket) SerializationUtils.deserialize(encryptor.decrypt(val)), key);});
-			intermediatePath.forEach((key,val) -> stash.put(key,val.getRight()));
+			intermediatePath.forEach((key,val) -> clientStash.put(key,val.getRight()));
 		}
-		Short data = stash.get(a);
+		Short data = clientStash.get(a);
 		Integer oldPosition = oldPositions.get(oldPositions.lowerKey(Double.MAX_VALUE));
 		if(op.equals(Operation.WRITE)) {
-			stash.put(a,newData);
+			clientStash.put(a,newData);
 			data=newData;
 		}
-		Set<Entry<Short, Short>> stashValues = stash.entrySet();
+		Set<Entry<Short, Short>> stashValues = clientStash.entrySet();
 		TreeMap<Integer,byte[]> newPath = new TreeMap<>();
 		for (int level = tree_levels-1; level >= 0; level--) {
 			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_levels);
-			Map<Short,Short> tempStash = stashValues.parallelStream()
+			ClientStash tempClientStash = stashValues.parallelStream()
 					.filter(val -> compatiblePaths.contains(tempPositionMap.get(val.getKey())))
 					.limit(Bucket.MAX_SIZE)
 					.collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-			for (Short key : tempStash.keySet()) {
-				stash.remove(key);
+			for (Short key : tempClientStash.keySet()) {
+				clientStash.remove(key);
 			}
 			Bucket b = new Bucket();
-			b.writeBucket(tempStash);
+			b.writeBucket(tempClientStash);
 
 			newPath.put(level, encryptor.encrypt(SerializationUtils.serialize(b)));
 		}
@@ -160,7 +158,7 @@ public class Client {
 			evictoout.writeInt(ServerOperationType.EVICT);
 			evictoout.writeObject(snapIds);
 			FourTuple<byte[], byte[], Integer, TreeMap<Integer,byte[]>> obj=new FourTuple<>(encryptor.encrypt(SerializationUtils.serialize(tempPositionMap)),
-					encryptor.encrypt(SerializationUtils.serialize(stash)), oldPosition,
+					encryptor.encrypt(SerializationUtils.serialize(clientStash)), oldPosition,
 					newPath);
 			evictoout.writeObject(obj);
 			evictoout.flush();
@@ -174,7 +172,7 @@ public class Client {
 	}
 
 	private void mergePaths(TreeMap<Short, Pair<Double, Short>> intermediatePath, Bucket deserializedBucket, Double snapId) {
-		Map<Short, Short> elements = deserializedBucket.readBucket();
+		Block[] elements = deserializedBucket.readBucket();
 		elements.forEach((key, value) -> {
 			if (!intermediatePath.containsKey(key) || intermediatePath.get(key).getKey() < snapId) {
 				intermediatePath.put(key, Pair.of(snapId, value));
@@ -212,7 +210,7 @@ public class Client {
 		if(rawTree!=null) {
 			List<String> tree = rawTree.stream()
 					.map(b -> b==null ? null : (SerializationUtils.deserialize(encryptor.decrypt(b))).toString())
-					.collect(Collectors.toList());;
+					.collect(Collectors.toList());
 			TreePrinter.print(tree);
 		}
 	}

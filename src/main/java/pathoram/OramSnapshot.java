@@ -1,4 +1,4 @@
-package structure;
+package pathoram;
 
 
 import java.io.Serializable;

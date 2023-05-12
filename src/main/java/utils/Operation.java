@@ -1,4 +1,4 @@
-package structure;
+package utils;
 
 public enum Operation {
 READ,
