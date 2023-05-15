@@ -87,7 +87,7 @@ public class Oram {
                     }
                     if(!dataIsNull) {
                         stashes.putAll(tempVersionStashes);
-                        list.putAll(dataList);
+                        list.putAll(dataList); //TODO: BUG: isto subsitui valores anteriores, não podes ter mais que uma localização vinda de um snapshot que não funciona
                     }else {
                         List<OramSnapshot> newSnapshots=new ArrayList<>();
                         versionSnapshots.stream().map(snap -> newSnapshots.addAll(snap.getPrev()));

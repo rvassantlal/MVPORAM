@@ -4,39 +4,60 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 public class ClientPositionMap implements Externalizable {
 	// This array maps a key to a pathId.
 	// The key is the position in the array and the pathId is the byte stored in that position.
 	// 256 paths, which means there are 511 nodes in total and the max storage is 511*Bucket.MAX_SIZE.
-	private byte[] positionMap;
+	// private byte[] positionMap;
+	private TreeMap<Integer,Integer> positionMap;
+	private Integer tree_size;
+	//public ClientPositionMap(int size) {	this.positionMap = new byte[size];	}
 
+	public ClientPositionMap() {
+		positionMap= new TreeMap<>();
+	}
 	public ClientPositionMap(int size) {
-		this.positionMap = new byte[size];
+		positionMap= new TreeMap<>();
+		tree_size=size;
 	}
 
 	public int getPosition(int key) {
-		return positionMap[key];
+		return positionMap.get(key);
+	}
+
+	public boolean putInPosition(int key, int value) {
+		boolean validPosition = value<256 && key<511*Bucket.MAX_SIZE;
+		if(validPosition)
+			positionMap.put(key,value);
+		return validPosition;
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
-		//TODO: this
-		/*out.writeInt(positionMap.size());
-		for (Map.Entry<Integer, Integer> entry : positionMap.entrySet()) {
-			out.writeInt(entry.getKey());
-			out.writeInt(entry.getValue());
-		}*/
+	public void writeExternal(ObjectOutput objectOutput) throws IOException {
+		for (int i = 0; i < tree_size*Bucket.MAX_SIZE; i++) {
+			objectOutput.writeByte(positionMap.get(i));
+		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		//TODO: this
-		/*int nItems = positionMap.size();
-		while (nItems-- > 0) {
-			int key = in.readInt();
-			int value = in.readInt();
+	public void readExternal(ObjectInput objectInput) throws IOException, ClassNotFoundException {
+		for (int key = 0; key < tree_size; key++) {
+			int value = objectInput.readByte();
 			positionMap.put(key, value);
-		}*/
+		}
 	}
+
+	public Set<Map.Entry<Integer, Integer>> entrySet() {
+		return positionMap.entrySet();
+	}
+
+	public void putAll(ClientPositionMap map) {
+		positionMap.putAll(map.positionMap);
+	}
+
+
 }

@@ -1,11 +1,10 @@
 package clientStructure;
 
-import java.io.Serializable;
+import java.io.*;
 import java.util.Arrays;
 import java.util.List;
 
-public class Bucket implements Serializable{
-	private static final long serialVersionUID = -7859690712026222635L;
+public class Bucket {
 	private Block[] blocks;
 	public static final Integer MAX_SIZE=7;
 
@@ -27,5 +26,4 @@ public class Bucket implements Serializable{
 	public String toString() {
 		return Arrays.toString(blocks);
 	}
-	
 }

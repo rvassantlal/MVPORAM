@@ -1,10 +1,12 @@
 package clientStructure;
 
-public class Block<T> {
+public class Block {
     private final byte key; //256 possibilities aren't a bit low?
-    private final T value;
+    private final byte[] value;
 
-    public Block(byte k, T v){
+    private final int standard_size=4096;
+
+    public Block(byte k, byte[] v){
         key=k;
         value=v;
     }
@@ -12,7 +14,11 @@ public class Block<T> {
         return key;
     }
 
-    public T getValue() {
+    public byte[] getValue() {
         return value;
+    }
+
+    public boolean isNotDummy() {
+        return !value.equals(new byte[standard_size]);
     }
 }
