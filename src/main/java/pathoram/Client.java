@@ -145,7 +145,17 @@ public class Client {
 					ObjectOutputStream encryptevictoout = new ObjectOutputStream(encryptevictout)) {
 				tempPositionMap.writeExternal(encryptevictoout);
 				clientStash.writeExternal(encryptevictoout);
-				newPath.writeExternal(encryptevictoout);
+				Path encryptedPath = new Path(newPath.size());
+				Bucket[] nonEncryptedBuckets = newPath.getBuckets();
+				for (int i = 0; i < nonEncryptedBuckets.length; i++) {
+					Block[] blocks = nonEncryptedBuckets[i].readBucket();
+					List<Block> encryptedBlocks= new ArrayList<>();
+					for (int j = 0; j < blocks.length; j++) {
+						encryptedBlocks.add(new Block(blocks[i].getKey(), encryptor.encrypt(blocks[i].getValue())));
+					}
+					encryptedPath.put(i,new Bucket(encryptedBlocks));
+				}
+				encryptedPath.writeExternal(encryptevictoout);
 				encryptevictoout.flush(); //TODO: create encryptedPath, encrypt blocks individually
 				evictout.write(encryptor.encrypt(encryptevictout.toByteArray()));
 				pathOramProxy.invokeOrdered(evictout.toByteArray());

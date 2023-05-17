@@ -12,7 +12,12 @@ public class Bucket implements Externalizable{
 		blocks = new Block[MAX_SIZE];
 	}
 
-	
+	public Bucket(List<Block> encryptedBlocks) {
+		blocks = new Block[MAX_SIZE];
+		writeBucket(encryptedBlocks);
+	}
+
+
 	public void writeBucket(List<Block> newBucketElements) {
 		if (newBucketElements.size() <= MAX_SIZE){
 			blocks= (Block[]) newBucketElements.toArray();

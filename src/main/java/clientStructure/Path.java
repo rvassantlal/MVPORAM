@@ -42,5 +42,13 @@ public class Path implements Externalizable {
         return blocks;
     }
 
+    public Bucket[] getBuckets() {
+        return pathContents;
+    }
+
+    public int size() {
+        return pathContents.length;
+    }
+
     //TODO:dummy this
 }
