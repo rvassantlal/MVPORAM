@@ -27,7 +27,7 @@ public class ClientTester {
 				if (op.equals(Operation.WRITE)) {
 					value = (short) r.nextInt(Short.MAX_VALUE);
 				}
-				Short answer = me.access(op, key, value,true);
+				byte[] answer = me.access(op, Integer.valueOf(key), new byte[]{value.byteValue()});
 				System.out.println("Answer from server: "+answer);
 			}
 			System.exit(0);

@@ -4,9 +4,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
+import clientStructure.Block;
+import clientStructure.Bucket;
 import org.apache.commons.lang3.SerializationUtils;
 
 import utils.*;
@@ -51,16 +54,30 @@ public class Server extends DefaultSingleRecoverable{
 			ByteArrayOutputStream out;
 			ObjectOutputStream oout;
 			if (cmd == ServerOperationType.EVICT) {
-				List<Double> snapshots = (List<Double>) objin.readObject();
-				FourTuple<byte[], byte[], Integer, TreeMap<Integer, byte[]>> evict = (FourTuple<byte[], byte[], Integer, TreeMap<Integer, byte[]>>) objin.readObject();
-				boolean bool = serverOram.doEviction(snapshots, evict.getFirst(), evict.getSecond(), evict.getThird(), evict.getFourth(), msgCtx.getSender());
+				int numberOfSnaps = objin.readInt();
+				snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
+				snaps.readExternal(objin);
+				int oldPosition = objin.readInt();
+				int stashSize = objin.readInt();
+
+				byte[] posMap= new byte[serverOram.getTreeSize()];
+				objin.read(posMap);
+				byte[] stash= new byte[stashSize* (Block.standard_size+1)];
+				objin.read(stash);
+				List<byte[]> path = new ArrayList<>();
+				for (int i = 0; i < serverOram.getTreeLevels(); i++) {
+					byte[] bucket= new byte[Bucket.MAX_SIZE*Block.standard_size];
+					objin.read(bucket);
+					path.add(bucket);
+				}
+				boolean bool = serverOram.doEviction(snaps, posMap, stash, oldPosition, path, msgCtx.getSender());
 				out = new ByteArrayOutputStream();
 				oout = new ObjectOutputStream(out);
 				oout.writeBoolean(bool);
 				oout.flush();
 				return out.toByteArray();
 			}
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
@@ -85,8 +102,14 @@ public class Server extends DefaultSingleRecoverable{
 				ObjectOutputStream oout;
 				switch (cmd) {
 					case ServerOperationType.GET_PATH_STASH:
-						List<Double> snaps = (List<Double>) ois.readObject();
-						List<Integer> pathIDs = (List<Integer>) ois.readObject();
+						int numberOfSnaps = ois.readInt();
+						snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
+						snaps.readExternal(ois);
+						int numberOfPaths = ois.readInt();
+						List<Integer> pathIDs = new ArrayList<>();
+						for (int i = 0; i < numberOfPaths; i++) {
+							pathIDs.add(ois.readInt());
+						}
 						return serverOram.getPathAndStash(snaps, pathIDs);
 					case ServerOperationType.GET_POSITION_MAP:
 						return serverOram.getPositionMap();
@@ -101,8 +124,6 @@ public class Server extends DefaultSingleRecoverable{
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
 		}
 		return null;
 	}

@@ -69,7 +69,7 @@ public class OramSnapshot implements Serializable{
 		this.stash = newStash;
 	}
 
-	public void putPath(Integer pathID, TreeMap<Integer,byte[]> newPath) {
+	public void putPath(Integer pathID, List<byte[]> newPath) {
 		int location = TREE_SIZE/2+pathID;
 		for (int i = TREE_LEVELS-1; i >= 0; i--) {
 			tree.put(location, newPath.get(i));

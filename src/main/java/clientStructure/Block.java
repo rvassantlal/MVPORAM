@@ -1,10 +1,12 @@
 package clientStructure;
 
+import java.util.Arrays;
+
 public class Block {
     private final byte key; //256 possibilities aren't a bit low?
     private final byte[] value;
 
-    private final int standard_size=4096;
+    public static final int standard_size=4096;
 
     public Block(byte k, byte[] v){
         key=k;
@@ -19,6 +21,6 @@ public class Block {
     }
 
     public boolean isNotDummy() {
-        return !value.equals(new byte[standard_size]);
+        return !Arrays.equals(value, new byte[standard_size]);
     }
 }

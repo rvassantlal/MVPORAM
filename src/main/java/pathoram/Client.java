@@ -3,6 +3,8 @@ package pathoram;
 
 import bftsmart.tom.ServiceProxy;
 import org.apache.commons.lang3.SerializationUtils;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.apache.commons.lang3.tuple.Pair;
 import security.EncryptionAbstraction;
 import clientStructure.*;
@@ -47,26 +49,25 @@ public class Client {
 
 	}
 	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException {
-		return access(Operation.READ,position,null,false);
+		return access(Operation.READ,position,null);
 	}
 	public byte[] writeMemory(Integer position,byte[] content) throws IOException, ClassNotFoundException {
-		return access(Operation.WRITE,position,content,false);
+		return access(Operation.WRITE,position,content);
 	}
-	public byte[] access(Operation op, Integer a, byte[] newData, Boolean debugMode) throws IOException, ClassNotFoundException {
+	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
+		/* TODO: use logger
 		if (debugMode)
 			debugPrintTree();
-		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
-		ByteArrayInputStream in = new ByteArrayInputStream(rawPositionMaps);
-		ObjectInputStream ois = new ObjectInputStream(in);
-		int paralellPathNumber = ois.readInt();
-		List<ClientPositionMap> posMaps = new ArrayList<>();
-		for (int i = 0; i < paralellPathNumber; i++) {
-			ClientPositionMap p = new ClientPositionMap(tree_size);
-			p.readExternal(ois);
-			posMaps.add(p);
-		}
-		snapshotIdentifiers snapIds = new snapshotIdentifiers();
-		snapIds.readExternal(ois);
+		 */
+		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
+
+		ImmutableTriple<Integer,byte[],snapshotIdentifiers> pmRequestResult = readPMRequestResult(rawPositionMaps);
+		int paralellPathNumber = pmRequestResult.left;
+		byte[] encryptedData = pmRequestResult.middle;
+		snapshotIdentifiers snapIds = pmRequestResult.right;
+		List<ClientPositionMap> posMaps = decryptPositionMaps(encryptedData,paralellPathNumber);
+
 		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
 		ClientPositionMap currentpositionMapClient = new ClientPositionMap(tree_size);
 		ClientStash clientStash = new ClientStash();
@@ -77,77 +78,35 @@ public class Client {
 					Integer val = entry.getValue();
 					oldPositions.put(snapIds.getByIndex(posMaps.indexOf(map)),val);
 				}
-					
-					/*if (currentpositionMap.containsKey(key) && !currentpositionMap.get(key).contains(val)) {
-						currentpositionMap.get(key).add(val);
-					} else {
-						ArrayList<Integer> al=new ArrayList<>();
-						al.add(val);
-						currentpositionMap.put(key, al);
-					}*/
 			}
 			currentpositionMapClient.putAll(map);
 		}
-
 		if((oldPositions.size()==0 && op==Operation.READ) || tree_size==-1) {
 			return null;
 		}
 		int tree_levels = (int)(Math.log(tree_size+1) / Math.log(2));
-		ClientPositionMap tempPositionMap = SerializationUtils.clone(currentpositionMapClient);
 		if(oldPositions.size()==0){
 			oldPositions.put(0.0,r.nextInt(tree_size/2+1));
 		}
-		tempPositionMap.putInPosition(a, r.nextInt(tree_size/2+1));
-		ByteArrayOutputStream pathout = new ByteArrayOutputStream();
-		try {
-			ObjectOutputStream pathoout = new ObjectOutputStream(pathout);
-			pathoout.writeInt(oramName);
-			pathoout.writeInt(ServerOperationType.GET_PATH_STASH);
-			snapIds.writeExternal(pathoout);
-			pathoout.writeInt(oldPositions.size());
-			for (Integer val: oldPositions.values()) {
-				pathoout.writeInt(val);
-			}
-			pathoout.flush();
-			
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		byte[] answer = pathOramProxy.invokeUnordered(pathout.toByteArray());
-		ByteArrayInputStream in2 = new ByteArrayInputStream(answer);
-		ObjectInputStream ois2 = new ObjectInputStream(in2);
-		//TODO: vamos ler o length, depois faz se o for com esse número e cada um vai ter uma stash
-		// também vai haver igual numero de entradas para o path
-		int numberOfSnaps = ois2.readInt();
-		TreeMap<Short, Pair<Double, byte[]>> intermediateStash = new TreeMap<>();
-		TreeMap<Short, Pair<Double, byte[]>> intermediatePath = new TreeMap<>();
-		for (int i = 0; i < numberOfSnaps; i++) {
-			double snapId = ois2.readDouble();
-			ClientStash retrievedStash = new ClientStash();
-			retrievedStash.readExternal(ois2);
+		currentpositionMapClient.putInPosition(a, r.nextInt(tree_size/2+1));
+		byte[] answer = makeGetPathStashRequest(snapIds,oldPositions);
 
-			ClientStash path = new ClientStash();
-			path.readExternal(ois2);
+		ImmutableTriple<ArrayList<List<Double>>,ArrayList<List<Integer>>,byte[]> pathStashResult = readPathStashRequestResult(answer, oldPositions.size());
 
-			List<Block> stashContents = retrievedStash.getBlocks().stream()
-					.filter(Block::isNotDummy)
-					.collect(Collectors.toList());
-			mergeStashes(intermediateStash,new ClientStash(stashContents),snapId);
+		ArrayList<List<Double>> snapsByPath = pathStashResult.left;
+		ArrayList<List<Integer>> stashSizes = pathStashResult.middle;
+		byte[] encryptedData2 = pathStashResult.right;
 
-			List<Block> pathContents = path.getBlocks().stream()
-					.filter(Block::isNotDummy)
-					.collect(Collectors.toList());
-
-			mergeStashes(intermediatePath,new ClientStash(pathContents),snapId);
-
-		}
+		ImmutablePair<TreeMap<Short, Pair<Double, byte[]>>,TreeMap<Short, Pair<Double, byte[]>>> decryptedPathAndStash =
+				readEncryptedPathStash(encryptedData2, oldPositions.size(), tree_levels,snapsByPath,stashSizes);
+		TreeMap<Short, Pair<Double, byte[]>> intermediateStash = decryptedPathAndStash.left;
+		TreeMap<Short, Pair<Double, byte[]>> intermediatePath = decryptedPathAndStash.right;
 		intermediatePath.forEach((key,val) -> clientStash.putBlock(new Block(key.byteValue(),val.getRight())));
 		intermediateStash.forEach((key,val) -> clientStash.putBlock(new Block(key.byteValue(),val.getRight())));
-		byte[] data = clientStash.getBlock(a.byteValue());
+		byte[] data = clientStash.getBlock((byte)a);
 		Integer oldPosition = oldPositions.get(oldPositions.lowerKey(Double.MAX_VALUE));
 		if(op.equals(Operation.WRITE)) {
-			clientStash.putBlock(new Block(a.byteValue(),newData));
+			clientStash.putBlock(new Block((byte)a,newData));
 			data=newData;
 		}
 		List<Block> stashValues = clientStash.getBlocks();
@@ -155,7 +114,7 @@ public class Client {
 		for (int level = tree_levels-1; level >= 0; level--) {
 			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_levels);
 			ClientStash tempClientStash = new ClientStash(stashValues.parallelStream()
-					.filter(val -> compatiblePaths.contains(tempPositionMap.getPosition(val.getKey())))
+					.filter(val -> compatiblePaths.contains(currentpositionMapClient.getPosition(val.getKey())))
 					.limit(Bucket.MAX_SIZE)
 					.collect(Collectors.toList()));
 			tempClientStash.getBlocks().forEach(clientStash::remove);
@@ -166,28 +125,143 @@ public class Client {
 		}
 		/*if (debugMode)
 			debugPrintPositionMap(tempPositionMap);*/
+		makeEvictionRequest(snapIds,oldPosition, currentpositionMapClient,clientStash,newPath);
 
-		try {
-			ByteArrayOutputStream evictout = new ByteArrayOutputStream();
-			ObjectOutputStream evictoout = new ObjectOutputStream(evictout);
+
+		return data;
+	}
+
+	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, ClientPositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
+		try
+				(ByteArrayOutputStream evictout = new ByteArrayOutputStream();
+				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout);){
 			evictoout.writeInt(oramName);
 			evictoout.writeInt(ServerOperationType.EVICT);
 			snapIds.writeExternal(evictoout);
 			evictoout.writeInt(oldPosition);
-			ByteArrayOutputStream encryptevictout = new ByteArrayOutputStream();
-			ObjectOutputStream encryptevictoout = new ObjectOutputStream(encryptevictout);
-			tempPositionMap.writeExternal(encryptevictoout);
-			clientStash.writeExternal(encryptevictoout);
-			newPath.writeExternal(encryptevictoout);
-			encryptevictoout.flush();
-			evictout.write(encryptor.encrypt(encryptevictout.toByteArray()));
-			pathOramProxy.invokeOrdered(evictout.toByteArray());
+			evictoout.writeInt(clientStash.size());
+			try(
+					ByteArrayOutputStream encryptevictout = new ByteArrayOutputStream();
+					ObjectOutputStream encryptevictoout = new ObjectOutputStream(encryptevictout)) {
+				tempPositionMap.writeExternal(encryptevictoout);
+				clientStash.writeExternal(encryptevictoout);
+				newPath.writeExternal(encryptevictoout);
+				encryptevictoout.flush(); //TODO: create encryptedPath, encrypt blocks individually
+				evictout.write(encryptor.encrypt(encryptevictout.toByteArray()));
+				pathOramProxy.invokeOrdered(evictout.toByteArray());
+			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
 
-		return data;
+	private ImmutableTriple<ArrayList<List<Double>>, ArrayList<List<Integer>>,byte[]> readPathStashRequestResult(byte[] answer, int oldPositionsSize) throws IOException {
+		ArrayList<List<Double>> snapsByPath = new ArrayList<>();
+		ArrayList<List<Integer>> stashSizes =  new ArrayList<>();
+		byte[] encryptedData2;
+		try(
+				ByteArrayInputStream in2 = new ByteArrayInputStream(answer);
+				ObjectInputStream ois2 = new ObjectInputStream(in2)) {
+
+			int[] numberOfSnaps = new int[oldPositionsSize];
+			for (int i = 0; i < oldPositionsSize; i++) {
+				numberOfSnaps[i] = ois2.readInt();
+				ArrayList<Double> arr = new ArrayList<>();
+				ArrayList<Integer> sizes = new ArrayList<>();
+				for (int j = 0; j < numberOfSnaps[i]; j++) {
+					arr.add(ois2.readDouble());
+					sizes.add(ois2.readInt());
+				}
+				snapsByPath.add(arr);
+				stashSizes.add(sizes);
+			}
+
+			int encryptedLength = ois2.readInt();
+			encryptedData2 = new byte[encryptedLength];
+			ois2.read(encryptedData2);
+			encryptedData2 = encryptor.decrypt(encryptedData2);
+		}
+		return ImmutableTriple.of(snapsByPath,stashSizes,encryptedData2);
+	}
+
+	private ImmutablePair<TreeMap<Short, Pair<Double,byte[]>>, TreeMap<Short, Pair<Double,byte[]>>> readEncryptedPathStash(byte[] encryptedData, int oldPositionsSize, int tree_levels, ArrayList<List<Double>> snapsByPath, ArrayList<List<Integer>> stashSizes) throws IOException, ClassNotFoundException {
+		TreeMap<Short, Pair<Double, byte[]>> intermediateStash = new TreeMap<>();
+		TreeMap<Short, Pair<Double, byte[]>> intermediatePath = new TreeMap<>();
+		try(
+				ByteArrayInputStream encryptedin2 = new ByteArrayInputStream(encryptedData);
+				ObjectInputStream encryptedois2 = new ObjectInputStream(encryptedin2)) {
+			for (int i = 0; i < oldPositionsSize; i++) {
+				for (Double snapId : snapsByPath.get(i)) {
+					ClientStash retrievedStash = new ClientStash(stashSizes.get(i).get(snapsByPath.get(i).indexOf(snapId)));
+					retrievedStash.readExternal(encryptedois2);
+					Path path = new Path(tree_levels);
+					path.readExternal(encryptedois2);
+					List<Block> stashContents = retrievedStash.getBlocks().stream()
+							.filter(Block::isNotDummy)
+							.collect(Collectors.toList());
+					mergeStashes(intermediateStash, new ClientStash(stashContents), snapId);
+
+					List<Block> pathContents = path.getBlocks().stream()
+							.filter(Block::isNotDummy)
+							.collect(Collectors.toList());
+
+					mergeStashes(intermediatePath, new ClientStash(pathContents), snapId);
+				}
+			}
+		}
+		return ImmutablePair.of(intermediateStash,intermediatePath);
+	}
+
+	private ImmutableTriple<Integer,byte[], snapshotIdentifiers> readPMRequestResult(byte[] rawPositionMaps) throws IOException {
+		try(ByteArrayInputStream in = new ByteArrayInputStream(rawPositionMaps); //TODO:use try with resources
+			ObjectInputStream ois = new ObjectInputStream(in)) {
+			int paralellPathNumber = ois.readInt();
+			snapshotIdentifiers snapIds = new snapshotIdentifiers(paralellPathNumber);
+			snapIds.readExternal(ois);
+			int encryptedLength = ois.readInt();
+			byte[] encryptedData = new byte[encryptedLength];
+			ois.read(encryptedData);
+			return ImmutableTriple.of(paralellPathNumber,encryptedData,snapIds);
+		}
+	}
+
+	private byte[] makeGetPathStashRequest(snapshotIdentifiers snapIds, TreeMap<Double, Integer> oldPositions) {
+		try (ByteArrayOutputStream pathout = new ByteArrayOutputStream();
+			 ObjectOutputStream pathoout = new ObjectOutputStream(pathout)){
+			pathoout.writeInt(oramName);
+			pathoout.writeInt(ServerOperationType.GET_PATH_STASH);
+			pathoout.writeInt(snapIds.size());
+			snapIds.writeExternal(pathoout);
+			pathoout.writeInt(oldPositions.size());
+			for (Integer val: oldPositions.values()) {
+				pathoout.writeInt(val);
+			}
+			pathoout.flush();
+			return pathOramProxy.invokeUnordered(pathout.toByteArray());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return new byte[0];
+	}
+
+	private List<ClientPositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
+		if(encryptedData.length>0) {
+			encryptedData = encryptor.decrypt(encryptedData);
+
+			try (ByteArrayInputStream encryptedin = new ByteArrayInputStream(encryptedData);
+				 ObjectInputStream encryptedois = new ObjectInputStream(encryptedin)) {
+				List<ClientPositionMap> posMaps = new ArrayList<>();
+				for (int i = 0; i < paralellPathNumber; i++) {
+					ClientPositionMap p = new ClientPositionMap(tree_size);
+					p.readExternal(encryptedois);
+					posMaps.add(p);
+				}
+				return posMaps;
+			}
+		}
+		return new ArrayList<>();
 	}
 
 	/*private void mergePaths(TreeMap<Short, Pair<Double, Short>> intermediatePath, Bucket deserializedBucket, Double snapId) {
@@ -222,7 +296,7 @@ public class Client {
 		if (rawTree!=null) {
 			ByteArrayInputStream in = new ByteArrayInputStream(rawTree);
 			ObjectInputStream ois = new ObjectInputStream(in);
-			
+
 			List<List<byte[]>> obj = ((List<List<byte[]>>) ois.readObject());
 			obj.stream().forEach(treeList ->  auxPrintTree(treeList));
 		}

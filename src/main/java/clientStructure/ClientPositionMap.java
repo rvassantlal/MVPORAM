@@ -15,7 +15,6 @@ public class ClientPositionMap implements Externalizable {
 	// private byte[] positionMap;
 	private TreeMap<Integer,Integer> positionMap;
 	private Integer tree_size;
-	//public ClientPositionMap(int size) {	this.positionMap = new byte[size];	}
 
 	public ClientPositionMap() {
 		positionMap= new TreeMap<>();
@@ -29,11 +28,10 @@ public class ClientPositionMap implements Externalizable {
 		return positionMap.get(key);
 	}
 
-	public boolean putInPosition(int key, int value) {
+	public void putInPosition(int key, int value) {
 		boolean validPosition = value<256 && key<511*Bucket.MAX_SIZE;
 		if(validPosition)
 			positionMap.put(key,value);
-		return validPosition;
 	}
 
 	@Override
@@ -44,7 +42,7 @@ public class ClientPositionMap implements Externalizable {
 	}
 
 	@Override
-	public void readExternal(ObjectInput objectInput) throws IOException, ClassNotFoundException {
+	public void readExternal(ObjectInput objectInput) throws IOException {
 		for (int key = 0; key < tree_size; key++) {
 			int value = objectInput.readByte();
 			positionMap.put(key, value);
