@@ -37,7 +37,12 @@ public class ClientPositionMap implements Externalizable {
 	@Override
 	public void writeExternal(ObjectOutput objectOutput) throws IOException {
 		for (int i = 0; i < tree_size*Bucket.MAX_SIZE; i++) {
-			objectOutput.writeByte(positionMap.get(i));
+			Integer pathId = positionMap.get(i);
+			if(pathId==null)
+				objectOutput.writeByte(0);
+			else{
+				objectOutput.writeByte(pathId);
+			}
 		}
 	}
 

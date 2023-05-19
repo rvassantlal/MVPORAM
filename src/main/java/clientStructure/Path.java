@@ -12,12 +12,15 @@ public class Path implements Externalizable {
     Bucket[] pathContents;
     public Path(int tree_levels) {
         pathContents= new Bucket[tree_levels];
+        for (int i = 0; i < tree_levels; i++) {
+            put(i,new Bucket());
+        }
     }
 
     @Override
     public void writeExternal(ObjectOutput objectOutput) throws IOException {
-        for (int i = 0; i < pathContents.length; i++) {
-            pathContents[i].writeExternal(objectOutput);
+        for (Bucket pathContent : pathContents) {
+            pathContent.writeExternal(objectOutput);
         }
     }
 

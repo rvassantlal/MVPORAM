@@ -96,13 +96,14 @@ public class Client {
 		ArrayList<List<Double>> snapsByPath = pathStashResult.left;
 		ArrayList<List<Integer>> stashSizes = pathStashResult.middle;
 		byte[] encryptedData2 = pathStashResult.right;
-
-		ImmutablePair<TreeMap<Short, Pair<Double, byte[]>>,TreeMap<Short, Pair<Double, byte[]>>> decryptedPathAndStash =
-				readEncryptedPathStash(encryptedData2, oldPositions.size(), tree_levels,snapsByPath,stashSizes);
-		TreeMap<Short, Pair<Double, byte[]>> intermediateStash = decryptedPathAndStash.left;
-		TreeMap<Short, Pair<Double, byte[]>> intermediatePath = decryptedPathAndStash.right;
-		intermediatePath.forEach((key,val) -> clientStash.putBlock(new Block(key.byteValue(),val.getRight())));
-		intermediateStash.forEach((key,val) -> clientStash.putBlock(new Block(key.byteValue(),val.getRight())));
+		if(encryptedData2.length>0) {
+			ImmutablePair<TreeMap<Short, Pair<Double, byte[]>>, TreeMap<Short, Pair<Double, byte[]>>> decryptedPathAndStash =
+					readEncryptedPathStash(encryptedData2, oldPositions.size(), tree_levels, snapsByPath, stashSizes);
+			TreeMap<Short, Pair<Double, byte[]>> intermediateStash = decryptedPathAndStash.left;
+			TreeMap<Short, Pair<Double, byte[]>> intermediatePath = decryptedPathAndStash.right;
+			intermediatePath.forEach((key, val) -> clientStash.putBlock(new Block(key.byteValue(), val.getRight())));
+			intermediateStash.forEach((key, val) -> clientStash.putBlock(new Block(key.byteValue(), val.getRight())));
+		}
 		byte[] data = clientStash.getBlock((byte)a);
 		Integer oldPosition = oldPositions.get(oldPositions.lowerKey(Double.MAX_VALUE));
 		if(op.equals(Operation.WRITE)) {
@@ -119,8 +120,8 @@ public class Client {
 					.collect(Collectors.toList()));
 			tempClientStash.getBlocks().forEach(clientStash::remove);
 			Bucket b = new Bucket();
-			b.writeBucket(tempClientStash.getBlocks());
-
+			if(tempClientStash.size()>0)
+				b.writeBucket(tempClientStash.getBlocks());
 			newPath.put(level, b);
 		}
 		/*if (debugMode)
@@ -134,32 +135,35 @@ public class Client {
 	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, ClientPositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
 		try
 				(ByteArrayOutputStream evictout = new ByteArrayOutputStream();
-				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout);){
+				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout)){
 			evictoout.writeInt(oramName);
 			evictoout.writeInt(ServerOperationType.EVICT);
 			snapIds.writeExternal(evictoout);
 			evictoout.writeInt(oldPosition);
 			evictoout.writeInt(clientStash.size());
+			evictoout.flush();
 			try(
 					ByteArrayOutputStream encryptevictout = new ByteArrayOutputStream();
 					ObjectOutputStream encryptevictoout = new ObjectOutputStream(encryptevictout)) {
 				tempPositionMap.writeExternal(encryptevictoout);
 				clientStash.writeExternal(encryptevictoout);
-				Path encryptedPath = new Path(newPath.size());
-				Bucket[] nonEncryptedBuckets = newPath.getBuckets();
-				for (int i = 0; i < nonEncryptedBuckets.length; i++) {
-					Block[] blocks = nonEncryptedBuckets[i].readBucket();
-					List<Block> encryptedBlocks= new ArrayList<>();
-					for (int j = 0; j < blocks.length; j++) {
-						encryptedBlocks.add(new Block(blocks[i].getKey(), encryptor.encrypt(blocks[i].getValue())));
-					}
-					encryptedPath.put(i,new Bucket(encryptedBlocks));
-				}
-				encryptedPath.writeExternal(encryptevictoout);
-				encryptevictoout.flush(); //TODO: create encryptedPath, encrypt blocks individually
+				encryptevictoout.flush();
 				evictout.write(encryptor.encrypt(encryptevictout.toByteArray()));
-				pathOramProxy.invokeOrdered(evictout.toByteArray());
 			}
+			Path encryptedPath = new Path(newPath.size());
+			System.out.println(newPath.size());
+			Bucket[] nonEncryptedBuckets = newPath.getBuckets();
+			for (int i = 0; i < nonEncryptedBuckets.length; i++) {
+				Block[] blocks = nonEncryptedBuckets[i].readBucket();
+				List<Block> encryptedBlocks= new ArrayList<>();
+				for (int j = 0; j < blocks.length; j++) {
+					encryptedBlocks.add(new Block(blocks[i].getKey(), encryptor.encrypt(blocks[i].getValue())));
+				}
+				encryptedPath.put(i,new Bucket(encryptedBlocks));
+			}
+			encryptedPath.writeExternal(evictoout);
+			evictoout.flush();
+			pathOramProxy.invokeOrdered(evictout.toByteArray());
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -175,19 +179,21 @@ public class Client {
 				ObjectInputStream ois2 = new ObjectInputStream(in2)) {
 
 			int[] numberOfSnaps = new int[oldPositionsSize];
+			int cumulativeStashesSize=0;
 			for (int i = 0; i < oldPositionsSize; i++) {
 				numberOfSnaps[i] = ois2.readInt();
 				ArrayList<Double> arr = new ArrayList<>();
 				ArrayList<Integer> sizes = new ArrayList<>();
 				for (int j = 0; j < numberOfSnaps[i]; j++) {
 					arr.add(ois2.readDouble());
-					sizes.add(ois2.readInt());
+					int stashSize = ois2.readInt();
+					sizes.add(stashSize);
+					cumulativeStashesSize+=stashSize;
 				}
 				snapsByPath.add(arr);
 				stashSizes.add(sizes);
 			}
-
-			int encryptedLength = ois2.readInt();
+			int encryptedLength = cumulativeStashesSize*(Block.standard_size+1)+(Arrays.stream(numberOfSnaps).sum()*tree_size*Bucket.MAX_SIZE);
 			encryptedData2 = new byte[encryptedLength];
 			ois2.read(encryptedData2);
 			encryptedData2 = encryptor.decrypt(encryptedData2);

@@ -1,6 +1,7 @@
 package clientStructure;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 //TODO: dummy fill the rest of the buckets
@@ -10,6 +11,7 @@ public class Bucket implements Externalizable{
 
 	public Bucket(){
 		blocks = new Block[MAX_SIZE];
+		writeBucket(new ArrayList<>());
 	}
 
 	public Bucket(List<Block> encryptedBlocks) {
@@ -19,8 +21,13 @@ public class Bucket implements Externalizable{
 
 
 	public void writeBucket(List<Block> newBucketElements) {
-		if (newBucketElements.size() <= MAX_SIZE){
-			blocks= (Block[]) newBucketElements.toArray();
+		int listSize = newBucketElements.size();
+		if (listSize <= MAX_SIZE){
+			blocks = new Block[MAX_SIZE];
+			for (int i = 0; i < MAX_SIZE; i++) {
+				Block val = i<listSize?newBucketElements.get(i):null;
+				blocks[i] = val==null? new Block() : newBucketElements.get(i);
+			}
 		}
 	}
 

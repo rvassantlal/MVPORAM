@@ -1,5 +1,6 @@
 package pathoram;
 
+import clientStructure.Block;
 import utils.snapshotIdentifiers;
 
 import java.io.ByteArrayOutputStream;
@@ -24,12 +25,11 @@ public class Oram {
         outstandingTrees = new ArrayList<>();
         Double snapId = 1+Double.parseDouble("0."+client_id.toString());
         OramSnapshot snap = new OramSnapshot(TREE_SIZE, null, snapId);
-        int numberOfPaths = TREE_SIZE/TREE_LEVELS;
         List<byte[]> newPath = new ArrayList<>();
         for (int i = 0; i < TREE_LEVELS; i++) {
             newPath.add(null);
         }
-        for (int i = 0; i < numberOfPaths; i++) {
+        for (int i = 0; i < TREE_SIZE/2; i++) {
             snap.putPath(i, newPath);
         }
         outstandingTrees.add(snap);
@@ -68,9 +68,11 @@ public class Oram {
             return null;
         List<TreeMap<Double,byte[]>> allPathStashes = new ArrayList<>();
         List<TreeMap<Double,List<byte[]>>> allPathPaths = new ArrayList<>();
-        for (Integer pathID: pathIDs) { //TODO:não bate certo
+        List<List<Double>> snapsByPath = new ArrayList<>();
+        for (Integer pathID: pathIDs) {
             TreeMap<Double,byte[]> stashes = new TreeMap<>();
             TreeMap<Double,List<byte[]>> list = new TreeMap<>();
+            List<Double> snapsInPath = new ArrayList<>();
             int location = TREE_SIZE/2+pathID;
             for (int i = TREE_LEVELS-1; i >= 0; i--) {
                 boolean dataIsNull = true;
@@ -85,11 +87,14 @@ public class Oram {
                     TreeMap<Double,List<byte[]>> dataList = new TreeMap<>();
                     for (OramSnapshot snapshot:versionSnapshots) {
                         byte[] tempData = snapshot.getFromLocation(location);
-
                         if (tempData != null){
                             if(!stashes.containsKey(snapshot.getId()))
                                 tempVersionStashes.put(snapshot.getId(),snapshot.getStash());
+                            if(dataList.get(snapshot.getId())==null)
+                                dataList.put(snapshot.getId(), new ArrayList<>());
                             dataList.get(snapshot.getId()).add(tempData);
+                            if (!snapsInPath.contains(snapshot.getId()))
+                                snapsInPath.add(snapshot.getId());
                             dataIsNull = false;
                         }
                     }
@@ -106,8 +111,25 @@ public class Oram {
                 location=location%2==0?location-2:location-1;
                 location/=2;
             }
+            oout.writeInt(snapsInPath.size());
+            for (int i = 0; i < snapsInPath.size(); i++) {
+                Double snapID = snapsInPath.get(i);
+                oout.writeDouble(snapID);
+                oout.writeInt(stashes.get(snapID).length/(Block.standard_size+1));
+            }
             allPathStashes.add(stashes);
             allPathPaths.add(list);
+            snapsByPath.add(snapsInPath);
+        }
+        for (int i = 0; i < pathIDs.size(); i++) {
+            TreeMap<Double, byte[]> stashes = allPathStashes.get(i);
+            TreeMap<Double, List<byte[]>> paths = allPathPaths.get(i);
+            for(Double snapId : snapsByPath.get(i)){
+                oout.write(stashes.get(snapId));
+                for(byte[] bucket : paths.get(snapId)){
+                    oout.write(bucket);
+                }
+            }
         }
         oout.flush();
         return out.toByteArray();
@@ -143,7 +165,7 @@ public class Oram {
 
     //gets one tree from this version
     public List<List<byte[]>> getTree() {
-        return allTrees.values().stream().map(e -> e.getTree()).collect(Collectors.toList());
+        return allTrees.values().stream().map(OramSnapshot::getTree).collect(Collectors.toList());
     }
 
     public int getTreeSize() {
