@@ -60,9 +60,9 @@ public class Server extends DefaultSingleRecoverable{
 				int oldPosition = objin.readInt();
 				int stashSize = objin.readInt();
 
-				byte[] posMap= new byte[serverOram.getTreeSize()];
+				byte[] posMap= new byte[objin.readInt()];
 				objin.read(posMap);
-				byte[] stash= new byte[stashSize* (Block.standard_size+1)];
+				byte[] stash= new byte[objin.readInt()];
 				objin.read(stash);
 				List<byte[]> path = new ArrayList<>();
 				for (int i = 0; i < serverOram.getTreeLevels(); i++) {

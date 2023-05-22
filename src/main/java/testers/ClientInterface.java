@@ -48,7 +48,8 @@ public class ClientInterface {
 			}
 			sc.nextLine();
 			try {
-				byte[] answer = me.access(op, Integer.valueOf(key), new byte[]{value.byteValue()});
+				byte[] val = value == null ? new byte[]{} : new byte[]{value.byteValue()};
+				byte[] answer = me.access(op, Integer.valueOf(key),val);
 				System.out.println("Answer from server: "+answer);
 				
 			} catch (Exception e) {

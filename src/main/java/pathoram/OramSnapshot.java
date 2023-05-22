@@ -47,11 +47,7 @@ public class OramSnapshot implements Serializable{
 	}
 
 	public List<byte[]> getTree() {
-		ArrayList<byte[]> result = new ArrayList<>();
-		for (int treeKey:tree.keySet()) {
-			result.add(tree.get(treeKey));
-		}
-		return result;
+		return new ArrayList<>(tree.values());
 	}
 	public byte[] getStash() {
 		return stash;

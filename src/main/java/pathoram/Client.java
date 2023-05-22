@@ -6,6 +6,8 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import security.EncryptionAbstraction;
 import clientStructure.*;
 import utils.*;
@@ -17,6 +19,7 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 public class Client {
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
 	private SecureRandom r = new SecureRandom();
 	private final int[] possibleTreeSizes={3,7,15,31,63,127,255,511};
 	private ServiceProxy pathOramProxy;
@@ -55,10 +58,7 @@ public class Client {
 		return access(Operation.WRITE,position,content);
 	}
 	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
-		/* TODO: use logger
-		if (debugMode)
-			debugPrintTree();
-		 */
+		//debugPrintTree();
 		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
 				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
 
@@ -96,6 +96,7 @@ public class Client {
 		ArrayList<List<Double>> snapsByPath = pathStashResult.left;
 		ArrayList<List<Integer>> stashSizes = pathStashResult.middle;
 		byte[] encryptedData2 = pathStashResult.right;
+		logger.debug("len:"+encryptedData2.length);
 		if(encryptedData2.length>0) {
 			ImmutablePair<TreeMap<Short, Pair<Double, byte[]>>, TreeMap<Short, Pair<Double, byte[]>>> decryptedPathAndStash =
 					readEncryptedPathStash(encryptedData2, oldPositions.size(), tree_levels, snapsByPath, stashSizes);
@@ -124,11 +125,8 @@ public class Client {
 				b.writeBucket(tempClientStash.getBlocks());
 			newPath.put(level, b);
 		}
-		/*if (debugMode)
-			debugPrintPositionMap(tempPositionMap);*/
+		//debugPrintPositionMap(currentpositionMapClient);
 		makeEvictionRequest(snapIds,oldPosition, currentpositionMapClient,clientStash,newPath);
-
-
 		return data;
 	}
 
@@ -138,6 +136,7 @@ public class Client {
 				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout)){
 			evictoout.writeInt(oramName);
 			evictoout.writeInt(ServerOperationType.EVICT);
+			evictoout.writeInt(snapIds.size());
 			snapIds.writeExternal(evictoout);
 			evictoout.writeInt(oldPosition);
 			evictoout.writeInt(clientStash.size());
@@ -146,12 +145,19 @@ public class Client {
 					ByteArrayOutputStream encryptevictout = new ByteArrayOutputStream();
 					ObjectOutputStream encryptevictoout = new ObjectOutputStream(encryptevictout)) {
 				tempPositionMap.writeExternal(encryptevictoout);
+				encryptevictoout.flush();
+				byte[] pm = encryptor.encrypt(encryptevictout.toByteArray());
+				evictoout.writeInt(pm.length);
+				evictoout.write(pm);
+				encryptevictoout.reset();
+				encryptevictout.reset();
 				clientStash.writeExternal(encryptevictoout);
 				encryptevictoout.flush();
-				evictout.write(encryptor.encrypt(encryptevictout.toByteArray()));
+				byte[] stash = encryptor.encrypt(encryptevictout.toByteArray());
+				evictoout.writeInt(stash.length);
+				evictoout.write(stash);
 			}
 			Path encryptedPath = new Path(newPath.size());
-			System.out.println(newPath.size());
 			Bucket[] nonEncryptedBuckets = newPath.getBuckets();
 			for (int i = 0; i < nonEncryptedBuckets.length; i++) {
 				Block[] blocks = nonEncryptedBuckets[i].readBucket();
@@ -183,17 +189,17 @@ public class Client {
 			for (int i = 0; i < oldPositionsSize; i++) {
 				numberOfSnaps[i] = ois2.readInt();
 				ArrayList<Double> arr = new ArrayList<>();
-				ArrayList<Integer> sizes = new ArrayList<>();
+				ArrayList<Integer> pathIdStashSizes = new ArrayList<>();
 				for (int j = 0; j < numberOfSnaps[i]; j++) {
 					arr.add(ois2.readDouble());
 					int stashSize = ois2.readInt();
-					sizes.add(stashSize);
+					pathIdStashSizes.add(stashSize);
 					cumulativeStashesSize+=stashSize;
 				}
 				snapsByPath.add(arr);
-				stashSizes.add(sizes);
+				stashSizes.add(pathIdStashSizes);
 			}
-			int encryptedLength = cumulativeStashesSize*(Block.standard_size+1)+(Arrays.stream(numberOfSnaps).sum()*tree_size*Bucket.MAX_SIZE);
+			int encryptedLength = cumulativeStashesSize+(Arrays.stream(numberOfSnaps).sum()*tree_size*Bucket.MAX_SIZE);
 			encryptedData2 = new byte[encryptedLength];
 			ois2.read(encryptedData2);
 			encryptedData2 = encryptor.decrypt(encryptedData2);
@@ -300,13 +306,13 @@ public class Client {
 	}
 
 
-	private void debugPrintPositionMap(TreeMap<Short, Integer> tempPositionMap) {
-		System.out.println("positionMap"+tempPositionMap.entrySet().stream()
+	private void debugPrintPositionMap(ClientPositionMap tempPositionMap) {
+		logger.debug("positionMap"+tempPositionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.collect(Collectors.toList()));
 
 	}
-	private void debugPrintTree() throws IOException, ClassNotFoundException {
+	private String debugPrintTree() throws IOException, ClassNotFoundException {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
 				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)));
 		if (rawTree!=null) {
@@ -314,15 +320,16 @@ public class Client {
 			ObjectInputStream ois = new ObjectInputStream(in);
 
 			List<List<byte[]>> obj = ((List<List<byte[]>>) ois.readObject());
-			obj.stream().forEach(treeList ->  auxPrintTree(treeList));
+			obj.forEach(this::auxPrintTree);
 		}
+		return null;
 	}
 	private void auxPrintTree (List<byte[]> rawTree) {
 		if(rawTree!=null) {
 			List<String> tree = rawTree.stream()
-					.map(b -> b==null ? null : (SerializationUtils.deserialize(encryptor.decrypt(b))).toString())
+					.map(b -> b==null ? null : Arrays.toString((encryptor.decrypt(b))))
 					.collect(Collectors.toList());
-			TreePrinter.print(tree);
+			logger.debug(TreePrinter.print(tree));
 		}
 	}
 	private byte[] createRequest(List<Integer> contents) {

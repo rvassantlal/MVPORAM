@@ -115,7 +115,8 @@ public class Oram {
             for (int i = 0; i < snapsInPath.size(); i++) {
                 Double snapID = snapsInPath.get(i);
                 oout.writeDouble(snapID);
-                oout.writeInt(stashes.get(snapID).length/(Block.standard_size+1));
+                oout.writeInt(stashes.get(snapID).length);
+                oout.writeInt(list.get(snapID).size());
             }
             allPathStashes.add(stashes);
             allPathPaths.add(list);
@@ -147,7 +148,7 @@ public class Oram {
         outstandingTrees.add(newTree);
         allTrees.put(snapId,newTree);
 
-        removeDeadVersions(previousSnapshots, pathID);
+        //removeDeadVersions(previousSnapshots, pathID);
         return true;
     }
 
