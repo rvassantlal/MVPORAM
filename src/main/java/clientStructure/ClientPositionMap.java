@@ -25,7 +25,7 @@ public class ClientPositionMap implements Externalizable {
 	}
 
 	public int getPosition(int key) {
-		return positionMap.get(key);
+		return positionMap.get(key)==null?0:positionMap.get(key);
 	}
 
 	public void putInPosition(int key, int value) {
