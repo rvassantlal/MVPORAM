@@ -48,7 +48,7 @@ public class Client {
 		List<Integer> reqArgs= Arrays.asList(oramName,
 				ServerOperationType.CREATE_ORAM,
 				size);
-		return SerializationUtils.deserialize(pathOramProxy.invokeUnordered(createRequest(reqArgs)));
+		return SerializationUtils.deserialize(pathOramProxy.invokeUnordered(createRequest(reqArgs), null, (byte) 0));
 
 	}
 	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException {
@@ -60,7 +60,7 @@ public class Client {
 	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
 		//debugPrintTree();
 		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), null, (byte) 0);
 
 		ImmutableTriple<Integer,byte[],snapshotIdentifiers> pmRequestResult = readPMRequestResult(rawPositionMaps);
 		int paralellPathNumber = pmRequestResult.left;
@@ -169,7 +169,7 @@ public class Client {
 			}
 			encryptedPath.writeExternal(evictoout);
 			evictoout.flush();
-			pathOramProxy.invokeOrdered(evictout.toByteArray());
+			pathOramProxy.invokeOrdered(evictout.toByteArray(), null, (byte) 0);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -260,7 +260,7 @@ public class Client {
 				pathoout.writeInt(val);
 			}
 			pathoout.flush();
-			return pathOramProxy.invokeUnordered(pathout.toByteArray());
+			return pathOramProxy.invokeUnordered(pathout.toByteArray(), null, (byte) 0);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -314,7 +314,7 @@ public class Client {
 	}
 	private String debugPrintTree() throws IOException, ClassNotFoundException {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)));
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), null, (byte) 0);
 		if (rawTree!=null) {
 			ByteArrayInputStream in = new ByteArrayInputStream(rawTree);
 			ObjectInputStream ois = new ObjectInputStream(in);

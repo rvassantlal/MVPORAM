@@ -1,6 +1,7 @@
 package pathoram;
 
-import clientStructure.Block;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.snapshotIdentifiers;
 
 import java.io.ByteArrayOutputStream;
@@ -12,13 +13,40 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-public class Oram {
+public class ORAM {
+    private final Logger logger = LoggerFactory.getLogger("oram");
     private static Integer TREE_SIZE;
     private static Integer TREE_LEVELS;
+    private final int oramId;
     private TreeMap<Double,OramSnapshot> allTrees;
     private List<OramSnapshot> outstandingTrees;
 
-    protected Oram(int size,Integer client_id) {
+    public ORAM(int oramId, int treeHeight, int clientId) {
+        this.oramId = oramId;
+        int nBuckets = 0;
+        for (int i = 0; i < treeHeight; i++) {
+            nBuckets += 1 << i;
+        }
+        TREE_SIZE = nBuckets;
+        TREE_LEVELS = treeHeight;
+        logger.debug("Total number of buckets: {}", nBuckets);
+        allTrees=new TreeMap<>();
+        outstandingTrees = new ArrayList<>();
+        double snapId = 1 + Double.parseDouble("0." + clientId);
+        OramSnapshot snap = new OramSnapshot(TREE_SIZE, null, snapId);
+        List<byte[]> newPath = new ArrayList<>();
+        for (int i = 0; i < TREE_LEVELS; i++) {
+            newPath.add(null);
+        }
+        for (int i = 0; i < TREE_SIZE/2; i++) {
+            snap.putPath(i, newPath);
+        }
+        outstandingTrees.add(snap);
+        allTrees.put(snapId,snap);
+    }
+
+    protected ORAM(int oramId, int size, Integer client_id) {
+        this.oramId = oramId;
         TREE_SIZE = size;
         TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
         allTrees=new TreeMap<>();
