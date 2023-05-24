@@ -1,4 +1,6 @@
-package clientStructure;
+package oram.client.structure;
+
+import clientStructure.Bucket;
 
 import java.io.Externalizable;
 import java.io.IOException;
@@ -8,20 +10,30 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-public class ClientPositionMap implements Externalizable {
+public class PositionMap implements Externalizable {
 	// This array maps a key to a pathId.
 	// The key is the position in the array and the pathId is the byte stored in that position.
 	// 256 paths, which means there are 511 nodes in total and the max storage is 511*Bucket.MAX_SIZE.
 	// private byte[] positionMap;
 	private TreeMap<Integer,Integer> positionMap;
+	private double versionId;
 	private Integer tree_size;
 
-	public ClientPositionMap() {
+	public PositionMap() {
 		positionMap= new TreeMap<>();
 	}
-	public ClientPositionMap(int size) {
+	public PositionMap(int size) {
 		positionMap= new TreeMap<>();
 		tree_size=size;
+	}
+
+	public PositionMap(double versionId, int[] positionMap) {
+		this.versionId = versionId;
+		this.tree_size = positionMap.length;
+		this.positionMap = new TreeMap<>();
+		for (int i = 0; i < positionMap.length; i++) {
+			this.positionMap.put(i, positionMap[i]);
+		}
 	}
 
 	public int getPosition(int key) {
@@ -29,9 +41,13 @@ public class ClientPositionMap implements Externalizable {
 	}
 
 	public void putInPosition(int key, int value) {
-		boolean validPosition = value<256 && key<511*Bucket.MAX_SIZE;
+		boolean validPosition = value<256 && key<511* Bucket.MAX_SIZE;
 		if(validPosition)
 			positionMap.put(key,value);
+	}
+
+	public double getVersionId() {
+		return versionId;
 	}
 
 	@Override
@@ -58,7 +74,7 @@ public class ClientPositionMap implements Externalizable {
 		return positionMap.entrySet();
 	}
 
-	public void putAll(ClientPositionMap map) {
+	public void putAll(PositionMap map) {
 		positionMap.putAll(map.positionMap);
 	}
 

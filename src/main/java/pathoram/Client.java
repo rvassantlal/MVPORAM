@@ -2,6 +2,7 @@ package pathoram;
 
 
 import bftsmart.tom.ServiceProxy;
+import oram.client.structure.PositionMap;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
@@ -51,7 +52,7 @@ public class Client {
 		List<Integer> reqArgs= Arrays.asList(oramName,
 				ServerOperationType.CREATE_ORAM,
 				size);
-		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs)));
+		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs), null, (byte) 0));
 
 	}
 	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException {
@@ -63,18 +64,18 @@ public class Client {
 	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
 		//debugPrintTree();
 		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)));
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), null, (byte) 0);
 
 		ImmutableTriple<Integer,byte[],snapshotIdentifiers> pmRequestResult = readPMRequestResult(rawPositionMaps);
 		int paralellPathNumber = pmRequestResult.left;
 		byte[] encryptedData = pmRequestResult.middle;
 		snapshotIdentifiers snapIds = pmRequestResult.right;
-		List<ClientPositionMap> posMaps = decryptPositionMaps(encryptedData,paralellPathNumber);
+		List<PositionMap> posMaps = decryptPositionMaps(encryptedData,paralellPathNumber);
 
 		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
-		ClientPositionMap currentpositionMapClient = new ClientPositionMap(tree_size);
+		PositionMap currentpositionMapClient = new PositionMap(tree_size);
 		ClientStash clientStash = new ClientStash();
-		for (ClientPositionMap map : posMaps) {
+		for (PositionMap map : posMaps) {
 			for (Entry<Integer, Integer> entry : map.entrySet()) {
 				Integer key = entry.getKey();
 				if (key.equals(a)) {
@@ -133,7 +134,7 @@ public class Client {
 		return data;
 	}
 
-	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, ClientPositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
+	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, PositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
 		try
 				(ByteArrayOutputStream evictout = new ByteArrayOutputStream();
 				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout)){
@@ -189,7 +190,7 @@ public class Client {
 				evictoout.write(b);
 			}*/
 			evictoout.close();
-			pathOramProxy.invokeOrdered(evictout.toByteArray());
+			pathOramProxy.invokeOrdered(evictout.toByteArray(), null, (byte) 0);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -312,7 +313,7 @@ public class Client {
 				pathoout.writeInt(val);
 			}
 			pathoout.flush();
-			return pathOramProxy.invokeUnordered(pathout.toByteArray());
+			return pathOramProxy.invokeUnordered(pathout.toByteArray(), null, (byte) 0);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -320,15 +321,15 @@ public class Client {
 		return new byte[0];
 	}
 
-	private List<ClientPositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
+	private List<PositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
 		if(encryptedData.length>0) {
 			encryptedData = encryptor.decrypt(encryptedData);
 
 			try (ByteArrayInputStream encryptedin = new ByteArrayInputStream(encryptedData);
 				 ObjectInputStream encryptedois = new ObjectInputStream(encryptedin)) {
-				List<ClientPositionMap> posMaps = new ArrayList<>();
+				List<PositionMap> posMaps = new ArrayList<>();
 				for (int i = 0; i < paralellPathNumber; i++) {
-					ClientPositionMap p = new ClientPositionMap(tree_size);
+					PositionMap p = new PositionMap(tree_size);
 					p.readExternal(encryptedois);
 					posMaps.add(p);
 				}
@@ -358,7 +359,7 @@ public class Client {
 	}
 
 
-	private void debugPrintPositionMap(ClientPositionMap tempPositionMap) {
+	private void debugPrintPositionMap(PositionMap tempPositionMap) {
 		logger.debug("positionMap"+tempPositionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.collect(Collectors.toList()));
@@ -366,7 +367,7 @@ public class Client {
 	}
 	private String debugPrintTree() throws IOException, ClassNotFoundException {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)));
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), null, (byte) 0);
 		if (rawTree!=null) {
 			ByteArrayInputStream in = new ByteArrayInputStream(rawTree);
 			ObjectInputStream ois = new ObjectInputStream(in);

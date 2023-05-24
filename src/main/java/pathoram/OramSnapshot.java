@@ -9,8 +9,7 @@ import java.util.TreeMap;
 
 
 public class OramSnapshot implements Serializable{
-	private static final long serialVersionUID = -4459879580826094264L;
-	private Double id;
+	private final double id;
 	private static Integer TREE_SIZE;
 	private static Integer TREE_LEVELS;
 	private  List<OramSnapshot> prev;
@@ -20,7 +19,7 @@ public class OramSnapshot implements Serializable{
 	// LOCATION, VERSION, CONTENT
 	private TreeMap<Integer,byte[]> tree= new TreeMap<>();
 
-	public OramSnapshot(int size, List<OramSnapshot> previousTrees, Double id) {
+	public OramSnapshot(int size, List<OramSnapshot> previousTrees, double id) {
 		this.id = id;
 		for (int i = 0; i < size; i++) {
 			tree.put(i, null);

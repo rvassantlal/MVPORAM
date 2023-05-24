@@ -36,7 +36,33 @@ distributions {
     }
 }
 
+task localDeploy(dependsOn: installDist) {
+    doLast {
+        int nServers = 4
+        int nClients = 1
 
+        def fileSeparator = System.getProperty("file.separator")
+        def src = project.buildDir.name + fileSeparator + "install" + fileSeparator + project.name
+        def workingDirectory = project.buildDir.name + fileSeparator + "local" + fileSeparator
+
+        println ("Deploying project into ${workingDirectory}")
+        for (i in 0..<nServers) {
+            def target = workingDirectory + "rep${i}"
+            copy {
+                from src
+                into target
+            }
+        }
+
+        for (i in 0..<nClients) {
+            def target = workingDirectory + "cli${i}"
+            copy {
+                from src
+                into target
+            }
+        }
+    }
+}
 
 dependencies {
     implementation fileTree('lib'){include '*.jar'}
