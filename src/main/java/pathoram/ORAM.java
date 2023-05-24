@@ -1,5 +1,7 @@
 package pathoram;
 
+import oram.ORAMUtils;
+import oram.server.structure.EncryptedPositionMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.snapshotIdentifiers;
@@ -15,22 +17,19 @@ import java.util.stream.Collectors;
 
 public class ORAM {
     private final Logger logger = LoggerFactory.getLogger("oram");
-    private static Integer TREE_SIZE;
-    private static Integer TREE_LEVELS;
+    private final int TREE_SIZE;
+    private final int TREE_LEVELS;
     private final int oramId;
     private TreeMap<Double,OramSnapshot> allTrees;
     private List<OramSnapshot> outstandingTrees;
 
     public ORAM(int oramId, int treeHeight, int clientId) {
         this.oramId = oramId;
-        int nBuckets = 0;
-        for (int i = 0; i < treeHeight; i++) {
-            nBuckets += 1 << i;
-        }
+        int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
         TREE_SIZE = nBuckets;
         TREE_LEVELS = treeHeight;
         logger.debug("Total number of buckets: {}", nBuckets);
-        allTrees=new TreeMap<>();
+        allTrees = new TreeMap<>();
         outstandingTrees = new ArrayList<>();
         double snapId = 1 + Double.parseDouble("0." + clientId);
         OramSnapshot snap = new OramSnapshot(TREE_SIZE, null, snapId);
@@ -85,6 +84,17 @@ public class ORAM {
             out.flush();
             return out.toByteArray();
         }
+    }
+
+    public EncryptedPositionMap[] getPositionMaps() {
+        //Warning outstandingTree might change due to eviction executed using invokeOrdered
+        EncryptedPositionMap[] result = new EncryptedPositionMap[outstandingTrees.size()];
+        int i = 0;
+        for (OramSnapshot snapshot : outstandingTrees) {
+            byte[] pm = snapshot.getPositionMap();
+            result[i++] = new EncryptedPositionMap(snapshot.getId(), pm);
+        }
+        return result;
     }
 
     public byte[] getPathAndStash(snapshotIdentifiers snapIds,List<Integer> pathIDs) throws IOException {

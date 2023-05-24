@@ -2,8 +2,9 @@ package utils;
 
 public enum Operation {
 	CREATE_ORAM,
+	GET_POSITION_MAP,
 	READ,
-	WRITE;
+	WRITE, GET_ORAM;
 
 	public final static Operation[] values = values();
 

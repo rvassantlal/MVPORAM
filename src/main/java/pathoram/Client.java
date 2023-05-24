@@ -2,6 +2,7 @@ package pathoram;
 
 
 import bftsmart.tom.ServiceProxy;
+import oram.client.structure.PositionMap;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
@@ -66,12 +67,12 @@ public class Client {
 		int paralellPathNumber = pmRequestResult.left;
 		byte[] encryptedData = pmRequestResult.middle;
 		snapshotIdentifiers snapIds = pmRequestResult.right;
-		List<ClientPositionMap> posMaps = decryptPositionMaps(encryptedData,paralellPathNumber);
+		List<PositionMap> posMaps = decryptPositionMaps(encryptedData,paralellPathNumber);
 
 		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
-		ClientPositionMap currentpositionMapClient = new ClientPositionMap(tree_size);
+		PositionMap currentpositionMapClient = new PositionMap(tree_size);
 		ClientStash clientStash = new ClientStash();
-		for (ClientPositionMap map : posMaps) {
+		for (PositionMap map : posMaps) {
 			for (Entry<Integer, Integer> entry : map.entrySet()) {
 				Integer key = entry.getKey();
 				if (key.equals(a)) {
@@ -130,7 +131,7 @@ public class Client {
 		return data;
 	}
 
-	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, ClientPositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
+	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, PositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
 		try
 				(ByteArrayOutputStream evictout = new ByteArrayOutputStream();
 				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout)){
@@ -268,15 +269,15 @@ public class Client {
 		return new byte[0];
 	}
 
-	private List<ClientPositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
+	private List<PositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
 		if(encryptedData.length>0) {
 			encryptedData = encryptor.decrypt(encryptedData);
 
 			try (ByteArrayInputStream encryptedin = new ByteArrayInputStream(encryptedData);
 				 ObjectInputStream encryptedois = new ObjectInputStream(encryptedin)) {
-				List<ClientPositionMap> posMaps = new ArrayList<>();
+				List<PositionMap> posMaps = new ArrayList<>();
 				for (int i = 0; i < paralellPathNumber; i++) {
-					ClientPositionMap p = new ClientPositionMap(tree_size);
+					PositionMap p = new PositionMap(tree_size);
 					p.readExternal(encryptedois);
 					posMaps.add(p);
 				}
@@ -306,7 +307,7 @@ public class Client {
 	}
 
 
-	private void debugPrintPositionMap(ClientPositionMap tempPositionMap) {
+	private void debugPrintPositionMap(PositionMap tempPositionMap) {
 		logger.debug("positionMap"+tempPositionMap.entrySet().stream()
 				.map(bvalue-> bvalue.getKey()+";"+bvalue.getValue())
 				.collect(Collectors.toList()));

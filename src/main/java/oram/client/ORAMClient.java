@@ -8,17 +8,25 @@ public class ORAMClient {
 	private static final Logger logger = LoggerFactory.getLogger("benchmark");
 
 	public static void main(String[] args) throws SecretSharingException {
-		ORAMFacade oramFacade = new ORAMFacade(100);
+		ORAMManager oramManager = new ORAMManager(100);
+
 		int oramId = 1;
 		int treeHeight = 3;
-		boolean isORAMCreated = oramFacade.createORAM(oramId, treeHeight);
+		int nBlocksPerBucket = 4;
+		ORAMObject oram = oramManager.createORAM(oramId, treeHeight, nBlocksPerBucket);
 
-		if (isORAMCreated) {
+		if (oram != null) {
 			logger.info("ORAM was created with id {}", oramId);
 		} else {
 			logger.info("Failed to create ORAM with id {}", oramId);
 		}
 
-		oramFacade.close();
+		ORAMObject oram1 = oramManager.getORAM(oramId);
+		if (oram1 != null) {
+			logger.info("ORAM with id {} exists", oramId);
+		} else {
+			logger.info("ORAM with id {} does not exist", oramId);
+		}
+		oramManager.close();
 	}
 }
