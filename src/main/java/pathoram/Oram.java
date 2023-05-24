@@ -13,7 +13,9 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class Oram {
+    // Number of buckets in the tree
     private static Integer TREE_SIZE;
+    // Height of the tree, levels in [0,tree_levels-1]
     private static Integer TREE_LEVELS;
     private TreeMap<Double,OramSnapshot> allTrees;
     private List<OramSnapshot> outstandingTrees;
@@ -81,18 +83,24 @@ public class Oram {
                  * should pull from the older versions to the newer ones
                  */
                 List<OramSnapshot> versionSnapshots = new ArrayList<>();
-                snapIds.getSnaps().stream().map(id -> versionSnapshots.add(allTrees.get(id)));
+                for (Double snapId: snapIds.getSnaps() ) {
+                    versionSnapshots.add(allTrees.get(snapId));
+                }
+
                 while (dataIsNull){
                     TreeMap<Double,byte[]> tempVersionStashes = new TreeMap<>();
                     TreeMap<Double,List<byte[]>> dataList = new TreeMap<>();
                     for (OramSnapshot snapshot:versionSnapshots) {
                         byte[] tempData = snapshot.getFromLocation(location);
+                        System.out.println(i+"PATH:"+tempData);
                         if (tempData != null){
-                            if(!stashes.containsKey(snapshot.getId()))
-                                tempVersionStashes.put(snapshot.getId(),snapshot.getStash());
-                            if(dataList.get(snapshot.getId())==null)
-                                dataList.put(snapshot.getId(), new ArrayList<>());
-                            dataList.get(snapshot.getId()).add(tempData);
+                            Double snapshotId = snapshot.getId();
+                            if(!stashes.containsKey(snapshotId))
+                                tempVersionStashes.put(snapshotId,snapshot.getStash());
+                            dataList.computeIfAbsent(snapshotId, k -> new ArrayList<>());
+                            List<byte[]> data = dataList.get(snapshotId);
+                            data.add(tempData);
+                            dataList.put(snapshotId,data);
                             if (!snapsInPath.contains(snapshot.getId()))
                                 snapsInPath.add(snapshot.getId());
                             dataIsNull = false;
@@ -103,7 +111,12 @@ public class Oram {
                         list.putAll(dataList);
                     }else {
                         List<OramSnapshot> newSnapshots=new ArrayList<>();
-                        versionSnapshots.stream().map(snap -> newSnapshots.addAll(snap.getPrev()));
+                        for (OramSnapshot snap: versionSnapshots) {
+                            List<OramSnapshot> prev = snap.getPrev();
+                            if(prev!=null)
+                                newSnapshots.addAll(prev);
+                        }
+                        versionSnapshots=newSnapshots;
                         if(newSnapshots.size()==0)
                             dataIsNull=false;
                     }
@@ -116,7 +129,11 @@ public class Oram {
                 Double snapID = snapsInPath.get(i);
                 oout.writeDouble(snapID);
                 oout.writeInt(stashes.get(snapID).length);
-                oout.writeInt(list.get(snapID).size());
+                int cumulative = 0;
+                for (byte [] b : list.get(snapID)) {
+                    cumulative+=b.length;
+                }
+                oout.writeInt(cumulative);
             }
             allPathStashes.add(stashes);
             allPathPaths.add(list);
@@ -144,7 +161,7 @@ public class Oram {
         newTree.setPositionMap(newPositionMap);
         newTree.setStash(newStash);
         newTree.putPath(pathID, newPath);
-        outstandingTrees.clear();
+        outstandingTrees.clear(); //BUG para paralelo
         outstandingTrees.add(newTree);
         allTrees.put(snapId,newTree);
 

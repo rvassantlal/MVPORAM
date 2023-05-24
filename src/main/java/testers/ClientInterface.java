@@ -2,6 +2,7 @@ package testers;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Arrays;
 import java.util.Scanner;
 
 import pathoram.Client;
@@ -50,7 +51,7 @@ public class ClientInterface {
 			try {
 				byte[] val = value == null ? new byte[]{} : new byte[]{value.byteValue()};
 				byte[] answer = me.access(op, Integer.valueOf(key),val);
-				System.out.println("Answer from server: "+answer);
+				System.out.println("Answer from server: "+ Arrays.toString(answer));
 				
 			} catch (Exception e) {
 				e.printStackTrace();
