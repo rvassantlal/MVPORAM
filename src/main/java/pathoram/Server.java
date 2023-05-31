@@ -53,33 +53,39 @@ public class Server extends DefaultSingleRecoverable{
 			cmd = objin.readInt();
 			ByteArrayOutputStream out;
 			ObjectOutputStream oout;
-			if (cmd == ServerOperationType.EVICT) {
-				int numberOfSnaps = objin.readInt();
-				snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
-				snaps.readExternal(objin);
-				int oldPosition = objin.readInt();
-				int stashSize = objin.readInt();
-
-				byte[] posMap= new byte[objin.readInt()];
-				objin.read(posMap);
-				byte[] stash= new byte[objin.readInt()];
-				objin.read(stash);
-				List<byte[]> path = new ArrayList<>();
-				for (int i = 0; i < serverORAM.getTreeLevels(); i++) {
-					byte[] bucket= new byte[Bucket.MAX_SIZE*Block.standard_size];
-					objin.read(bucket);
-					path.add(bucket);
+			if(serverORAM ==null) {
+				int size = objin.readInt();
+				serverOrams.put(oramName, new ORAM(oramName, size, msgCtx.getSender()));
+				return SerializationUtils.serialize(true);
+			}else {
+				if (cmd == ServerOperationType.EVICT) {
+					int numberOfSnaps = objin.readInt();
+					snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
+					snaps.readExternal(objin);
+					int oldPosition = objin.readInt();
+					byte[] posMap = new byte[objin.readInt()];
+					objin.read(posMap);
+					byte[] stash = new byte[objin.readInt()];
+					objin.read(stash);
+					List<byte[]> path = (List<byte[]>) objin.readObject();
+					/*for (int i = 0; i < serverOram.getTreeLevels(); i++) {
+						byte[] bucket = new byte[objin.readInt()];
+						objin.read(bucket);
+						path.add(bucket);
+					}*/
+					boolean bool = serverORAM.doEviction(snaps, posMap, stash, oldPosition, path, msgCtx.getSender());
+					out = new ByteArrayOutputStream();
+					oout = new ObjectOutputStream(out);
+					oout.writeBoolean(bool);
+					oout.flush();
+					return out.toByteArray();
 				}
-				boolean bool = serverORAM.doEviction(snaps, posMap, stash, oldPosition, path, msgCtx.getSender());
-				out = new ByteArrayOutputStream();
-				oout = new ObjectOutputStream(out);
-				oout.writeBoolean(bool);
-				oout.flush();
-				return out.toByteArray();
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			throw new RuntimeException(e);
 		}
 		return null;
 	}
@@ -94,33 +100,28 @@ public class Server extends DefaultSingleRecoverable{
 			ORAM serverORAM = serverOrams.get(oramName);
 			cmd = ois.readInt();
 			ByteArrayOutputStream out;
-			if(serverORAM ==null) {
-				int size = ois.readInt();
-				serverOrams.put(oramName, new ORAM(oramName, size, msgCtx.getSender()));
-				return SerializationUtils.serialize(true);
-			}else {
-				ObjectOutputStream oout;
-				switch (cmd) {
-					case ServerOperationType.GET_PATH_STASH:
-						int numberOfSnaps = ois.readInt();
-						snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
-						snaps.readExternal(ois);
-						int numberOfPaths = ois.readInt();
-						List<Integer> pathIDs = new ArrayList<>();
-						for (int i = 0; i < numberOfPaths; i++) {
-							pathIDs.add(ois.readInt());
-						}
-						return serverORAM.getPathAndStash(snaps, pathIDs);
-					case ServerOperationType.GET_POSITION_MAP:
-						return serverORAM.getPositionMap();
-					case ServerOperationType.GET_TREE:
-						out = new ByteArrayOutputStream();
-						oout = new ObjectOutputStream(out);
-						oout.writeObject(serverORAM.getTree());
-						oout.flush();
-						return out.toByteArray();
-				}
+			ObjectOutputStream oout;
+			switch (cmd) {
+				case ServerOperationType.GET_PATH_STASH:
+					int numberOfSnaps = ois.readInt();
+					snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
+					snaps.readExternal(ois);
+					int numberOfPaths = ois.readInt();
+					List<Integer> pathIDs = new ArrayList<>();
+					for (int i = 0; i < numberOfPaths; i++) {
+						pathIDs.add(ois.readInt());
+					}
+					return serverORAM.getPathAndStash(snaps, pathIDs);
+				case ServerOperationType.GET_POSITION_MAP:
+					return serverORAM.getPositionMap();
+				case ServerOperationType.GET_TREE:
+					out = new ByteArrayOutputStream();
+					oout = new ObjectOutputStream(out);
+					oout.writeObject(serverORAM.getTree());
+					oout.flush();
+					return out.toByteArray();
 			}
+
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
