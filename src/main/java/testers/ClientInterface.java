@@ -7,9 +7,10 @@ import java.util.Scanner;
 
 import pathoram.Client;
 import utils.Operation;
+import vss.facade.SecretSharingException;
 
 public class ClientInterface {
-	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException {		
+	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException, SecretSharingException {
 		Scanner sc=new Scanner(System.in);
 		System.out.println("Insert your password please:");
 		String pass = sc.nextLine();
@@ -17,7 +18,7 @@ public class ClientInterface {
 		System.out.println("Do you already have an ORAM? (Y for yes, N for no)");
 		String nLine = sc.nextLine();
 		if(nLine.toUpperCase().contentEquals("N")) {
-			System.out.println("Insert size:");
+			System.out.println("Insert height of the tree (up to 8):");
 			int size = sc.nextInt();
 			System.out.println("Insert an identification number for your ORAM:");
 			int oramName = sc.nextInt();

@@ -1,7 +1,7 @@
 package pathoram;
 
 
-import bftsmart.tom.ServiceProxy;
+import confidential.client.ConfidentialServiceProxy;
 import oram.client.structure.PositionMap;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import security.EncryptionAbstraction;
 import clientStructure.*;
 import utils.*;
+import vss.facade.SecretSharingException;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -23,8 +24,7 @@ import java.util.stream.Collectors;
 public class Client {
 	private Logger logger = LoggerFactory.getLogger(this.getClass());
 	private SecureRandom r = new SecureRandom();
-	private final int[] possibleTreeSizes={3,7,15,31,63,127,255,511};
-	private ServiceProxy pathOramProxy;
+	private ConfidentialServiceProxy pathOramProxy;
 	private EncryptionAbstraction encryptor;
 	private int oramName;
 
@@ -32,39 +32,33 @@ public class Client {
 
 	private int tree_levels=-1;
 
-	public Client(int name, String pass){
-		pathOramProxy = new ServiceProxy(name);
+	public Client(int name, String pass) throws SecretSharingException {
+		pathOramProxy = new ConfidentialServiceProxy(name);
 		encryptor = new EncryptionAbstraction(pass);
 	}
 	public void associateOram(int oramName) {
 		this.oramName=oramName;
 	}
-	public boolean createOram(int size, int oramName) {
-		for (int i = 0; i < possibleTreeSizes.length; i++) {
-			if(size==possibleTreeSizes[i]){
-				this.tree_size=size;
-				i=possibleTreeSizes.length;
-			}
-		}
-		if (this.tree_size==-1)
+	public boolean createOram(int size, int oramName) throws SecretSharingException {
+		if (size < 0 || size > 8)
 			return false;
 		this.oramName=oramName;
 		List<Integer> reqArgs= Arrays.asList(oramName,
 				ServerOperationType.CREATE_ORAM,
 				size);
-		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs), null, (byte) 0));
+		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData());
 
 	}
-	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException {
+	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException, SecretSharingException {
 		return access(Operation.READ,position,null);
 	}
-	public byte[] writeMemory(Integer position,byte[] content) throws IOException, ClassNotFoundException {
+	public byte[] writeMemory(Integer position,byte[] content) throws IOException, ClassNotFoundException, SecretSharingException {
 		return access(Operation.WRITE,position,content);
 	}
-	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
+	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException, SecretSharingException {
 		//debugPrintTree();
-		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), null, (byte) 0);
+		byte[] rawPositionMaps = pathOramProxy.invokeOrdered(
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 
 		ImmutableTriple<Integer,byte[],snapshotIdentifiers> pmRequestResult = readPMRequestResult(rawPositionMaps);
 		int paralellPathNumber = pmRequestResult.left;
@@ -190,10 +184,12 @@ public class Client {
 				evictoout.write(b);
 			}*/
 			evictoout.close();
-			pathOramProxy.invokeOrdered(evictout.toByteArray(), null, (byte) 0);
+			pathOramProxy.invokeOrdered(evictout.toByteArray(), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -313,17 +309,19 @@ public class Client {
 				pathoout.writeInt(val);
 			}
 			pathoout.flush();
-			return pathOramProxy.invokeUnordered(pathout.toByteArray(), null, (byte) 0);
+			return pathOramProxy.invokeUnordered(pathout.toByteArray(), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
 		}
 		return new byte[0];
 	}
 
 	private List<PositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
 		if(encryptedData.length>0) {
-			encryptedData = encryptor.decrypt(encryptedData);
+
 
 			try (ByteArrayInputStream encryptedin = new ByteArrayInputStream(encryptedData);
 				 ObjectInputStream encryptedois = new ObjectInputStream(encryptedin)) {
@@ -365,9 +363,9 @@ public class Client {
 				.collect(Collectors.toList()));
 
 	}
-	private String debugPrintTree() throws IOException, ClassNotFoundException {
+	private String debugPrintTree() throws IOException, ClassNotFoundException, SecretSharingException {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), null, (byte) 0);
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		if (rawTree!=null) {
 			ByteArrayInputStream in = new ByteArrayInputStream(rawTree);
 			ObjectInputStream ois = new ObjectInputStream(in);
