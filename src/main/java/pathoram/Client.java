@@ -1,8 +1,9 @@
 package pathoram;
 
 
-import bftsmart.tom.ServiceProxy;
+import confidential.client.ConfidentialServiceProxy;
 import oram.client.structure.PositionMap;
+import oram.client.structure.Stash;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import security.EncryptionAbstraction;
 import clientStructure.*;
 import utils.*;
+import vss.facade.SecretSharingException;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -23,8 +25,7 @@ import java.util.stream.Collectors;
 public class Client {
 	private Logger logger = LoggerFactory.getLogger(this.getClass());
 	private SecureRandom r = new SecureRandom();
-	private final int[] possibleTreeSizes={3,7,15,31,63,127,255,511};
-	private ServiceProxy pathOramProxy;
+	private ConfidentialServiceProxy pathOramProxy;
 	private EncryptionAbstraction encryptor;
 	private int oramName;
 
@@ -32,39 +33,33 @@ public class Client {
 
 	private int tree_levels=-1;
 
-	public Client(int name, String pass){
-		pathOramProxy = new ServiceProxy(name);
+	public Client(int name, String pass) throws SecretSharingException {
+		pathOramProxy = new ConfidentialServiceProxy(name);
 		encryptor = new EncryptionAbstraction(pass);
 	}
 	public void associateOram(int oramName) {
 		this.oramName=oramName;
 	}
-	public boolean createOram(int size, int oramName) {
-		for (int i = 0; i < possibleTreeSizes.length; i++) {
-			if(size==possibleTreeSizes[i]){
-				this.tree_size=size;
-				i=possibleTreeSizes.length;
-			}
-		}
-		if (this.tree_size==-1)
+	public boolean createOram(int size, int oramName) throws SecretSharingException {
+		if (size < 0 || size > 8)
 			return false;
 		this.oramName=oramName;
 		List<Integer> reqArgs= Arrays.asList(oramName,
 				ServerOperationType.CREATE_ORAM,
 				size);
-		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs), null, (byte) 0));
+		return SerializationUtils.deserialize(pathOramProxy.invokeOrdered(createRequest(reqArgs), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData());
 
 	}
-	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException {
+	public byte[] readMemory(Integer position) throws IOException, ClassNotFoundException, SecretSharingException {
 		return access(Operation.READ,position,null);
 	}
-	public byte[] writeMemory(Integer position,byte[] content) throws IOException, ClassNotFoundException {
+	public byte[] writeMemory(Integer position,byte[] content) throws IOException, ClassNotFoundException, SecretSharingException {
 		return access(Operation.WRITE,position,content);
 	}
-	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException {
+	public byte[] access(Operation op, int a, byte[] newData) throws IOException, ClassNotFoundException, SecretSharingException {
 		//debugPrintTree();
-		byte[] rawPositionMaps = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), null, (byte) 0);
+		byte[] rawPositionMaps = pathOramProxy.invokeOrdered(
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_POSITION_MAP)), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 
 		ImmutableTriple<Integer,byte[],snapshotIdentifiers> pmRequestResult = readPMRequestResult(rawPositionMaps);
 		int paralellPathNumber = pmRequestResult.left;
@@ -74,7 +69,7 @@ public class Client {
 
 		TreeMap<Double,Integer> oldPositions= new TreeMap<>();
 		PositionMap currentpositionMapClient = new PositionMap(tree_size);
-		ClientStash clientStash = new ClientStash();
+		Stash clientStash = new Stash();
 		for (PositionMap map : posMaps) {
 			for (Entry<Integer, Integer> entry : map.entrySet()) {
 				Integer key = entry.getKey();
@@ -119,7 +114,7 @@ public class Client {
 		Path newPath = new Path(tree_levels);
 		for (int level = tree_levels-1; level >= 0; level--) {
 			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_levels);
-			ClientStash tempClientStash = new ClientStash(stashValues.parallelStream()
+			Stash tempClientStash = new Stash(stashValues.parallelStream()
 					.filter(val -> compatiblePaths.contains(currentpositionMapClient.getPosition(val.getKey())))
 					.limit(Bucket.MAX_SIZE)
 					.collect(Collectors.toList()));
@@ -134,7 +129,7 @@ public class Client {
 		return data;
 	}
 
-	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, PositionMap tempPositionMap, ClientStash clientStash, Path newPath) {
+	private void makeEvictionRequest(snapshotIdentifiers snapIds, Integer oldPosition, PositionMap tempPositionMap, Stash clientStash, Path newPath) {
 		try
 				(ByteArrayOutputStream evictout = new ByteArrayOutputStream();
 				 ObjectOutputStream evictoout = new ObjectOutputStream(evictout)){
@@ -190,10 +185,12 @@ public class Client {
 				evictoout.write(b);
 			}*/
 			evictoout.close();
-			pathOramProxy.invokeOrdered(evictout.toByteArray(), null, (byte) 0);
+			pathOramProxy.invokeOrdered(evictout.toByteArray(), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -245,7 +242,7 @@ public class Client {
 					in.read(stash);
 					stash=encryptor.decrypt(stash);
 					int encryptedBlockSize = Block.standard_size+16;
-					ClientStash retrievedStash = new ClientStash(stash.length/encryptedBlockSize);
+					Stash retrievedStash = new Stash(stash.length/encryptedBlockSize);
 					if(stash.length>0){
 						try(
 								ByteArrayInputStream encryptedin2 = new ByteArrayInputStream(stash);
@@ -274,13 +271,13 @@ public class Client {
 					List<Block> stashContents = retrievedStash.getBlocks().stream()
 							.filter(Block::isNotDummy)
 							.collect(Collectors.toList());
-					mergeStashes(intermediateStash, new ClientStash(stashContents), snapId);
+					mergeStashes(intermediateStash, new Stash(stashContents), snapId);
 
 					List<Block> pathContents = bufOut.stream()
 							.filter(Block::isNotDummy)
 							.collect(Collectors.toList());
 
-					mergeStashes(intermediatePath, new ClientStash(pathContents), snapId);
+					mergeStashes(intermediatePath, new Stash(pathContents), snapId);
 				}
 			}
 		}
@@ -313,17 +310,19 @@ public class Client {
 				pathoout.writeInt(val);
 			}
 			pathoout.flush();
-			return pathOramProxy.invokeUnordered(pathout.toByteArray(), null, (byte) 0);
+			return pathOramProxy.invokeUnordered(pathout.toByteArray(), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
 		}
 		return new byte[0];
 	}
 
 	private List<PositionMap> decryptPositionMaps(byte[] encryptedData, int paralellPathNumber) throws IOException {
 		if(encryptedData.length>0) {
-			encryptedData = encryptor.decrypt(encryptedData);
+
 
 			try (ByteArrayInputStream encryptedin = new ByteArrayInputStream(encryptedData);
 				 ObjectInputStream encryptedois = new ObjectInputStream(encryptedin)) {
@@ -348,7 +347,7 @@ public class Client {
 		});
 	}*/
 
-	private void mergeStashes(TreeMap<Short, Pair<Double, byte[]>> intermediateStash, ClientStash deserializedStash, Double snapId) {
+	private void mergeStashes(TreeMap<Short, Pair<Double, byte[]>> intermediateStash, Stash deserializedStash, Double snapId) {
 		deserializedStash.getBlocks().forEach(block -> {
 			short key = (short) block.getKey();
 			byte[] value = block.getValue();
@@ -365,9 +364,9 @@ public class Client {
 				.collect(Collectors.toList()));
 
 	}
-	private String debugPrintTree() throws IOException, ClassNotFoundException {
+	private String debugPrintTree() throws IOException, ClassNotFoundException, SecretSharingException {
 		byte[] rawTree = pathOramProxy.invokeUnordered(
-				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), null, (byte) 0);
+				createRequest(Arrays.asList(oramName,ServerOperationType.GET_TREE)), new byte[]{(byte) 0}, new byte[]{(byte) 0}).getPainData();
 		if (rawTree!=null) {
 			ByteArrayInputStream in = new ByteArrayInputStream(rawTree);
 			ObjectInputStream ois = new ObjectInputStream(in);

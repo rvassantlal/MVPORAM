@@ -120,7 +120,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 		} else {
 			logger.debug("Created an ORAM with id {} of height {}", oramId, treeHeight);
-			ORAM oram = new ORAM(oramId, treeHeight, clientId);
+			ORAM oram = new ORAM(oramId,treeHeight, clientId);
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}

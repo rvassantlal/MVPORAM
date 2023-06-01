@@ -8,19 +8,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
-import clientStructure.Block;
-import clientStructure.Bucket;
+import confidential.ConfidentialMessage;
+import confidential.facade.server.ConfidentialServerFacade;
+import confidential.facade.server.ConfidentialSingleExecutable;
+import confidential.statemanagement.ConfidentialSnapshot;
 import org.apache.commons.lang3.SerializationUtils;
 
 import utils.*;
 import bftsmart.tom.MessageContext;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
+import vss.secretsharing.VerifiableShare;
 
-public class Server extends DefaultSingleRecoverable{
-
-	@SuppressWarnings("unused")
-	private ServiceReplica replica = null;
+public class Server implements ConfidentialSingleExecutable {
 	private TreeMap<Integer, ORAM> serverOrams;
 
 	public static void main(String[] args) {
@@ -28,22 +28,11 @@ public class Server extends DefaultSingleRecoverable{
 	}
 
 	public Server(int id) {
-		replica = new ServiceReplica(id, this, this);
+		new ConfidentialServerFacade(id, this);
 		serverOrams= new TreeMap<>();
 	}
-
 	@Override
-	public void installSnapshot(byte[] state) {
-		serverOrams = SerializationUtils.deserialize(state);
-	}
-
-	@Override
-	public byte[] getSnapshot() {
-		return SerializationUtils.serialize(serverOrams);
-	}
-
-	@Override
-	public byte[] appExecuteOrdered(byte[] command, MessageContext msgCtx) {
+	public ConfidentialMessage appExecuteOrdered(byte[] command, VerifiableShare[] verifiableShares, MessageContext msgCtx) {
 		ByteArrayInputStream in = new ByteArrayInputStream(command);
 		int cmd;
 		try {
@@ -55,30 +44,33 @@ public class Server extends DefaultSingleRecoverable{
 			ObjectOutputStream oout;
 			if(serverORAM ==null) {
 				int size = objin.readInt();
-				serverOrams.put(oramName, new ORAM(oramName, size, msgCtx.getSender()));
-				return SerializationUtils.serialize(true);
+				serverOrams.put(oramName, new ORAM(size, msgCtx.getSender()));
+				return new ConfidentialMessage(SerializationUtils.serialize(true));
 			}else {
-				if (cmd == ServerOperationType.EVICT) {
-					int numberOfSnaps = objin.readInt();
-					snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
-					snaps.readExternal(objin);
-					int oldPosition = objin.readInt();
-					byte[] posMap = new byte[objin.readInt()];
-					objin.read(posMap);
-					byte[] stash = new byte[objin.readInt()];
-					objin.read(stash);
-					List<byte[]> path = (List<byte[]>) objin.readObject();
+				switch (cmd){
+					case ServerOperationType.GET_POSITION_MAP:
+						return serverORAM.getPositionMap();
+					case ServerOperationType.EVICT:
+						int numberOfSnaps = objin.readInt();
+						snapshotIdentifiers snaps = new snapshotIdentifiers(numberOfSnaps);
+						snaps.readExternal(objin);
+						int oldPosition = objin.readInt();
+						byte[] posMap = new byte[objin.readInt()];
+						objin.read(posMap);
+						byte[] stash = new byte[objin.readInt()];
+						objin.read(stash);
+						List<byte[]> path = (List<byte[]>) objin.readObject();
 					/*for (int i = 0; i < serverOram.getTreeLevels(); i++) {
 						byte[] bucket = new byte[objin.readInt()];
 						objin.read(bucket);
 						path.add(bucket);
 					}*/
-					boolean bool = serverORAM.doEviction(snaps, posMap, stash, oldPosition, path, msgCtx.getSender());
-					out = new ByteArrayOutputStream();
-					oout = new ObjectOutputStream(out);
-					oout.writeBoolean(bool);
-					oout.flush();
-					return out.toByteArray();
+						boolean bool = serverORAM.doEviction(snaps, posMap, stash, oldPosition, path, msgCtx.getSender());
+						out = new ByteArrayOutputStream();
+						oout = new ObjectOutputStream(out);
+						oout.writeBoolean(bool);
+						oout.flush();
+						return new ConfidentialMessage(out.toByteArray());
 				}
 			}
 		} catch (IOException e) {
@@ -91,7 +83,7 @@ public class Server extends DefaultSingleRecoverable{
 	}
 
 	@Override
-	public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
+	public ConfidentialMessage appExecuteUnordered(byte[] command, VerifiableShare[] verifiableShares, MessageContext msgCtx) {
 		ByteArrayInputStream in = new ByteArrayInputStream(command);
 		int cmd;
 		try {
@@ -112,14 +104,12 @@ public class Server extends DefaultSingleRecoverable{
 						pathIDs.add(ois.readInt());
 					}
 					return serverORAM.getPathAndStash(snaps, pathIDs);
-				case ServerOperationType.GET_POSITION_MAP:
-					return serverORAM.getPositionMap();
 				case ServerOperationType.GET_TREE:
 					out = new ByteArrayOutputStream();
 					oout = new ObjectOutputStream(out);
 					oout.writeObject(serverORAM.getTree());
 					oout.flush();
-					return out.toByteArray();
+					return new ConfidentialMessage(out.toByteArray());
 			}
 
 		} catch (IOException e) {
@@ -129,4 +119,13 @@ public class Server extends DefaultSingleRecoverable{
 		return null;
 	}
 
+	@Override
+	public ConfidentialSnapshot getConfidentialSnapshot() {
+		return new ConfidentialSnapshot(SerializationUtils.serialize(serverOrams));
+	}
+
+	@Override
+	public void installConfidentialSnapshot(ConfidentialSnapshot confidentialSnapshot) {
+		serverOrams = SerializationUtils.deserialize(confidentialSnapshot.getPlainData());
+	}
 }

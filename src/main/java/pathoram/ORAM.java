@@ -1,5 +1,6 @@
 package pathoram;
 
+import confidential.ConfidentialMessage;
 import oram.ORAMUtils;
 import oram.server.structure.EncryptedPositionMap;
 import org.slf4j.Logger;
@@ -21,11 +22,10 @@ public class ORAM {
     private final int TREE_SIZE;
     // Height of the tree, levels in [0,tree_levels-1]
     private final int TREE_LEVELS;
-    private final int oramId;
+    private int oramId; //should be final, only changed to accept all constructors
     private TreeMap<Double,OramSnapshot> allTrees;
     private List<OramSnapshot> outstandingTrees;
-
-    public ORAM(int oramId, int treeHeight, int clientId) {
+    public ORAM(int oramId, int treeHeight, int clientId){
         this.oramId = oramId;
         int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
         TREE_SIZE = nBuckets;
@@ -45,8 +45,27 @@ public class ORAM {
         outstandingTrees.add(snap);
         allTrees.put(snapId,snap);
     }
-
-    protected ORAM(int oramId, int size, Integer client_id) {
+    public ORAM(int treeHeight, int clientId) {
+        //this.oramId = oramId;
+        int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
+        TREE_SIZE = nBuckets;
+        TREE_LEVELS = treeHeight;
+        logger.debug("Total number of buckets: {}", nBuckets);
+        allTrees = new TreeMap<>();
+        outstandingTrees = new ArrayList<>();
+        double snapId = 1 + Double.parseDouble("0." + clientId);
+        OramSnapshot snap = new OramSnapshot(TREE_SIZE, null, snapId);
+        List<byte[]> newPath = new ArrayList<>();
+        for (int i = 0; i < TREE_LEVELS; i++) {
+            newPath.add(null);
+        }
+        for (int i = 0; i < TREE_SIZE/2; i++) {
+            snap.putPath(i, newPath);
+        }
+        outstandingTrees.add(snap);
+        allTrees.put(snapId,snap);
+    }
+    protected ORAM(int oramId, int size, Integer client_id){
         this.oramId = oramId;
         TREE_SIZE = size;
         TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
@@ -64,27 +83,47 @@ public class ORAM {
         outstandingTrees.add(snap);
         allTrees.put(snapId,snap);
     }
-    protected byte[] getPositionMap() throws IOException {
+    protected ORAM(int size, Integer client_id) {
+        TREE_SIZE = size;
+        TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
+        allTrees=new TreeMap<>();
+        outstandingTrees = new ArrayList<>();
+        Double snapId = 1+Double.parseDouble("0."+client_id.toString());
+        OramSnapshot snap = new OramSnapshot(TREE_SIZE, null, snapId);
+        List<byte[]> newPath = new ArrayList<>();
+        for (int i = 0; i < TREE_LEVELS; i++) {
+            newPath.add(null);
+        }
+        for (int i = 0; i < TREE_SIZE/2; i++) {
+            snap.putPath(i, newPath);
+        }
+        outstandingTrees.add(snap);
+        allTrees.put(snapId,snap);
+    }
+    protected ConfidentialMessage getPositionMap() throws IOException {
         try(ByteArrayOutputStream out = new ByteArrayOutputStream();
             ObjectOutputStream oout = new ObjectOutputStream(out)){
             oout.writeInt(outstandingTrees.size());
             snapshotIdentifiers snapIds = new snapshotIdentifiers(outstandingTrees.size());
             List<byte[]> positionMaps = new ArrayList<>();
-            int encryptedSize = 0;
+            List<Integer> encryptedSize = new ArrayList<>();
+            int encryptedSizeTotal = 0;
             for ( OramSnapshot snapshot : outstandingTrees) {
                 byte[] pm = snapshot.getPositionMap();
-                encryptedSize += pm.length;
+                encryptedSizeTotal += pm.length;
+                encryptedSize.add(pm.length);
                 positionMaps.add(pm);
                 snapIds.add(snapshot.getId());
             }
             snapIds.writeExternal(oout);
-            oout.writeInt(encryptedSize);
-            for (byte[] pm: positionMaps) {
-                oout.write(pm);
+            oout.writeInt(encryptedSizeTotal);
+            for (int i = 0; i < positionMaps.size(); i++) {
+                oout.writeInt(encryptedSize.get(i));
+                oout.write(positionMaps.get(i));
             }
             oout.flush();
             out.flush();
-            return out.toByteArray();
+            return new ConfidentialMessage(out.toByteArray());
         }
     }
 
@@ -99,7 +138,7 @@ public class ORAM {
         return result;
     }
 
-    public byte[] getPathAndStash(snapshotIdentifiers snapIds,List<Integer> pathIDs) throws IOException {
+    public ConfidentialMessage getPathAndStash(snapshotIdentifiers snapIds, List<Integer> pathIDs) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ObjectOutputStream oout = new ObjectOutputStream(out);
         List<OramSnapshot> snapshots;
@@ -188,7 +227,7 @@ public class ORAM {
             }
         }
         oout.flush();
-        return out.toByteArray();
+        return new ConfidentialMessage(out.toByteArray());
     }
 
     public boolean doEviction(snapshotIdentifiers snapshots,byte[] newPositionMap,byte[] newStash,Integer pathID,List<byte[]> newPath, Integer senderId) {
@@ -199,7 +238,7 @@ public class ORAM {
         newTree.setPositionMap(newPositionMap);
         newTree.setStash(newStash);
         newTree.putPath(pathID, newPath);
-        outstandingTrees.clear(); //BUG para paralelo
+        outstandingTrees.removeAll(previousSnapshots);
         outstandingTrees.add(newTree);
         allTrees.put(snapId,newTree);
 

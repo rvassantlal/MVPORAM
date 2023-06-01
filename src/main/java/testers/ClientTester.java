@@ -2,6 +2,7 @@ package testers;
 
 import pathoram.Client;
 import utils.Operation;
+import vss.facade.SecretSharingException;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
@@ -10,10 +11,10 @@ import java.util.Random;
 
 public class ClientTester {
 	// ARGS: clientId, pass, oramName, testSize
-	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException {
+	public static void main(String[] args) throws NoSuchAlgorithmException, InvalidKeySpecException, SecretSharingException {
 		Random r = new Random();
 		Client me = new Client(Integer.parseInt(args[0]), args[1]);
-		int oramSize = 63;
+		int oramSize = 6;
 		me.createOram(oramSize, Integer.parseInt(args[2]));
 		int testSize = Integer.parseInt(args[3]);
 		try {
