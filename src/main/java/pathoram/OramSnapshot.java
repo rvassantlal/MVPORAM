@@ -1,94 +1,103 @@
 package pathoram;
 
 
+import oram.ORAMUtils;
+import oram.server.structure.EncryptedBucket;
+import oram.server.structure.EncryptedPath;
+import oram.server.structure.EncryptedPositionMap;
+import oram.server.structure.EncryptedStash;
+
 import java.io.Serializable;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.TreeMap;
 
 
 
-public class OramSnapshot implements Serializable{
-	private final double id;
-	private static Integer TREE_SIZE;
-	private static Integer TREE_LEVELS;
-	private  List<OramSnapshot> prev;
-	private byte[] positionMap;
-	private byte[] stash;
-	private int ref_counter;
-	// LOCATION, VERSION, CONTENT
-	private TreeMap<Integer,byte[]> tree= new TreeMap<>();
+public class OramSnapshot implements Serializable {
+	private final double versionId;
+	private final int TREE_SIZE;
+	private final int TREE_HEIGHT;
+	private  List<OramSnapshot> previous;
+	private EncryptedPositionMap positionMap;
+	private EncryptedStash stash;
+	private int referenceCounter;
+	private final TreeMap<Integer, EncryptedBucket> difTree = new TreeMap<>();
 
-	public OramSnapshot(int size, List<OramSnapshot> previousTrees, double id) {
-		this.id = id;
-		for (int i = 0; i < size; i++) {
-			tree.put(i, null);
+	public OramSnapshot(double versionId, int treeSize, int treeHeight, List<OramSnapshot> previousTrees,
+						EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+		this.versionId = versionId;
+		for (int i = 0; i < treeSize; i++) {
+			difTree.put(i, null);
 		}
-		positionMap = new byte[]{};
-		stash = new byte[]{};
-		TREE_SIZE = tree.size();
-		TREE_LEVELS = (int)(Math.log(TREE_SIZE+1) / Math.log(2));
-		this.prev=previousTrees;
-		ref_counter=0;
+		positionMap = encryptedPositionMap;
+		stash = encryptedStash;
+		TREE_SIZE = treeSize;
+		TREE_HEIGHT = treeHeight;
+		previous = previousTrees;
 	}
 
-	public byte[] getPositionMap(){
-		ref_counter++;
+	public int getReferenceCounter(){
+		return referenceCounter;
+	}
+
+	public void incrementReferenceCounter() {
+		referenceCounter++;
+	}
+
+	public void decrementReferenceCounter() {
+		referenceCounter--;
+	}
+
+	public EncryptedPositionMap getPositionMap(){
 		return positionMap;
 	}
 
-	public int getRefCounter(){
-		return ref_counter;
+	public List<OramSnapshot> getPrevious(){
+		return previous;
 	}
 
-	public List<OramSnapshot> getPrev(){
-		return prev;
+	public Collection<EncryptedBucket> getDifTree() {
+		return difTree.values();
 	}
-
-	public List<byte[]> getTree() {
-		return new ArrayList<>(tree.values());
-	}
-	public byte[] getStash() {
+	public EncryptedStash getStash() {
 		return stash;
 	}
 
-	public byte[] getFromLocation(int location) {
-		return tree.get(location);
+	public EncryptedBucket getFromLocation(int location) {
+		return difTree.get(location);
 	}
 
-	public void setPositionMap(byte[] newPositionMap) {
-		this.positionMap = newPositionMap;
+	public EncryptedPath getPath(byte pathId) {
+		int[] pathLocations = ORAMUtils.computePathLocations(pathId, TREE_HEIGHT);
+
+		return null;
 	}
 
-	public void setStash(byte[] newStash) {
-		this.stash = newStash;
-	}
-
-	public void putPath(Integer pathID, List<byte[]> newPath) {
+	public void putPath(Integer pathID, List<EncryptedBucket> newPath) {
 		int location = TREE_SIZE/2+pathID;
-		for (int i = TREE_LEVELS-1; i >= 0; i--) {
-			tree.put(location, newPath.get(i));
+		for (int i = TREE_HEIGHT -1; i >= 0; i--) {
+			difTree.put(location, newPath.get(i));
 			location=location%2==0?location-2:location-1;
 			location/=2;
 		}
-		ref_counter--;
+		referenceCounter--;
 	}
 
 	public void removePath(Integer pathID) {
 		int location = TREE_SIZE/2+pathID;
-		for (int i = TREE_LEVELS-1; i >= 0; i--) {
-			tree.remove(location);
+		for (int i = TREE_HEIGHT -1; i >= 0; i--) {
+			difTree.remove(location);
 			location=location%2==0?location-2:location-1;
 			location/=2;
 		}
 	}
 
-	public Double getId() {
-		return id;
-	}
-	
-	public boolean isEmpty() {
-		return tree.isEmpty();
+	public double getVersionId() {
+		return versionId;
 	}
 
+	public boolean isEmpty() {
+		return difTree.isEmpty();
+	}
 }

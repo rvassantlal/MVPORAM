@@ -5,11 +5,11 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-public class EncryptedORAMBucket implements Externalizable {
+public class EncryptedBucket implements Externalizable {
 	private byte[][] blocks;
 	private final int blockSize;
 
-	public EncryptedORAMBucket(int bucketSize, int blockSize) {
+	public EncryptedBucket(int bucketSize, int blockSize) {
 		this.blocks = new byte[bucketSize][];
 		this.blockSize = blockSize;
 	}

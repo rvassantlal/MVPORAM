@@ -4,36 +4,42 @@ import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
 import oram.ORAMUtils;
 import oram.client.structure.PositionMap;
+import oram.client.structure.Stash;
 import oram.messages.CreateORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.server.structure.EncryptedPositionMap;
+import oram.server.structure.EncryptedStash;
+import oram.server.structure.ORAMContext;
 import utils.Operation;
 import utils.Status;
 import utils.Utils;
 import vss.facade.SecretSharingException;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.security.SecureRandom;
-import java.util.Arrays;
 
 public class ORAMManager {
 	private final ConfidentialServiceProxy serviceProxy;
+	private final int clientId;
 	private final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 
 	public ORAMManager(int clientId) throws SecretSharingException {
 		//Connecting to servers
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
+		this.clientId = clientId;
 		this.encryptionManager = new EncryptionManager();
 		this.rndGenerator = new SecureRandom("oram".getBytes());
 	}
 
-	public ORAMObject createORAM(int oramId, int treeHeight, int nBlocksPerBucket) {
+	public ORAMObject createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) {
 		try {
-			int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
-			int totalNumberBlocks = nBuckets * nBlocksPerBucket;
-			EncryptedPositionMap encryptedPositionMap = initializeDummyPositionMap(totalNumberBlocks, treeHeight);
-
-			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight);
+			EncryptedPositionMap encryptedPositionMap = initializeDummyPositionMap();
+			EncryptedStash encryptedStash = initializeDummyStash(blockSize);
+			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
+					encryptedPositionMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(Operation.CREATE_ORAM, request);
 			if (serializedRequest == null) {
 				return null;
@@ -46,18 +52,12 @@ public class ORAMManager {
 			if (status == Status.FAILED) {
 				return null;
 			}
-			return new ORAMObject(serviceProxy, oramId, treeHeight, encryptionManager);
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+			ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
+			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
 			return null;
 		}
-	}
-
-	private EncryptedPositionMap initializeDummyPositionMap(int totalNumberBlocks, int nPaths) {
-		int[] positionMap = new int[totalNumberBlocks];
-		Arrays.fill(positionMap, ORAMUtils.DUMMY_PATH);
-		double versionId = 0;//TODO initialize
-		PositionMap pm = new PositionMap(versionId, positionMap);
-		return encryptionManager.encryptPositionMap(pm);
 	}
 
 	public ORAMObject getORAM(int oramId) {
@@ -71,14 +71,34 @@ public class ORAMManager {
 			if (response == null || response.getPainData() == null) {
 				return null;
 			}
-			int treeHeight = Utils.toNumber(response.getPainData());
-			if (treeHeight == -1) {
-				return null;
+
+			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPainData());
+				 ObjectInputStream in = new ObjectInputStream(bis)) {
+				int treeHeight = in.readInt();
+				if (treeHeight == -1) {
+					return null;
+				}
+				int bucketSize = in.readInt();
+				int blockSize = in.readInt();
+				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+				ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
+				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
-			return new ORAMObject(serviceProxy, oramId, treeHeight, encryptionManager);
-		} catch (SecretSharingException e) {
+		} catch (SecretSharingException | IOException e) {
 			return null;
 		}
+	}
+
+	private EncryptedStash initializeDummyStash(int blockSize) {
+		Stash stash = new Stash(blockSize);
+		return encryptionManager.encryptStash(stash);
+	}
+
+	private EncryptedPositionMap initializeDummyPositionMap() {
+		byte[] positionMap = new byte[0];
+		double[] versionIds = new double[0];
+		PositionMap pm = new PositionMap(versionIds, positionMap);
+		return encryptionManager.encryptPositionMap(pm);
 	}
 
 	public void close() {

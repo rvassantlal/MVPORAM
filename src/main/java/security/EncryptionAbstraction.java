@@ -33,7 +33,6 @@ public class EncryptionAbstraction {
 			return strToDecrypt==null? null :cipher.doFinal(strToDecrypt);
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
 		} 
 		return null;
 	}

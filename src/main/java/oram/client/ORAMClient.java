@@ -13,7 +13,8 @@ public class ORAMClient {
 		int oramId = 1;
 		int treeHeight = 3;
 		int nBlocksPerBucket = 4;
-		ORAMObject oram = oramManager.createORAM(oramId, treeHeight, nBlocksPerBucket);
+		int blockSize = 512;
+		ORAMObject oram = oramManager.createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 
 		if (oram != null) {
 			logger.info("ORAM was created with id {}", oramId);

@@ -1,5 +1,8 @@
 package clientStructure;
 
+import oram.client.structure.Block;
+import oram.client.structure.Bucket;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -8,33 +11,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Path implements Externalizable {
-
-    Bucket[] pathContents;
-    public Path(int tree_levels) {
-        pathContents= new Bucket[tree_levels];
-        for (int i = 0; i < tree_levels; i++) {
-            put(i,new Bucket());
-        }
+    private final Bucket[] pathContents;
+    public Path(int treeLevels) {
+        pathContents = new Bucket[treeLevels];
     }
 
-    @Override
-    public void writeExternal(ObjectOutput objectOutput) throws IOException {
-        for (Bucket pathContent : pathContents) {
-            pathContent.writeExternal(objectOutput);
-        }
-    }
-
-    @Override
-    public void readExternal(ObjectInput objectInput) throws IOException {
-        for (int i = 0; i < pathContents.length; i++) {
-            Bucket b= new Bucket();
-            b.readExternal(objectInput);
-            pathContents[i] = b;
-        }
-    }
-
-    public void put(int level, Bucket b) {
-        pathContents[level]=b;
+    public void put(int level, Bucket bucket) {
+        pathContents[level] = bucket;
     }
 
     public ArrayList<Block> getBlocks() {
@@ -53,5 +36,19 @@ public class Path implements Externalizable {
         return pathContents.length;
     }
 
-    //TODO:dummy this
+    @Override
+    public void writeExternal(ObjectOutput objectOutput) throws IOException {
+        for (Bucket pathContent : pathContents) {
+            pathContent.writeExternal(objectOutput);
+        }
+    }
+
+    @Override
+    public void readExternal(ObjectInput objectInput) throws IOException {
+        for (int i = 0; i < pathContents.length; i++) {
+            Bucket b = new Bucket();
+            b.readExternal(objectInput);
+            pathContents[i] = b;
+        }
+    }
 }

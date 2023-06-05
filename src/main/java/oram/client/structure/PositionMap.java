@@ -1,82 +1,55 @@
 package oram.client.structure;
 
-import clientStructure.Bucket;
+import oram.ORAMUtils;
 
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 
 public class PositionMap implements Externalizable {
-	// This array maps a key to a pathId.
-	// The key is the position in the array and the pathId is the byte stored in that position.
-	// 256 paths, which means there are 511 nodes in total and the max storage is 511*Bucket.MAX_SIZE.
-	// private byte[] positionMap;
-	private TreeMap<Integer,Integer> positionMap;
-	private double versionId;
-	private Integer tree_size;
+	// This array maps a memory address to a pathId (max 256 paths).
+	private byte[] pathIds;
+	private double[] versionIds;
 
-	public PositionMap() {
-		positionMap= new TreeMap<>();
-	}
-	public PositionMap(int size) {
-		positionMap= new TreeMap<>();
-		tree_size=size;
+	public PositionMap() {}
+
+	public PositionMap(double[] versionIds, byte[] pathIds) {
+		this.versionIds = versionIds;
+		this.pathIds = pathIds;
 	}
 
-	public PositionMap(double versionId, int[] positionMap) {
-		this.versionId = versionId;
-		this.tree_size = positionMap.length;
-		this.positionMap = new TreeMap<>();
-		for (int i = 0; i < positionMap.length; i++) {
-			this.positionMap.put(i, positionMap[i]);
-		}
+	public byte getPathAt(int address) {
+		return pathIds == null || pathIds.length < address ? ORAMUtils.DUMMY_PATH : pathIds[address];
 	}
 
-	public int getPosition(int key) {
-		return positionMap.get(key)==null?0:positionMap.get(key);
+	public void putPathAt(int address, byte pathId) {
+		pathIds[address] = pathId;
 	}
 
-	public void putInPosition(int key, int value) {
-		boolean validPosition = value<256 && key<511* Bucket.MAX_SIZE;
-		if(validPosition)
-			positionMap.put(key,value);
-	}
-
-	public double getVersionId() {
-		return versionId;
+	public double getVersionIdAt(int address) {
+		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput objectOutput) throws IOException {
-		for (int i = 0; i < tree_size*Bucket.MAX_SIZE; i++) {
-			Integer pathId = positionMap.get(i);
-			if(pathId==null)
-				objectOutput.writeByte(0);
-			else{
-				objectOutput.writeByte(pathId);
+	public void writeExternal(ObjectOutput out) throws IOException {
+		out.writeInt(pathIds == null ? -1 : pathIds.length);
+		for (int i = 0; i < pathIds.length; i++) {
+			out.write(pathIds[i]);
+			out.writeDouble(versionIds[i]);
+		}
+	}
+
+	@Override
+	public void readExternal(ObjectInput in) throws IOException {
+		int size = in.readInt();
+		if (size != -1) {
+			pathIds = new byte[size];
+			versionIds = new double[size];
+			for (int i = 0; i < size; i++) {
+				pathIds[i] = (byte) in.read();
+				versionIds[i] = in.readDouble();
 			}
 		}
 	}
-
-	@Override
-	public void readExternal(ObjectInput objectInput) throws IOException {
-		for (int key = 0; key < tree_size; key++) {
-			int value = objectInput.readByte();
-			positionMap.put(key, value);
-		}
-	}
-
-	public Set<Map.Entry<Integer, Integer>> entrySet() {
-		return positionMap.entrySet();
-	}
-
-	public void putAll(PositionMap map) {
-		positionMap.putAll(map.positionMap);
-	}
-
-
 }

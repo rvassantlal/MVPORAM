@@ -2,6 +2,8 @@ package pathoram;
 
 
 import confidential.client.ConfidentialServiceProxy;
+import oram.client.structure.Block;
+import oram.client.structure.Bucket;
 import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
 import org.apache.commons.lang3.SerializationUtils;
@@ -87,7 +89,7 @@ public class Client {
 		if(oldPositions.size()==0){
 			oldPositions.put(0.0,r.nextInt(tree_size/2+1));
 		}
-		currentpositionMapClient.putInPosition(a, r.nextInt(tree_size/2+1));
+		currentpositionMapClient.putPathAt(a, (byte) r.nextInt(tree_size/2+1));
 		byte[] answer = makeGetPathStashRequest(snapIds,oldPositions);
 
 		ImmutableTriple<ArrayList<List<Double>>, ImmutablePair<ArrayList<List<Integer>>, ArrayList<List<Integer>>>, byte[]> pathStashResult = readPathStashRequestResult(answer, oldPositions.size());
@@ -115,7 +117,7 @@ public class Client {
 		for (int level = tree_levels-1; level >= 0; level--) {
 			List<Integer> compatiblePaths = checkPaths(oldPosition, level,tree_levels);
 			Stash tempClientStash = new Stash(stashValues.parallelStream()
-					.filter(val -> compatiblePaths.contains(currentpositionMapClient.getPosition(val.getKey())))
+					.filter(val -> compatiblePaths.contains(currentpositionMapClient.getPathAt(val.getAddress())))
 					.limit(Bucket.MAX_SIZE)
 					.collect(Collectors.toList()));
 			tempClientStash.getBlocks().forEach(clientStash::remove);
@@ -162,8 +164,8 @@ public class Client {
 				List<byte[]> encryptedBlocks = new ArrayList<>();
 				for (int j = 0; j < blocks.length; j++) {
 					ByteBuffer buf = ByteBuffer.allocate(Block.standard_size+1);
-					buf.put(blocks[i].getKey());
-					buf.put(blocks[i].getValue());
+					buf.put(blocks[i].getAddress());
+					buf.put(blocks[i].getContent());
 					byte[] result = encryptor.encrypt(buf.array());
 					encryptedBlocks.add(result);
 				}
@@ -269,12 +271,12 @@ public class Client {
 
 
 					List<Block> stashContents = retrievedStash.getBlocks().stream()
-							.filter(Block::isNotDummy)
+							.filter(Block::isDummy)
 							.collect(Collectors.toList());
 					mergeStashes(intermediateStash, new Stash(stashContents), snapId);
 
 					List<Block> pathContents = bufOut.stream()
-							.filter(Block::isNotDummy)
+							.filter(Block::isDummy)
 							.collect(Collectors.toList());
 
 					mergeStashes(intermediatePath, new Stash(pathContents), snapId);
@@ -349,8 +351,8 @@ public class Client {
 
 	private void mergeStashes(TreeMap<Short, Pair<Double, byte[]>> intermediateStash, Stash deserializedStash, Double snapId) {
 		deserializedStash.getBlocks().forEach(block -> {
-			short key = (short) block.getKey();
-			byte[] value = block.getValue();
+			short key = (short) block.getAddress();
+			byte[] value = block.getContent();
 			if (!intermediateStash.containsKey(key) || intermediateStash.get(key).getKey() < snapId) {
 				intermediateStash.put(key, Pair.of(snapId, value));
 			}

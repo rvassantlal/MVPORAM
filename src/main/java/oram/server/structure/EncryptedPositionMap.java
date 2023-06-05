@@ -6,18 +6,12 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
 public class EncryptedPositionMap implements Externalizable {
-	private double versionId;
 	private byte[] encryptedPositionMap;
 
 	public EncryptedPositionMap() {}
 
-	public EncryptedPositionMap(double versionId, byte[] encryptedPositionMap) {
-		this.versionId = versionId;
+	public EncryptedPositionMap(byte[] encryptedPositionMap) {
 		this.encryptedPositionMap = encryptedPositionMap;
-	}
-
-	public double getVersionId() {
-		return versionId;
 	}
 
 	public byte[] getEncryptedPositionMap() {
@@ -26,7 +20,6 @@ public class EncryptedPositionMap implements Externalizable {
 
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeDouble(versionId);
 		out.writeInt(encryptedPositionMap == null ? -1 : encryptedPositionMap.length);//TODO this length is fixed
 		if (encryptedPositionMap != null)
 			out.write(encryptedPositionMap);
@@ -34,7 +27,6 @@ public class EncryptedPositionMap implements Externalizable {
 
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		versionId = in.readDouble();
 		int len = in.readInt();
 		if (len != -1) {
 			encryptedPositionMap = new byte[len];
