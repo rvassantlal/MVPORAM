@@ -1,6 +1,6 @@
 package oram.client.structure;
 
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 
 import java.io.Externalizable;
 import java.io.IOException;

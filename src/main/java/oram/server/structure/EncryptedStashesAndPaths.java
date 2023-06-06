@@ -4,26 +4,24 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class EncryptedStashesAndPaths implements Externalizable {
 	private ORAMContext oramContext;
-	private List<EncryptedStash> encryptedStashes;
+	private Map<Double, EncryptedStash> encryptedStashes;
 	private Map<Double, EncryptedBucket[]> paths;
 
 	public EncryptedStashesAndPaths(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(List<EncryptedStash> encryptedStashes, Map<Double, EncryptedBucket[]> paths) {
+	public EncryptedStashesAndPaths(Map<Double, EncryptedStash> encryptedStashes, Map<Double, EncryptedBucket[]> paths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
 	}
 
-	public List<EncryptedStash> getEncryptedStashes() {
+	public Map<Double, EncryptedStash> getEncryptedStashes() {
 		return encryptedStashes;
 	}
 
@@ -34,8 +32,9 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		out.writeInt(encryptedStashes.size());
-		for (EncryptedStash encryptedStash : encryptedStashes) {
-			encryptedStash.writeExternal(out);
+		for (Map.Entry<Double, EncryptedStash> entry : encryptedStashes.entrySet()) {
+			out.writeDouble(entry.getKey());
+			entry.getValue().writeExternal(out);
 		}
 		out.writeInt(paths.size());
 		for (Map.Entry<Double, EncryptedBucket[]> entry : paths.entrySet()) {
@@ -50,11 +49,12 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
 		int size = in.readInt();
-		encryptedStashes = new ArrayList<>(size);
+		encryptedStashes = new HashMap<>(size);
 		while (size-- > 0) {
+			double versionId = in.readDouble();
 			EncryptedStash encryptedStash = new EncryptedStash();
 			encryptedStash.readExternal(in);
-			encryptedStashes.add(encryptedStash);
+			encryptedStashes.put(versionId, encryptedStash);
 		}
 		size = in.readInt();
 		paths = new HashMap<>(size);

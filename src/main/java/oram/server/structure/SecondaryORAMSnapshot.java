@@ -1,6 +1,6 @@
 package oram.server.structure;
 
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 
 import java.util.HashMap;
 import java.util.LinkedList;

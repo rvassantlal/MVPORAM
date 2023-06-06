@@ -2,16 +2,20 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 import oram.client.structure.*;
+import oram.messages.EvictionORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.messages.StashPathORAMMessage;
+import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
 import oram.server.structure.ORAMContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import utils.Operation;
+import oram.utils.Operation;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
@@ -20,14 +24,16 @@ import java.util.*;
 public class ORAMObject {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final ConfidentialServiceProxy serviceProxy;
+	private final int clientId;
 	private final int oramId;
 	private final ORAMContext oramContext;
 	private final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 
-	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
+	public ORAMObject(ConfidentialServiceProxy serviceProxy, int clientId, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
 		this.serviceProxy = serviceProxy;
+		this.clientId = clientId;
 		this.oramId = oramId;
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
@@ -35,24 +41,26 @@ public class ORAMObject {
 	}
 
 	/**
-	 * Read the memory position.
-	 * @param position Memory position.
-	 * @return Content located at the memory position.
+	 * Read the memory address.
+	 * @param address Memory address.
+	 * @return Content located at the memory address.
 	 */
-	public byte[] readMemory(int position) {
-		//TODO check if position is inside the limits
-		throw new UnsupportedOperationException();
+	public byte[] readMemory(int address) {
+		if (address < 0 || oramContext.getTreeSize() <= address)
+			return null;
+		return access(Operation.READ, address, null);
 	}
 
 	/**
-	 * Write content to the memory position.
-	 * @param position Memory position.
+	 * Write content to the memory address.
+	 * @param address Memory address.
 	 * @param content Content to write.
-	 * @return Old content located at the memory position.
+	 * @return Old content located at the memory address.
 	 */
-	public byte[] writeMemory(int position, byte[] content) {
-		//TODO check if position is inside the limits
-		throw new UnsupportedOperationException();
+	public byte[] writeMemory(int address, byte[] content) {
+		if (address < 0 || oramContext.getTreeSize() <= address)
+			return null;
+		return access(Operation.WRITE, address, content);
 	}
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
@@ -66,8 +74,11 @@ public class ORAMObject {
 		PositionMap mergedPositionMap = mergePositionMaps(positionMaps);
 		byte pathId = mergedPositionMap.getPathAt(address);
 
+		mergedPositionMap.setPathAt(address, generateRandomPathId());
+		mergedPositionMap.setVersionIdAt(address, generateVersion(mergedPositionMap));
+
 		if (pathId == ORAMUtils.DUMMY_PATH) {
-			pathId = (byte) rndGenerator.nextInt(1 << oramContext.getTreeHeight());//2^height
+			pathId = generateRandomPathId();
 			isRealAccess = false;
 		}
 
@@ -89,12 +100,14 @@ public class ORAMObject {
 			logger.error("Unsupported operation type {} in access", op);
 		}
 
-		evict(mergedPositionMap, mergedStash, pathId);
-
+		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
+		if (!isEvicted) {
+			logger.error("Failed to do eviction on oram {}", oramId);
+		}
 		return oldContent;
 	}
 
-	private void evict(PositionMap positionMap, Stash stash, byte oldPathId) {
+	private boolean evict(PositionMap positionMap, Stash stash, byte oldPathId) {
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
 		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
@@ -126,7 +139,42 @@ public class ORAMObject {
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
+		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext.getBlockSize(), path);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
+	}
 
+	private double generateVersion(PositionMap positionMap) {
+		double maxVersion = 0;
+		for (double versionId : positionMap.getVersionIds()) {
+			maxVersion = Math.max(maxVersion, versionId);
+		}
+		int versionLevel = (int)maxVersion;
+		return Double.parseDouble(versionLevel + "." + clientId);
+	}
+
+	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
+									 Map<Integer, EncryptedBucket> encryptedPath) {
+		try {
+			ORAMMessage request = new EvictionORAMMessage(oramId, oramContext.getBucketSize(),
+					oramContext.getBlockSize(), encryptedStash, encryptedPositionMap, encryptedPath);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
+			if (serializedRequest == null) {
+				return false;
+			}
+
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			if (response == null || response.getPainData() == null) {
+				return false;
+			}
+			Status status = Status.getStatus(response.getPainData()[0]);
+			return status != Status.FAILED;
+		} catch (SecretSharingException e) {
+			return false;
+		}
+	}
+
+	private byte generateRandomPathId() {
+		return (byte) rndGenerator.nextInt(1 << oramContext.getTreeHeight()); //2^height
 	}
 
 	private Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths) {
@@ -186,7 +234,7 @@ public class ORAMObject {
 	private StashesAndPaths getStashesAndPaths(byte pathId) {
 		try {
 			ORAMMessage request = new StashPathORAMMessage(oramId, pathId);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(Operation.GET_STASH_AND_PATH, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_STASH_AND_PATH, request);
 			if (serializedRequest == null) {
 				return null;
 			}
@@ -198,10 +246,6 @@ public class ORAMObject {
 		} catch (SecretSharingException e) {
 			return null;
 		}
-	}
-
-	private void completeDummyAccess() {
-
 	}
 
 	private PositionMap mergePositionMaps(PositionMap[] positionMaps) {
@@ -225,25 +269,10 @@ public class ORAMObject {
 		return new PositionMap(versionIds, pathIds);
 	}
 
-	private byte locatePathId(PositionMap[] positionMaps, int address) {
-		byte recentPathId = ORAMUtils.DUMMY_PATH;
-		double recentVersionId = ORAMUtils.DUMMY_VERSION;
-		for (PositionMap positionMap : positionMaps) {
-			byte pathId = positionMap.getPathAt(address);
-			double versionId = positionMap.getVersionIdAt(address);
-			if (pathId != ORAMUtils.DUMMY_PATH && versionId > recentVersionId) {
-				recentPathId = pathId;
-				recentVersionId = versionId;
-			}
-		}
-
-		return recentPathId;
-	}
-
 	private PositionMap[] getPositionMaps() {
 		try {
 			ORAMMessage request = new ORAMMessage(oramId);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(Operation.GET_POSITION_MAP, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
 			if (serializedRequest == null) {
 				return null;
 			}

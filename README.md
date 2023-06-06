@@ -5,11 +5,11 @@
 #### With BFT-SMaRt
 1. Start servers.
     ```
-    .\smartrun.cmd pathoram.Server <process id>
+    .\smartrun.cmd oram.server.ORAMServer <process id>
     ```
 2. Start client.
     ```
-    .\smartrun.cmd testers.ClientTester <client id> <oram password> <oram name> <test size>
+    .\smartrun.cmd oram.testers.ClientTester <client id> <oram password> <oram name> <test size>
     ```
 
 
@@ -20,5 +20,5 @@
     ```
 2. Start client.
     ```
-   .\smartrun.cmd oram.client.ORAMClient
+   .\smartrun.cmd oram.testers.ORAMClient
     ```

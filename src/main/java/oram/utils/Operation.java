@@ -1,12 +1,8 @@
-package utils;
+package oram.utils;
 
 public enum Operation {
-	CREATE_ORAM,
-	GET_POSITION_MAP,
 	READ,
-	WRITE,
-	GET_ORAM,
-	GET_STASH_AND_PATH;
+	WRITE;
 
 	public final static Operation[] values = values();
 

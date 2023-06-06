@@ -1,6 +1,4 @@
-package utils;
-
-import confidential.demo.map.client.Operation;
+package oram.utils;
 
 public enum Status {
 	SUCCESS,

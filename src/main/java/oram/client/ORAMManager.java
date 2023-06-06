@@ -2,7 +2,7 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
 import oram.messages.CreateORAMMessage;
@@ -10,27 +10,24 @@ import oram.messages.ORAMMessage;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
 import oram.server.structure.ORAMContext;
-import utils.Operation;
-import utils.Status;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import vss.facade.SecretSharingException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.security.SecureRandom;
 
 public class ORAMManager {
 	private final ConfidentialServiceProxy serviceProxy;
 	private final int clientId;
 	private final EncryptionManager encryptionManager;
-	private final SecureRandom rndGenerator;
 
 	public ORAMManager(int clientId) throws SecretSharingException {
 		//Connecting to servers
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
 		this.clientId = clientId;
 		this.encryptionManager = new EncryptionManager();
-		this.rndGenerator = new SecureRandom("oram".getBytes());
 	}
 
 	public ORAMObject createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) {
@@ -39,7 +36,7 @@ public class ORAMManager {
 			EncryptedStash encryptedStash = initializeDummyStash(blockSize);
 			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
 					encryptedPositionMap, encryptedStash);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(Operation.CREATE_ORAM, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 			if (serializedRequest == null) {
 				return null;
 			}
@@ -53,7 +50,7 @@ public class ORAMManager {
 			}
 			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 			ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
-			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+			return new ORAMObject(serviceProxy, clientId, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
 			return null;
 		}
@@ -62,7 +59,7 @@ public class ORAMManager {
 	public ORAMObject getORAM(int oramId) {
 		try {
 			ORAMMessage request = new ORAMMessage(oramId);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(Operation.GET_ORAM, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_ORAM, request);
 			if (serializedRequest == null) {
 				return null;
 			}
@@ -81,7 +78,7 @@ public class ORAMManager {
 				int blockSize = in.readInt();
 				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 				ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
-				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+				return new ORAMObject(serviceProxy, clientId, oramId, oramContext, encryptionManager);
 			}
 		} catch (SecretSharingException | IOException e) {
 			return null;
@@ -90,7 +87,7 @@ public class ORAMManager {
 
 	private EncryptedStash initializeDummyStash(int blockSize) {
 		Stash stash = new Stash(blockSize);
-		return encryptionManager.encryptStash(ORAMUtils.DUMMY_VERSION,stash);
+		return encryptionManager.encryptStash(stash);
 	}
 
 	private EncryptedPositionMap initializeDummyPositionMap() {

@@ -1,14 +1,12 @@
-package oram;
+package oram.utils;
 
 import oram.messages.ORAMMessage;
-import utils.Operation;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 
 public class ORAMUtils {
@@ -50,7 +48,7 @@ public class ORAMUtils {
 		return commonNodes;
 	}
 
-	public static byte[] serializeRequest(Operation operation, ORAMMessage request) {
+	public static byte[] serializeRequest(ServerOperationType operation, ORAMMessage request) {
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			out.write(operation.ordinal());

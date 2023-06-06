@@ -6,6 +6,7 @@ import confidential.facade.server.ConfidentialServerFacade;
 import confidential.facade.server.ConfidentialSingleExecutable;
 import confidential.statemanagement.ConfidentialSnapshot;
 import oram.messages.CreateORAMMessage;
+import oram.messages.EvictionORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.messages.StashPathORAMMessage;
 import oram.server.structure.EncryptedPositionMap;
@@ -14,9 +15,9 @@ import oram.server.structure.EncryptedStashesAndPaths;
 import oram.server.structure.ORAMContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import pathoram.ORAM;
-import utils.Operation;
-import utils.Status;
+import oram.server.structure.ORAM;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
@@ -24,7 +25,7 @@ import java.util.TreeMap;
 
 public class ORAMServer implements ConfidentialSingleExecutable {
 	private final Logger logger = LoggerFactory.getLogger("oram");
-	private TreeMap<Integer, ORAM> orams;
+	private final TreeMap<Integer, ORAM> orams;
 
 	public static void main(String[] args) {
 		new ORAMServer(Integer.parseInt(args[0]));
@@ -40,7 +41,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	public ConfidentialMessage appExecuteOrdered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
-			Operation op = Operation.getOperation(in.read());
+			ServerOperationType op = ServerOperationType.getOperation(in.read());
 			ORAMMessage request;
 			switch (op) {
 				case CREATE_ORAM:
@@ -59,6 +60,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
 					return getStashesAndPaths((StashPathORAMMessage)request, msgCtx.getSender());
+				case EVICTION:
+					request = new EvictionORAMMessage();
+					request.readExternal(in);
+					return performEviction((EvictionORAMMessage)request, msgCtx.getSender());
 			}
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
@@ -70,7 +75,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	public ConfidentialMessage appExecuteUnordered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
-			Operation op = Operation.getOperation(in.read());
+			ServerOperationType op = ServerOperationType.getOperation(in.read());
 			ORAMMessage request;
 			switch (op) {
 				case GET_ORAM:
@@ -86,6 +91,19 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
 		}
 		return null;
+	}
+
+	private ConfidentialMessage performEviction(EvictionORAMMessage request, int clientId) {
+		int oramId =  request.getOramId();
+		ORAM oram = orams.get(oramId);
+		if (oram == null)
+			return null;
+		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
+				request.getEncryptedPath(), clientId);
+		if (isEvicted)
+			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
+		else
+			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 	}
 
 	private ConfidentialMessage getStashesAndPaths(StashPathORAMMessage request, int clientId) {
@@ -124,7 +142,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				bos.flush();
 				return new ConfidentialMessage(bos.toByteArray());
 			} catch (IOException e) {
-				logger.debug("Failed to serialize position maps: {}",  e.getMessage());
+				logger.debug("Failed to serialize oram context: {}",  e.getMessage());
 				return new ConfidentialMessage();
 			}
 		}
@@ -136,7 +154,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null)
 			return null;
 		EncryptedPositionMap[] positionMaps = oram.getPositionMaps(clientId);
-		//TODO compute the size of serialized position maps
+
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			out.writeInt(positionMaps.length);

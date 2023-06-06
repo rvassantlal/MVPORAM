@@ -1,6 +1,6 @@
 package oram.client.structure;
 
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 
 import java.io.Externalizable;
 import java.io.IOException;
@@ -23,12 +23,20 @@ public class PositionMap implements Externalizable {
 		return pathIds == null || pathIds.length < address ? ORAMUtils.DUMMY_PATH : pathIds[address];
 	}
 
-	public void putPathAt(int address, byte pathId) {
+	public void setPathAt(int address, byte pathId) {
 		pathIds[address] = pathId;
 	}
 
 	public double getVersionIdAt(int address) {
 		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
+	}
+
+	public double[] getVersionIds() {
+		return versionIds;
+	}
+
+	public void setVersionIdAt(int address, double newVersionId) {
+		versionIds[address] = newVersionId;
 	}
 
 	@Override

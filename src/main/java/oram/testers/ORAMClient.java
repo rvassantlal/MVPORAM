@@ -1,5 +1,7 @@
-package oram.client;
+package oram.testers;
 
+import oram.client.ORAMManager;
+import oram.client.ORAMObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;

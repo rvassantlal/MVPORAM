@@ -1,6 +1,6 @@
 package oram.server.structure;
 
-import oram.ORAMUtils;
+import oram.utils.ORAMUtils;
 
 public class MainORAMSnapshot extends AbstractORAMSnapshot {
 	private final EncryptedBucket[] tree;
