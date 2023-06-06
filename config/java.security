@@ -1,1 +1,1 @@
-oram.security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider
+security.provider.10=org.bouncycastle.jce.provider.BouncyCastleProvider
