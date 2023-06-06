@@ -7,10 +7,15 @@ import java.io.ObjectOutput;
 
 public class EncryptedBucket implements Externalizable {
 	private byte[][] blocks;
+
 	private final int blockSize;
 
 	public EncryptedBucket(int bucketSize, int blockSize) {
 		this.blocks = new byte[bucketSize][];
+		this.blockSize = blockSize;
+	}
+	public EncryptedBucket(int blockSize, byte[][] blocks) {
+		this.blocks = blocks;
 		this.blockSize = blockSize;
 	}
 
@@ -18,6 +23,9 @@ public class EncryptedBucket implements Externalizable {
 		return blocks;
 	}
 
+	public int getBlockSize() {
+		return blockSize;
+	}
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		for (byte[] block : blocks) {

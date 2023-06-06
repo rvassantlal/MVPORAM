@@ -10,9 +10,16 @@ import java.util.List;
 public class Stash implements Externalizable {
 	private final List<Block> blocks;
 	private final int blockSize;
+	private double versionId;
 
 	public Stash(int blockSize){
 		this.blockSize = blockSize;
+		this.blocks = new LinkedList<>();
+	}
+
+	public Stash(int blockSize, double versionId ){
+		this.blockSize = blockSize;
+		this.versionId = versionId;
 		this.blocks = new LinkedList<>();
 	}
 
@@ -51,5 +58,9 @@ public class Stash implements Externalizable {
 			Block block = new Block(blockSize);
 			block.readExternal(in);
 		}
+	}
+
+	public double getVersionId() {
+		return versionId;
 	}
 }

@@ -25,6 +25,9 @@ public class Bucket implements Externalizable {
 		return true;
 	}
 
+	public int getBlockSize() {
+		return blockSize;
+	}
 	public Block[] readBucket() {
 		return this.blocks;
 	}

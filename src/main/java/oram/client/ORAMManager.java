@@ -12,7 +12,6 @@ import oram.server.structure.EncryptedStash;
 import oram.server.structure.ORAMContext;
 import utils.Operation;
 import utils.Status;
-import utils.Utils;
 import vss.facade.SecretSharingException;
 
 import java.io.ByteArrayInputStream;
@@ -91,7 +90,7 @@ public class ORAMManager {
 
 	private EncryptedStash initializeDummyStash(int blockSize) {
 		Stash stash = new Stash(blockSize);
-		return encryptionManager.encryptStash(stash);
+		return encryptionManager.encryptStash(ORAMUtils.DUMMY_VERSION,stash);
 	}
 
 	private EncryptedPositionMap initializeDummyPositionMap() {
