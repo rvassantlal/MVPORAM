@@ -1,14 +1,19 @@
 package oram.client;
 
 import oram.client.structure.*;
-import oram.server.structure.*;
 import oram.security.EncryptionAbstraction;
+import oram.server.structure.*;
+import oram.utils.ORAMUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 public class EncryptionManager {
+	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final EncryptionAbstraction encryptionAbstraction;
 
 	public EncryptionManager() {
@@ -28,6 +33,7 @@ public class EncryptionManager {
 			}
 			return positionMaps;
 		} catch (IOException | ClassNotFoundException e) {
+			logger.error("Failed to decrypt position map", e);
 			return null;
 		}
 	}
@@ -40,10 +46,10 @@ public class EncryptionManager {
 
 			Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 					encryptedStashesAndPaths.getEncryptedStashes());
-			Map<Double, Bucket[]> paths = decryptPaths(oramContext.getBucketSize(), oramContext.getBlockSize(),
-					encryptedStashesAndPaths.getPaths());
+			Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
 			return new StashesAndPaths(stashes, paths);
 		} catch (IOException | ClassNotFoundException e) {
+			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
 		}
 	}
@@ -56,14 +62,13 @@ public class EncryptionManager {
 		return stashes;
 	}
 
-	private Map<Double, Bucket[]> decryptPaths(int bucketSize, int blockSize, Map<Double,
-			EncryptedBucket[]> encryptedPaths) {
+	private Map<Double, Bucket[]> decryptPaths(ORAMContext oramContext, Map<Double, EncryptedBucket[]> encryptedPaths) {
 		Map<Double, Bucket[]> paths = new HashMap<>(encryptedPaths.size());
 		for (Map.Entry<Double, EncryptedBucket[]> entry : encryptedPaths.entrySet()) {
 			EncryptedBucket[] encryptedBuckets = entry.getValue();
 			Bucket[] buckets = new Bucket[encryptedBuckets.length];
 			for (int i = 0; i < encryptedBuckets.length; i++) {
-				buckets[i] = decryptBucket(bucketSize, blockSize, encryptedBuckets[i]);
+				buckets[i] = decryptBucket(oramContext, encryptedBuckets[i]);
 			}
 			paths.put(entry.getKey(), buckets);
 		}
@@ -78,6 +83,7 @@ public class EncryptionManager {
 			bos.flush();
 			return new EncryptedPositionMap(encryptionAbstraction.encrypt(bos.toByteArray()));
 		} catch (IOException e) {
+			logger.error("Failed to encrypt position map", e);
 			return null;
 		}
 	}
@@ -89,6 +95,7 @@ public class EncryptionManager {
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
 			deserializedPositionMap.readExternal(in);
 		} catch (IOException e) {
+			logger.error("Failed to decrypt position map", e);
 			return null;
 		}
 		return deserializedPositionMap;
@@ -102,6 +109,7 @@ public class EncryptionManager {
 			bos.flush();
 			return new EncryptedStash(encryptionAbstraction.encrypt(bos.toByteArray()));
 		} catch (IOException e) {
+			logger.error("Failed to encrypt stash", e);
 			return null;
 		}
 	}
@@ -113,55 +121,69 @@ public class EncryptionManager {
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
 			deserializedStash.readExternal(in);
 		} catch (IOException | ClassNotFoundException e) {
+			logger.error("Failed to decrypt stash", e);
 			return null;
 		}
 		return deserializedStash;
 	}
 
-	public EncryptedBucket encryptBucket(int blockSize, Bucket bucket) {
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
-			Block[] bucketContents = bucket.readBucket();
-			byte[][] encryptedBlocks = new byte[bucketContents.length][];
-			//TODO fill bucket with dummy blocks
-			for (int i = 0; i < bucketContents.length; i++) {
+	public EncryptedBucket encryptBucket(ORAMContext oramContext, Bucket bucket) {
+		prepareBucket(oramContext, bucket);
+		Block[] bucketContents = bucket.readBucket();
+		byte[][] encryptedBlocks = new byte[bucketContents.length][];
+		for (int i = 0; i < bucketContents.length; i++) {
+			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 				bucketContents[i].writeExternal(out);
 				out.flush();
 				bos.flush();
-				byte[] encryptedBlock = encryptionAbstraction.encrypt(bos.toByteArray());
-				encryptedBlocks[i] = encryptedBlock;
-				bos.reset();
+				encryptedBlocks[i] = encryptionAbstraction.encrypt(bos.toByteArray());
+			} catch (IOException e) {
+				logger.error("Failed to encrypt bucket", e);
+				return null;
 			}
-			return new EncryptedBucket(blockSize, encryptedBlocks);
-		} catch (IOException e) {
-			return null;
 		}
+		return new EncryptedBucket(encryptedBlocks);
 	}
 
-	public Bucket decryptBucket(int bucketSize, int blockSize, EncryptedBucket encryptedBucket) {
+	public Bucket decryptBucket(ORAMContext oramContext, EncryptedBucket encryptedBucket) {
 		byte[][] blocks = encryptedBucket.getBlocks();
-		Bucket newBucket = new Bucket(bucketSize, blockSize);
-		//TODO remove dummy blocks
+		Bucket newBucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize());
+
 		for (byte[] block : blocks) {
 			byte[] serializedBlock = encryptionAbstraction.decrypt(block);
-			Block deserializedBlock = new Block(blockSize);
+			Block deserializedBlock = new Block(oramContext.getBlockSize());
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedBlock);
 				 ObjectInputStream in = new ObjectInputStream(bis)) {
 				deserializedBlock.readExternal(in);
 			} catch (IOException | ClassNotFoundException e) {
+				logger.error("Failed to decrypt block", e);
 				return null;
 			}
-			newBucket.putBlock(deserializedBlock);
+			if (deserializedBlock.getAddress() != ORAMUtils.DUMMY_ADDRESS
+					&& !Arrays.equals(deserializedBlock.getContent(), oramContext.DUMMY_BLOCK)) {
+				newBucket.putBlock(deserializedBlock);
+			}
 		}
 		return newBucket;
 	}
 
-	public Map<Integer, EncryptedBucket> encryptPath(int blockSize, Map<Integer, Bucket> path) {
+	public Map<Integer, EncryptedBucket> encryptPath(ORAMContext oramContext, Map<Integer, Bucket> path) {
 		Map<Integer, EncryptedBucket> encryptedPath = new HashMap<>(path.size());
 		for (Map.Entry<Integer, Bucket> entry : path.entrySet()) {
-			EncryptedBucket encryptedBucket = encryptBucket(blockSize, entry.getValue());
+			Bucket bucket = entry.getValue();
+			EncryptedBucket encryptedBucket = encryptBucket(oramContext, bucket);
 			encryptedPath.put(entry.getKey(), encryptedBucket);
 		}
 		return encryptedPath;
+	}
+
+	private void prepareBucket(ORAMContext oramContext, Bucket bucket) {
+		Block[] blocks = bucket.readBucket();
+		for (int i = 0; i < blocks.length; i++) {
+			if (blocks[i] == null) {
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, oramContext.DUMMY_BLOCK);
+			}
+		}
 	}
 }

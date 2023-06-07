@@ -63,7 +63,7 @@ public class EncryptedStashesAndPaths implements Externalizable {
 			int nValues = in.readInt();
 			EncryptedBucket[] encryptedBuckets = new EncryptedBucket[nValues];
 			for (int i = 0; i < nValues; i++) {
-				EncryptedBucket bucket = new EncryptedBucket(oramContext.getBucketSize(), oramContext.getBlockSize());
+				EncryptedBucket bucket = new EncryptedBucket(oramContext.getBucketSize());
 				bucket.readExternal(in);
 				encryptedBuckets[i] = bucket;
 			}

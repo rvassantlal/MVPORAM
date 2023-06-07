@@ -21,7 +21,6 @@ public class EncryptionAbstraction {
 			kf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
 			key = new SecretKeySpec(kf.generateSecret(keySpec).getEncoded(),"AES");
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -32,7 +31,6 @@ public class EncryptionAbstraction {
 			cipher.init(Cipher.DECRYPT_MODE, key,new IvParameterSpec(iv));
 			return strToDecrypt==null? null :cipher.doFinal(strToDecrypt);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 		} 
 		return null;
 	}
@@ -42,7 +40,6 @@ public class EncryptionAbstraction {
 			cipher.init(Cipher.ENCRYPT_MODE, key,new IvParameterSpec(iv));
 			return cipher.doFinal(strToEncrypt);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return null;

@@ -32,7 +32,7 @@ public class EncryptedPath implements Externalizable {
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
 		for (int i = 0; i < encryptedBuckets.length; i++) {
-			EncryptedBucket encryptedBucket = new EncryptedBucket(bucketSize, blockSize);
+			EncryptedBucket encryptedBucket = new EncryptedBucket(bucketSize);
 			encryptedBucket.readExternal(in);
 			encryptedBuckets[i] = encryptedBucket;
 		}

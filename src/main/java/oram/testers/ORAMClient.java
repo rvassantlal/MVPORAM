@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
+import java.util.Arrays;
+
 public class ORAMClient {
 	private static final Logger logger = LoggerFactory.getLogger("benchmark");
 
@@ -24,12 +26,62 @@ public class ORAMClient {
 			logger.info("Failed to create ORAM with id {}", oramId);
 		}
 
-		ORAMObject oram1 = oramManager.getORAM(oramId);
-		if (oram1 != null) {
+		oram = oramManager.getORAM(oramId);
+		if (oram != null) {
 			logger.info("ORAM with id {} exists", oramId);
 		} else {
 			logger.info("ORAM with id {} does not exist", oramId);
+			System.exit(-1);
 		}
+
+		logger.debug("Write \"test1\" to address 1");
+		byte[] response = oram.writeMemory(1, "test1".getBytes());
+		if (response != null) {
+			logger.error("First write on a empty oram returned data :O");
+		}
+
+		logger.debug("Write \"test2\" to address 2");
+		response = oram.writeMemory(2, "test2".getBytes());
+		if (response != null) {
+			logger.error("Write on empty address 2 returned data");
+		}
+
+		logger.debug("Read from address 1");
+		response = oram.readMemory(1);
+		if (response == null || !new String(response).trim().equals("test1")) {
+			logger.error("Read on address 1 returned different data: {}", Arrays.toString(response));
+		}
+
+		logger.debug("Read from address 2");
+		response = oram.readMemory(2);
+		if (response == null || !new String(response).trim().equals("test2")) {
+			logger.error("Read on address 2 returned different data: {}", Arrays.toString(response));
+		}
+
+		logger.debug("Read from address 1");
+		response = oram.readMemory(1);
+		if (response == null || !new String(response).trim().equals("test1")) {
+			logger.error("Read on address 1 returned different data: {}", Arrays.toString(response));
+		}
+
+		logger.debug("Read from address 2");
+		response = oram.readMemory(2);
+		if (response == null || !new String(response).trim().equals("test2")) {
+			logger.error("Read on address 2 returned different data: {}", Arrays.toString(response));
+		}
+
+		logger.debug("Read from address 1");
+		response = oram.readMemory(1);
+		if (response == null || !new String(response).trim().equals("test1")) {
+			logger.error("Read on address 1 returned different data: {}", Arrays.toString(response));
+		}
+
+		logger.debug("Read from address 2");
+		response = oram.readMemory(2);
+		if (response == null || !new String(response).trim().equals("test2")) {
+			logger.error("Read on address 2 returned different data: {}", Arrays.toString(response));
+		}
+
 		oramManager.close();
 	}
 }

@@ -1,7 +1,5 @@
 package oram.client.structure;
 
-import oram.utils.ORAMUtils;
-
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -17,9 +15,11 @@ public class Block implements Externalizable {
         content = new byte[blockSize];
     }
 
-    public Block(int address, byte[] content){
+    public Block(int blockSize, int address, byte[] newContent){
         this.address = address;
-        this.content = content;
+        this.content = new byte[blockSize];
+        Arrays.fill(content, (byte) ' ');// TODO use other padding strategy
+        System.arraycopy(newContent, 0, content, 0, newContent.length);
     }
 
     public int getAddress() {
@@ -30,12 +30,9 @@ public class Block implements Externalizable {
         return content;
     }
 
-    public void setContent(byte[] content) {
-        this.content = content;
-    }
-
-    public boolean isDummy() {
-        return address == ORAMUtils.DUMMY_ADDRESS && Arrays.equals(content, ORAMUtils.DUMMY_BLOCK);
+    public void setContent(byte[] newContent) {
+        Arrays.fill(content, (byte) ' ');
+        System.arraycopy(newContent, 0, content, 0, newContent.length);
     }
 
     @Override
@@ -63,5 +60,12 @@ public class Block implements Externalizable {
         int result = Objects.hash(address);
         result = 31 * result + Arrays.hashCode(content);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "Block{" + address +
+                ", " + Arrays.toString(content) +
+                '}';
     }
 }

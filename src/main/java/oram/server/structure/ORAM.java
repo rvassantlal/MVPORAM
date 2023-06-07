@@ -52,6 +52,7 @@ public class ORAM {
     public EncryptedStashesAndPaths getStashesAndPaths(byte pathId, int clientId) {
         ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
         if (oramClientContext == null) {
+            logger.debug("There is no client context for {} in oram {}", clientId, oramId);
             return null;
         }
 
@@ -63,7 +64,6 @@ public class ORAM {
 
         Map<Double, Map<Integer, EncryptedBucket>> paths = new TreeMap<>();
         Set<Double> visitedVersions = new HashSet<>();
-
         while (!versions.isEmpty()) {
             OramSnapshot version = versions.poll();
             visitedVersions.add(version.getVersionId());
@@ -95,7 +95,6 @@ public class ORAM {
             }
             compactedPaths.put(entry.getKey(), buckets);
         }
-
         return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths);
     }
 
@@ -121,6 +120,7 @@ public class ORAM {
         for (OramSnapshot outstandingVersion : outstandingVersions) {
             outstandingTrees.remove(outstandingVersion);
         }
+        outstandingTrees.add(newVersion);
         //removeDeadVersions(previousSnapshots, pathID);
         return true;
     }

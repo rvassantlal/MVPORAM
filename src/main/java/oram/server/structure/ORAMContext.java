@@ -1,56 +1,40 @@
 package oram.server.structure;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.util.Arrays;
 
-public class ORAMContext implements Externalizable {
-	private int treeHeight; // number of levels is equal to tree height + 1
-	private int treeSize; // Number of buckets in the tree
-	private int bucketSize;
-	private int blockSize;
+public class ORAMContext {
+	private final int TREE_HEIGHT; // number of levels is equal to tree height + 1
+	private final int TREE_SIZE; // Number of buckets in the tree
+	private final int BUCKET_SIZE;
+	private final int BLOCK_SIZE;
+	public final byte[] DUMMY_BLOCK;
 
 	public ORAMContext(int treeHeight, int treeSize, int bucketSize, int blockSize) {
-		this.treeHeight = treeHeight;
-		this.treeSize = treeSize;
-		this.bucketSize = bucketSize;
-		this.blockSize = blockSize;
+		this.TREE_HEIGHT = treeHeight;
+		this.TREE_SIZE = treeSize;
+		this.BUCKET_SIZE = bucketSize;
+		this.BLOCK_SIZE = blockSize;
+		this.DUMMY_BLOCK = new byte[blockSize];
+		Arrays.fill(DUMMY_BLOCK, (byte) -1);
 	}
 
 	public int getTreeHeight() {
-		return treeHeight;
+		return TREE_HEIGHT;
 	}
 
 	public int getTreeLevels() {
-		return treeHeight + 1;
+		return TREE_HEIGHT + 1;
 	}
 
 	public int getTreeSize() {
-		return treeSize;
+		return TREE_SIZE;
 	}
 
 	public int getBucketSize() {
-		return bucketSize;
+		return BUCKET_SIZE;
 	}
 
 	public int getBlockSize() {
-		return blockSize;
-	}
-
-	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeInt(treeHeight);
-		out.writeInt(treeSize);
-		out.writeInt(bucketSize);
-		out.writeInt(blockSize);
-	}
-
-	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		this.treeHeight = in.readInt();
-		this.treeSize = in.readInt();
-		this.bucketSize = in.readInt();
-		this.blockSize = in.readInt();
+		return BLOCK_SIZE;
 	}
 }

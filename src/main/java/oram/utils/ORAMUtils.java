@@ -11,9 +11,8 @@ import java.util.List;
 
 public class ORAMUtils {
 	public static final double DUMMY_VERSION = 0;
-	public static final int DUMMY_PATH = -1;
+	public static final byte DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
-	public static final byte[] DUMMY_BLOCK = new byte[0];//TODO initialize correctly
 
 	public static int computeNumberOfNodes(int treeHeight) {
 		int nNodes = 0;

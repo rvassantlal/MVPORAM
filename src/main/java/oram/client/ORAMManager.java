@@ -32,8 +32,8 @@ public class ORAMManager {
 
 	public ORAMObject createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) {
 		try {
-			EncryptedPositionMap encryptedPositionMap = initializeDummyPositionMap();
-			EncryptedStash encryptedStash = initializeDummyStash(blockSize);
+			EncryptedPositionMap encryptedPositionMap = initializeEmptyPositionMap();
+			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
 			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
 					encryptedPositionMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
@@ -85,12 +85,12 @@ public class ORAMManager {
 		}
 	}
 
-	private EncryptedStash initializeDummyStash(int blockSize) {
+	private EncryptedStash initializeEmptyStash(int blockSize) {
 		Stash stash = new Stash(blockSize);
 		return encryptionManager.encryptStash(stash);
 	}
 
-	private EncryptedPositionMap initializeDummyPositionMap() {
+	private EncryptedPositionMap initializeEmptyPositionMap() {
 		byte[] positionMap = new byte[0];
 		double[] versionIds = new double[0];
 		PositionMap pm = new PositionMap(versionIds, positionMap);

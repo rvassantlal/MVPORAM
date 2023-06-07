@@ -52,4 +52,13 @@ public class Stash implements Externalizable {
 			block.readExternal(in);
 		}
 	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		for (Block block : blocks) {
+			sb.append(block).append("\n");
+		}
+		return sb.toString();
+	}
 }

@@ -72,13 +72,19 @@ public class ORAMObject {
 		}
 
 		PositionMap mergedPositionMap = mergePositionMaps(positionMaps);
-		byte pathId = mergedPositionMap.getPathAt(address);
 
-		mergedPositionMap.setPathAt(address, generateRandomPathId());
-		mergedPositionMap.setVersionIdAt(address, generateVersion(mergedPositionMap));
+		byte pathId = mergedPositionMap.getPathAt(address);
+		logger.debug("Real path id: {}", pathId);
+		byte newPathId = generateRandomPathId();
+		logger.debug("New path id: {}", newPathId);
+		if (op == Operation.WRITE || (op == Operation.READ && pathId != ORAMUtils.DUMMY_PATH)) {
+			mergedPositionMap.setPathAt(address, newPathId);
+			mergedPositionMap.setVersionIdAt(address, generateVersion(mergedPositionMap));
+		}
 
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
+			logger.debug("Dummy path id: {}", pathId);
 			isRealAccess = false;
 		}
 
@@ -95,9 +101,12 @@ public class ORAMObject {
 		if (isRealAccess && op == Operation.READ) {
 			oldContent = block.getContent();
 		} else if (op == Operation.WRITE){
-			block.setContent(newContent);
-		} else {
-			logger.error("Unsupported operation type {} in access", op);
+			if (block == null) {
+				block = new Block(oramContext.getBlockSize(), address, newContent);
+				mergedStash.putBlock(block);
+			} else {
+				block.setContent(newContent);
+			}
 		}
 
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
@@ -136,10 +145,9 @@ public class ORAMObject {
 				remainingBlocks.putBlock(block);
 			}
 		}
-
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
-		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext.getBlockSize(), path);
+		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
@@ -155,8 +163,7 @@ public class ORAMObject {
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
 									 Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
-			ORAMMessage request = new EvictionORAMMessage(oramId, oramContext.getBucketSize(),
-					oramContext.getBlockSize(), encryptedStash, encryptedPositionMap, encryptedPath);
+			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
 			if (serializedRequest == null) {
 				return false;
@@ -197,7 +204,11 @@ public class ORAMObject {
 		for (Map.Entry<Double, Bucket[]> entry : paths.entrySet()) {
 			List<Block> blocks = new LinkedList<>();
 			for (Bucket bucket : entry.getValue()) {
-				Collections.addAll(blocks, bucket.readBucket());
+				for (Block block : bucket.readBucket()) {
+					if (block != null) {
+						blocks.add(block);
+					}
+				}
 			}
 			blocksToMerge.put(entry.getKey(), blocks);
 		}
@@ -252,10 +263,13 @@ public class ORAMObject {
 		int treeSize = oramContext.getTreeSize();
 		byte[] pathIds = new byte[treeSize];
 		double[] versionIds = new double[treeSize];
+
 		for (int address = 0; address < treeSize; address++) {
 			byte recentPathId = ORAMUtils.DUMMY_PATH;
 			double recentVersionId = ORAMUtils.DUMMY_VERSION;
 			for (PositionMap positionMap : positionMaps) {
+				if (positionMap.getPathIds().length == 0)
+					continue;
 				byte pathId = positionMap.getPathAt(address);
 				double versionId = positionMap.getVersionIdAt(address);
 				if (versionId != ORAMUtils.DUMMY_VERSION && versionId > recentVersionId) {

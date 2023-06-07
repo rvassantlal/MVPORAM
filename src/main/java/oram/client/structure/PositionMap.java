@@ -6,6 +6,7 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Arrays;
 
 public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
@@ -25,6 +26,10 @@ public class PositionMap implements Externalizable {
 
 	public void setPathAt(int address, byte pathId) {
 		pathIds[address] = pathId;
+	}
+
+	public byte[] getPathIds() {
+		return pathIds;
 	}
 
 	public double getVersionIdAt(int address) {
@@ -59,5 +64,14 @@ public class PositionMap implements Externalizable {
 				versionIds[i] = in.readDouble();
 			}
 		}
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < pathIds.length; i++) {
+			sb.append("( ").append(i).append(", ").append(pathIds[i]).append(", ").append(versionIds[i]).append(") ");
+		}
+		return sb.toString();
 	}
 }

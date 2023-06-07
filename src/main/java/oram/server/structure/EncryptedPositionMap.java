@@ -20,7 +20,7 @@ public class EncryptedPositionMap implements Externalizable {
 
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeInt(encryptedPositionMap == null ? -1 : encryptedPositionMap.length);//TODO this length is fixed
+		out.writeInt(encryptedPositionMap == null ? -1 : encryptedPositionMap.length);
 		if (encryptedPositionMap != null)
 			out.write(encryptedPositionMap);
 	}
