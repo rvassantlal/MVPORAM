@@ -20,7 +20,8 @@ public class PositionMap implements Externalizable {
 	public PositionMap(double[] versionIds, byte[] pathIds) {
 		this.versionIds = versionIds;
 		this.pathIds = pathIds;
-		this.modifiedAddresses = new BitSet(pathIds.length);
+		this.modifiedAddresses = new BitSet(pathIds.length + 1);
+		this.modifiedAddresses.set(pathIds.length);
 	}
 
 	public byte getPathAt(int address) {
@@ -29,6 +30,7 @@ public class PositionMap implements Externalizable {
 
 	public void setPathAt(int address, byte pathId) {
 		pathIds[address] = pathId;
+		modifiedAddresses.set(address);
 	}
 
 	public byte[] getPathIds() {
@@ -54,7 +56,7 @@ public class PositionMap implements Externalizable {
 			out.write(pathIds[i]);
 			out.writeDouble(versionIds[i]);
 		}
-
+		out.write(modifiedAddresses.toByteArray());
 	}
 
 	@Override
@@ -68,6 +70,10 @@ public class PositionMap implements Externalizable {
 				versionIds[i] = in.readDouble();
 			}
 		}
+		int length = (int) Math.ceil(size / 8.0);
+		byte[] serializedModifiedAddresses = new byte[length];
+		in.readFully(serializedModifiedAddresses);
+		modifiedAddresses = BitSet.valueOf(serializedModifiedAddresses);
 	}
 
 	@Override

@@ -136,7 +136,8 @@ public class ORAM {
             OramSnapshot[] prev = snapshot.getPrevious();
             if(prev != null && prev.length > 0)
                 Collections.addAll(previousTrees, prev);
-            snapshot.removePath(pathID);
+            if(snapshot.getReferenceCounter()==0)
+                snapshot.removePath(pathID);
 
         }
     }
@@ -144,5 +145,28 @@ public class ORAM {
     @Override
     public String toString() {
         return String.valueOf(oramId);
+    }
+
+    public String printORAM(){
+        List<OramSnapshot> snapshots = new ArrayList<>(outstandingTrees);
+        double[] lastVersion = new double[oramContext.getTreeSize()];
+        Arrays.fill(lastVersion,-1);
+        int[] bucketSize = new int[oramContext.getTreeSize()];
+        for (OramSnapshot snapshot : snapshots) {
+            for (int i = 0; i < oramContext.getTreeSize(); i++) {
+                if(lastVersion[i]< snapshot.getVersionId()) {
+                    lastVersion[i] = snapshot.getVersionId();
+                    bucketSize[i] = snapshot.getFromLocation(i).getBlocks().length;
+                }
+            }
+            snapshots.addAll(Arrays.asList(snapshot.getPrevious()));
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Printing ORAM ").append(oramId).append("\n");
+        sb.append("(Location, Most Recent Version, Number of Buckets)\n");
+        for (int i = 0; i < oramContext.getTreeSize(); i++) {
+            sb.append("(").append(i).append(", ").append(lastVersion[i]).append(", ").append(bucketSize[i]).append(")\n");
+        }
+        return sb.toString();
     }
 }
