@@ -100,6 +100,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return null;
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
 				request.getEncryptedPath(), clientId);
+		oram.printORAM();
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
