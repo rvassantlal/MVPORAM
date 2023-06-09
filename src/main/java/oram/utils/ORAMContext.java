@@ -1,7 +1,5 @@
 package oram.utils;
 
-import java.util.Arrays;
-
 public class ORAMContext {
 	private final int TREE_HEIGHT; // number of levels is equal to tree height + 1
 	private final int TREE_SIZE; // Number of buckets in the tree
