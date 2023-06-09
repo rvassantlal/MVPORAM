@@ -1,5 +1,7 @@
 package oram.server.structure;
 
+import oram.utils.ORAMContext;
+
 public abstract class AbstractORAMSnapshot {
 	private final double versionId;
 	protected final ORAMContext oramContext;

@@ -9,7 +9,7 @@ import oram.messages.CreateORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
-import oram.server.structure.ORAMContext;
+import oram.utils.ORAMContext;
 import oram.utils.ServerOperationType;
 import oram.utils.Status;
 import vss.facade.SecretSharingException;

@@ -1,5 +1,7 @@
 package oram.server.structure;
 
+import oram.utils.ORAMContext;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;

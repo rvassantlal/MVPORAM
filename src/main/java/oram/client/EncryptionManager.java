@@ -3,6 +3,7 @@ package oram.client;
 import oram.client.structure.*;
 import oram.security.EncryptionAbstraction;
 import oram.server.structure.*;
+import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,7 +162,7 @@ public class EncryptionManager {
 				return null;
 			}
 			if (deserializedBlock.getAddress() != ORAMUtils.DUMMY_ADDRESS
-					&& !Arrays.equals(deserializedBlock.getContent(), oramContext.DUMMY_BLOCK)) {
+					&& !Arrays.equals(deserializedBlock.getContent(), ORAMUtils.DUMMY_BLOCK)) {
 				newBucket.putBlock(deserializedBlock);
 			}
 		}
@@ -182,7 +183,7 @@ public class EncryptionManager {
 		Block[] blocks = bucket.readBucket();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
-				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, oramContext.DUMMY_BLOCK);
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_BLOCK);
 			}
 		}
 	}

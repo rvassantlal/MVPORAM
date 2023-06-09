@@ -13,6 +13,7 @@ public class ORAMUtils {
 	public static final double DUMMY_VERSION = 0;
 	public static final byte DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
+	public static byte[] DUMMY_BLOCK = new byte[0];
 
 	public static int computeNumberOfNodes(int treeHeight) {
 		int nNodes = 0;
@@ -59,5 +60,29 @@ public class ORAMUtils {
 		} catch (IOException e) {
 			return null;
 		}
+	}
+
+	public static int toNumber(byte[] numberInBytes) {
+		int number = Byte.toUnsignedInt(numberInBytes[0]);
+		number <<= 8;
+		number |= Byte.toUnsignedInt(numberInBytes[1]);
+		number <<= 8;
+		number |= Byte.toUnsignedInt(numberInBytes[2]);
+		number <<= 8;
+		number |= Byte.toUnsignedInt(numberInBytes[3]);
+		return number;
+	}
+
+	public static byte[] toBytes(int number) {
+		byte[] result = new byte[4];
+		result[3] = (byte) number;
+		number >>= 8;
+		result[2] = (byte) number;
+		number >>= 8;
+		result[1] = (byte) number;
+		number >>= 8;
+		result[0] = (byte) number;
+
+		return result;
 	}
 }

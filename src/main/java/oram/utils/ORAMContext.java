@@ -1,4 +1,4 @@
-package oram.server.structure;
+package oram.utils;
 
 import java.util.Arrays;
 
@@ -7,15 +7,12 @@ public class ORAMContext {
 	private final int TREE_SIZE; // Number of buckets in the tree
 	private final int BUCKET_SIZE;
 	private final int BLOCK_SIZE;
-	public final byte[] DUMMY_BLOCK;
 
 	public ORAMContext(int treeHeight, int treeSize, int bucketSize, int blockSize) {
 		this.TREE_HEIGHT = treeHeight;
 		this.TREE_SIZE = treeSize;
 		this.BUCKET_SIZE = bucketSize;
 		this.BLOCK_SIZE = blockSize;
-		this.DUMMY_BLOCK = new byte[blockSize];
-		Arrays.fill(DUMMY_BLOCK, (byte) -1);
 	}
 
 	public int getTreeHeight() {

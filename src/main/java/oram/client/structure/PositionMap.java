@@ -7,17 +7,20 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Arrays;
+import java.util.BitSet;
 
 public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
 	private byte[] pathIds;
 	private double[] versionIds;
+	private BitSet modifiedAddresses;
 
 	public PositionMap() {}
 
 	public PositionMap(double[] versionIds, byte[] pathIds) {
 		this.versionIds = versionIds;
 		this.pathIds = pathIds;
+		this.modifiedAddresses = new BitSet(pathIds.length);
 	}
 
 	public byte getPathAt(int address) {
@@ -51,6 +54,7 @@ public class PositionMap implements Externalizable {
 			out.write(pathIds[i]);
 			out.writeDouble(versionIds[i]);
 		}
+
 	}
 
 	@Override

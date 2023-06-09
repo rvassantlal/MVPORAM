@@ -10,7 +10,7 @@ import oram.messages.StashPathORAMMessage;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
-import oram.server.structure.ORAMContext;
+import oram.utils.ORAMContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import oram.utils.Operation;

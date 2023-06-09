@@ -1,5 +1,7 @@
 package oram.client.structure;
 
+import oram.utils.ORAMUtils;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -10,16 +12,16 @@ import java.util.Objects;
 public class Block implements Externalizable {
     private int address;
     private byte[] content;
+    private final int blockSize;
 
     public Block(int blockSize) {
-        content = new byte[blockSize];
+        this.blockSize = blockSize;
     }
 
     public Block(int blockSize, int address, byte[] newContent){
         this.address = address;
-        this.content = new byte[blockSize];
-        Arrays.fill(content, (byte) ' ');// TODO use other padding strategy
-        System.arraycopy(newContent, 0, content, 0, newContent.length);
+        this.content = newContent;
+        this.blockSize = blockSize;
     }
 
     public int getAddress() {
@@ -31,20 +33,28 @@ public class Block implements Externalizable {
     }
 
     public void setContent(byte[] newContent) {
-        Arrays.fill(content, (byte) ' ');
-        System.arraycopy(newContent, 0, content, 0, newContent.length);
+        this.content = newContent;
     }
 
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         out.writeInt(address);
-        out.write(content);
+        byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
+        int emptyBytes = blockSize - content.length;
+        byte[] serializedNEmptyBytes = ORAMUtils.toBytes(emptyBytes);
+        System.arraycopy(serializedNEmptyBytes, 0, paddedContent, blockSize, 4);
+        out.write(paddedContent);
     }
 
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         address = in.readInt();
-        in.readFully(content);
+        byte[] paddedContent = new byte[blockSize + 4];
+        in.readFully(paddedContent);
+        byte[] serializedNEmptyBytes = new byte[4];
+        System.arraycopy(paddedContent, blockSize, serializedNEmptyBytes, 0, 4);
+        int emptyBytes = ORAMUtils.toNumber(serializedNEmptyBytes);
+        content = Arrays.copyOf(paddedContent, blockSize - emptyBytes);
     }
 
     @Override

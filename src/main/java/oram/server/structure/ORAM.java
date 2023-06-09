@@ -1,5 +1,6 @@
 package oram.server.structure;
 
+import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

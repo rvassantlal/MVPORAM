@@ -1,5 +1,6 @@
 package oram.server.structure;
 
+import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 
 public class MainORAMSnapshot extends AbstractORAMSnapshot {
