@@ -148,15 +148,19 @@ public class ORAM {
     }
 
     public String printORAM(){
-        List<OramSnapshot> snapshots = new ArrayList<>(outstandingTrees);
+        Queue<OramSnapshot> snapshots = new LinkedList<>(outstandingTrees);
         double[] lastVersion = new double[oramContext.getTreeSize()];
         Arrays.fill(lastVersion,-1);
         int[] bucketSize = new int[oramContext.getTreeSize()];
-        for (OramSnapshot snapshot : snapshots) {
+        while (!snapshots.isEmpty()) {
+            OramSnapshot snapshot = snapshots.poll();
             for (int i = 0; i < oramContext.getTreeSize(); i++) {
-                if(lastVersion[i]< snapshot.getVersionId()) {
+                if(lastVersion[i] < snapshot.getVersionId()) {
                     lastVersion[i] = snapshot.getVersionId();
-                    bucketSize[i] = snapshot.getFromLocation(i).getBlocks().length;
+                    EncryptedBucket bucket = snapshot.getFromLocation(i);
+                    if (bucket != null) {
+                        bucketSize[i] = bucket.getBlocks().length;
+                    }
                 }
             }
             snapshots.addAll(Arrays.asList(snapshot.getPrevious()));
