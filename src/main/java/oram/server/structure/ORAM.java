@@ -169,7 +169,9 @@ public class ORAM {
         sb.append("Printing ORAM ").append(oramId).append("\n");
         sb.append("(Location, Most Recent Version, Number of Buckets)\n");
         for (int i = 0; i < oramContext.getTreeSize(); i++) {
-            sb.append("(").append(i).append(", ").append(lastVersion[i]).append(", ").append(bucketSize[i]).append(")\n");
+            sb.append("(").append(i).append(", ").append(bucketSize[i]).append(") ");
+            if(i%7==0)
+                sb.append("\n");
         }
         return sb.toString();
     }
