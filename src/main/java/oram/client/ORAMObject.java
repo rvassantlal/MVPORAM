@@ -70,16 +70,20 @@ public class ORAMObject {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
-
+		for (PositionMap positionMap : positionMaps) {
+			logger.debug(positionMap.toString());
+		}
 		PositionMap mergedPositionMap = mergePositionMaps(positionMaps);
 
 		byte pathId = mergedPositionMap.getPathAt(address);
 		logger.debug("Real path id: {}", pathId);
 		byte newPathId = generateRandomPathId();
 		logger.debug("New path id: {}", newPathId);
+		if (op == Operation.WRITE){
+			mergedPositionMap.setVersionIdAt(address, generateVersion(mergedPositionMap));
+		}
 		if (op == Operation.WRITE || (op == Operation.READ && pathId != ORAMUtils.DUMMY_PATH)) {
 			mergedPositionMap.setPathAt(address, newPathId);
-			mergedPositionMap.setVersionIdAt(address, generateVersion(mergedPositionMap));
 		}
 
 		if (pathId == ORAMUtils.DUMMY_PATH) {
@@ -156,7 +160,7 @@ public class ORAMObject {
 		for (double versionId : positionMap.getVersionIds()) {
 			maxVersion = Math.max(maxVersion, versionId);
 		}
-		int versionLevel = (int)maxVersion;
+		int versionLevel = (int)maxVersion + 1;
 		return Double.parseDouble(versionLevel + "." + clientId);
 	}
 
