@@ -30,6 +30,9 @@ public class ORAMObject {
 	private final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 
+	private boolean isRealAccess;
+	byte[] oldContent = null;
+
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int clientId, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
 		this.serviceProxy = serviceProxy;
@@ -64,7 +67,21 @@ public class ORAMObject {
 	}
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
-		boolean isRealAccess = true;
+		isRealAccess = true;
+		PositionMap mergedPositionMap = null;
+
+		mergedPositionMap = getPM();
+		byte pathId = getPathId(mergedPositionMap,op,address);
+		Stash mergedStash = getPS(pathId,op,address,newContent);
+		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
+
+		if (!isEvicted) {
+			logger.error("Failed to do eviction on oram {}", oramId);
+		}
+		return oldContent;
+	}
+
+	public PositionMap getPM() {
 		PositionMap[] positionMaps = getPositionMaps();
 		if (positionMaps == null) {
 			logger.error("Position map of oram {} is null", oramId);
@@ -73,8 +90,9 @@ public class ORAMObject {
 		for (PositionMap positionMap : positionMaps) {
 			logger.debug(positionMap.toString());
 		}
-		PositionMap mergedPositionMap = mergePositionMaps(positionMaps);
-
+		return mergePositionMaps(positionMaps);
+	}
+	public byte getPathId(PositionMap mergedPositionMap, Operation op, int address){
 		byte pathId = mergedPositionMap.getPathAt(address);
 		logger.debug("Real path id: {}", pathId);
 		byte newPathId = generateRandomPathId();
@@ -85,13 +103,14 @@ public class ORAMObject {
 		if (op == Operation.WRITE || (op == Operation.READ && pathId != ORAMUtils.DUMMY_PATH)) {
 			mergedPositionMap.setPathAt(address, newPathId);
 		}
-
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
 			logger.debug("Dummy path id: {}", pathId);
 			isRealAccess = false;
 		}
-
+		return pathId;
+	}
+	public Stash getPS(byte pathId, Operation op, int address, byte[] newContent) {
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
 			logger.error("States and paths of oram {} are null", oramId);
@@ -101,7 +120,7 @@ public class ORAMObject {
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths());
 
 		Block block = mergedStash.getBlock(address);
-		byte[] oldContent = null;
+
 		if (isRealAccess && op == Operation.READ) {
 			oldContent = block.getContent();
 		} else if (op == Operation.WRITE){
@@ -112,15 +131,9 @@ public class ORAMObject {
 				block.setContent(newContent);
 			}
 		}
-
-		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
-		if (!isEvicted) {
-			logger.error("Failed to do eviction on oram {}", oramId);
-		}
-		return oldContent;
+		return mergedStash;
 	}
-
-	private boolean evict(PositionMap positionMap, Stash stash, byte oldPathId) {
+	public boolean evict(PositionMap positionMap, Stash stash, byte oldPathId) {
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
 		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
@@ -152,7 +165,8 @@ public class ORAMObject {
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
+		logger.debug("pathId:{}",oldPathId);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
 	}
 
 	private double generateVersion(PositionMap positionMap) {
@@ -165,9 +179,9 @@ public class ORAMObject {
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-									 Map<Integer, EncryptedBucket> encryptedPath) {
+										Map<Integer, EncryptedBucket> encryptedPath, byte oldPathId) {
 		try {
-			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
+			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
 			if (serializedRequest == null) {
 				return false;

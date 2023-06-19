@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class EvictionORAMMessage extends ORAMMessage {
+
+	private byte pathId;
 	private EncryptedStash encryptedStash;
 	private EncryptedPositionMap encryptedPositionMap;
 	private Map<Integer, EncryptedBucket> encryptedPath;
@@ -19,11 +21,12 @@ public class EvictionORAMMessage extends ORAMMessage {
 
 	public EvictionORAMMessage(int oramId, EncryptedStash encryptedStash,
 							   EncryptedPositionMap encryptedPositionMap,
-							   Map<Integer, EncryptedBucket> encryptedPath) {
+							   Map<Integer, EncryptedBucket> encryptedPath, byte pathId) {
 		super(oramId);
 		this.encryptedStash = encryptedStash;
 		this.encryptedPositionMap = encryptedPositionMap;
 		this.encryptedPath = encryptedPath;
+		this.pathId = pathId;
 	}
 
 	public EncryptedStash getEncryptedStash() {
@@ -38,11 +41,16 @@ public class EvictionORAMMessage extends ORAMMessage {
 		return encryptedPath;
 	}
 
+	public byte getPathId() {
+		return pathId;
+	}
+
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		super.writeExternal(out);
 		encryptedStash.writeExternal(out);
 		encryptedPositionMap.writeExternal(out);
+		out.writeByte(pathId);
 		int bucketSize = encryptedPath.values().iterator().next().getBlocks().length;
 		out.writeInt(bucketSize);
 		out.writeInt(encryptedPath.size());
@@ -60,6 +68,7 @@ public class EvictionORAMMessage extends ORAMMessage {
 		encryptedPositionMap = new EncryptedPositionMap();
 		encryptedPositionMap.readExternal(in);
 
+		pathId = (byte) in.read();
 		int bucketSize = in.readInt();
 		int pathSize = in.readInt();
 		encryptedPath = new HashMap<>(pathSize);

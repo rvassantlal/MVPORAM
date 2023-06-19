@@ -10,7 +10,6 @@ import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class RandomParallelTester {
@@ -27,7 +26,7 @@ public class RandomParallelTester {
         int nClients = Integer.parseInt(args[0]);
         int oramId = Integer.parseInt(args[1]);
         testSize = Integer.parseInt(args[2]);
-        List<ORAMManager> oramManagerList = new ArrayList<ORAMManager>();
+        List<ORAMManager> oramManagerList = new ArrayList<>();
         List<Thread> threads = new ArrayList<>();
         for (int i = 1; i < nClients+1; i++) {
            oramManagerList.add(new ORAMManager(i));
@@ -40,12 +39,9 @@ public class RandomParallelTester {
         oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 
         for (ORAMManager oramManager : oramManagerList) {
-            threads.add(new Thread(new Runnable(){
-                @Override
-                public void run() {
-                    for (int i = 0; i < testSize; i++) {
-                        randomAccess(oramManager.getORAM(oramManagerList.indexOf(oramManager)));
-                    }
+            threads.add(new Thread(() -> {
+                for (int i = 0; i < testSize; i++) {
+                    randomAccess(oramManager.getORAM(oramManagerList.indexOf(oramManager)));
                 }
             }));
         }
@@ -70,11 +66,13 @@ public class RandomParallelTester {
             else
                 randomWord=expressions10[rnd.nextInt(expressions10.length)];
             byte[] response = oram.writeMemory(address, randomWord.getBytes());
-            logger.debug("write \""+randomWord+"\" to address"+address+". Response (oldValue): "+response);
+            String answer = response==null ? "null" : new String(response);
+            logger.debug("write \""+randomWord+"\" to address"+address+". Response (oldValue): " + answer);
         }
         else{
             byte[] response = oram.readMemory(address);
-            logger.debug("read from address"+address+". Response: "+response);
+            String answer = response==null ? "null" : new String(response);
+            logger.debug("read from address"+address+". Response: "+answer);
         }
 
     }

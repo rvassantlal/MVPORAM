@@ -96,11 +96,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private ConfidentialMessage performEviction(EvictionORAMMessage request, int clientId) {
 		int oramId =  request.getOramId();
 		ORAM oram = orams.get(oramId);
+		byte pathId = request.getPathId();
 		if (oram == null)
 			return null;
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), clientId);
-		logger.debug("{}", oram.printORAM());
+				request.getEncryptedPath(), clientId, pathId);
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -115,7 +115,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
-			encryptedStashesAndPaths.writeExternal(out);
+			if(encryptedStashesAndPaths != null)
+				encryptedStashesAndPaths.writeExternal(out);
 			out.flush();
 			bos.flush();
 			return new ConfidentialMessage(bos.toByteArray());
