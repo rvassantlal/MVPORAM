@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class EncryptionManager {
@@ -28,9 +29,10 @@ public class EncryptionManager {
 			PositionMap[] positionMaps = new PositionMap[nPositionMaps];
 			EncryptedPositionMap encryptedPositionMap;
 			for (int i = 0; i < nPositionMaps; i++) {
+				double versionId = in.readDouble();
 				encryptedPositionMap = new EncryptedPositionMap();
 				encryptedPositionMap.readExternal(in);
-				positionMaps[i] = decryptPositionMap(encryptedPositionMap);
+				positionMaps[i] = decryptPositionMap(encryptedPositionMap,versionId);
 			}
 			return positionMaps;
 		} catch (IOException | ClassNotFoundException e) {
@@ -48,7 +50,8 @@ public class EncryptionManager {
 			Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 					encryptedStashesAndPaths.getEncryptedStashes());
 			Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-			return new StashesAndPaths(stashes, paths);
+			Map<Double, List<Double>> snapIdsToOutstanding = encryptedStashesAndPaths.getSnapIdsToOutstanding();
+			return new StashesAndPaths(stashes, paths , snapIdsToOutstanding);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
@@ -89,9 +92,10 @@ public class EncryptionManager {
 		}
 	}
 
-	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
+	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap, double versionId) {
 		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
 		PositionMap deserializedPositionMap = new PositionMap();
+		deserializedPositionMap.setVersionId(versionId);
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
 			deserializedPositionMap.readExternal(in);

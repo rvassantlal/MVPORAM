@@ -30,6 +30,9 @@ public class ORAMObject {
 	private final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 
+	private boolean isRealAccess;
+	byte[] oldContent = null;
+
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int clientId, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
 		this.serviceProxy = serviceProxy;
@@ -64,17 +67,33 @@ public class ORAMObject {
 	}
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
-		boolean isRealAccess = true;
-		PositionMap[] positionMaps = getPositionMaps();
-		if (positionMaps == null) {
+		isRealAccess = true;
+		PositionMap mergedPositionMap = null;
+
+		Map<Double, PositionMap> maps = getAllPositionMaps();
+		PositionMap[] positionMaps = maps.values().stream().toArray(PositionMap[]::new);
+		mergedPositionMap = mergePositionMaps(positionMaps);
+		byte pathId = getPathId(mergedPositionMap,op,address);
+		Stash mergedStash = getPS(pathId,op,address,newContent,maps,mergedPositionMap);
+		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
+
+		if (!isEvicted) {
+			logger.error("Failed to do eviction on oram {}", oramId);
+		}
+		return oldContent;
+	}
+	public Map<Double, PositionMap> getAllPositionMaps() {
+		Map<Double, PositionMap> positionMaps = getPositionMaps();
+		if (positionMaps.values().isEmpty()) {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
-		for (PositionMap positionMap : positionMaps) {
+		for (PositionMap positionMap : positionMaps.values()) {
 			logger.debug(positionMap.toString());
 		}
-		PositionMap mergedPositionMap = mergePositionMaps(positionMaps);
-
+		return positionMaps;
+	}
+	public byte getPathId(PositionMap mergedPositionMap, Operation op, int address){
 		byte pathId = mergedPositionMap.getPathAt(address);
 		logger.debug("Real path id: {}", pathId);
 		byte newPathId = generateRandomPathId();
@@ -85,23 +104,24 @@ public class ORAMObject {
 		if (op == Operation.WRITE || (op == Operation.READ && pathId != ORAMUtils.DUMMY_PATH)) {
 			mergedPositionMap.setPathAt(address, newPathId);
 		}
-
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
 			logger.debug("Dummy path id: {}", pathId);
 			isRealAccess = false;
 		}
-
+		return pathId;
+	}
+	public Stash getPS(byte pathId, Operation op, int address, byte[] newContent, Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
 			logger.error("States and paths of oram {} are null", oramId);
 			return null;
 		}
 
-		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths());
+		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(),stashesAndPaths.getSnapIdsToOutstanding(), positionMaps, mergedPositionMap);
 
 		Block block = mergedStash.getBlock(address);
-		byte[] oldContent = null;
+
 		if (isRealAccess && op == Operation.READ) {
 			oldContent = block.getContent();
 		} else if (op == Operation.WRITE){
@@ -112,15 +132,9 @@ public class ORAMObject {
 				block.setContent(newContent);
 			}
 		}
-
-		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId);
-		if (!isEvicted) {
-			logger.error("Failed to do eviction on oram {}", oramId);
-		}
-		return oldContent;
+		return mergedStash;
 	}
-
-	private boolean evict(PositionMap positionMap, Stash stash, byte oldPathId) {
+	public boolean evict(PositionMap positionMap, Stash stash, byte oldPathId) {
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
 		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
@@ -152,7 +166,7 @@ public class ORAMObject {
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
 	}
 
 	private double generateVersion(PositionMap positionMap) {
@@ -165,9 +179,9 @@ public class ORAMObject {
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-									 Map<Integer, EncryptedBucket> encryptedPath) {
+										Map<Integer, EncryptedBucket> encryptedPath, byte oldPathId) {
 		try {
-			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
+			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
 			if (serializedRequest == null) {
 				return false;
@@ -188,12 +202,12 @@ public class ORAMObject {
 		return (byte) rndGenerator.nextInt(1 << oramContext.getTreeHeight()); //2^height
 	}
 
-	private Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths) {
+	private Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths, Map<Double, List<Double>> snapIdsToOutstanding, Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
 		Map<Integer, Double> recentVersionIds = new HashMap<>();
 
-		mergeStashes(recentBlocks, recentVersionIds, stashes);
-		mergePaths(recentBlocks, recentVersionIds, paths);
+		mergeStashes(recentBlocks, recentVersionIds, stashes,snapIdsToOutstanding, positionMaps, mergedPositionMap);
+		mergePaths(recentBlocks, recentVersionIds, paths,snapIdsToOutstanding, positionMaps, mergedPositionMap);
 
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 		for (Block recentBlock : recentBlocks.values()) {
@@ -203,29 +217,52 @@ public class ORAMObject {
 	}
 
 	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							Map<Double, Bucket[]> paths) {
-		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
+							Map<Double, Bucket[]> paths, Map<Double, List<Double>> snapIdsToOutstanding, Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
 		for (Map.Entry<Double, Bucket[]> entry : paths.entrySet()) {
-			List<Block> blocks = new LinkedList<>();
 			for (Bucket bucket : entry.getValue()) {
 				for (Block block : bucket.readBucket()) {
-					if (block != null) {
-						blocks.add(block);
+					if (block != null && (recentVersionIds.get(block.getAddress()) == null || !recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
+						int addr = block.getAddress();
+						for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
+							if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
+							snapIdsToOutstandingId.getValue().contains(entry.getKey())){
+								if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
+										mergedPositionMap.getVersionIdAt(addr)) {
+									recentBlocks.put(addr, block);
+									recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
+								}
+							}
+
+						}
+
 					}
 				}
 			}
-			blocksToMerge.put(entry.getKey(), blocks);
+
 		}
-		selectRecentBlocks(recentBlocks, recentVersionIds, blocksToMerge);
 	}
 
 	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							  Map<Double, Stash> stashes) {
-		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
+							  Map<Double, Stash> stashes, Map<Double, List<Double>> snapIdsToOutstanding, Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		int i = 0;
 		for (Map.Entry<Double, Stash> entry : stashes.entrySet()) {
-			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
+			for (Block block : entry.getValue().getBlocks()) {
+				if (block != null && (recentVersionIds.get(block.getAddress()) == null || !recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
+					int addr = block.getAddress();
+					for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
+						if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
+								snapIdsToOutstandingId.getValue().contains(entry.getKey())){
+							if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
+									mergedPositionMap.getVersionIdAt(addr)) {
+								recentBlocks.put(addr, block);
+								recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
+							}
+						}
+					}
+				}
+			}
+
 		}
-		selectRecentBlocks(recentBlocks, recentVersionIds, blocksToMerge);
 	}
 
 	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
@@ -287,7 +324,7 @@ public class ORAMObject {
 		return new PositionMap(versionIds, pathIds);
 	}
 
-	private PositionMap[] getPositionMaps() {
+	private Map<Double,PositionMap> getPositionMaps() {
 		try {
 			ORAMMessage request = new ORAMMessage(oramId);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
@@ -297,7 +334,12 @@ public class ORAMObject {
 			Response response = serviceProxy.invokeOrdered(serializedRequest);
 			if (response == null || response.getPainData() == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPainData());
+			PositionMap[] positionMaps = encryptionManager.decryptPositionMaps(response.getPainData());
+			Map<Double,PositionMap> maps = new HashMap<>(positionMaps.length);
+			for (PositionMap positionMap : positionMaps) {
+				maps.put(positionMap.getVersionId(), positionMap);
+			}
+			return maps;
 		} catch (SecretSharingException e) {
 			return null;
 		}

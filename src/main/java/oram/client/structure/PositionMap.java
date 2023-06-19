@@ -12,6 +12,8 @@ public class PositionMap implements Externalizable {
 	private byte[] pathIds;
 	private double[] versionIds;
 
+	private double versionId = -1;
+
 	public PositionMap() {}
 
 	public PositionMap(double[] versionIds, byte[] pathIds) {
@@ -72,5 +74,13 @@ public class PositionMap implements Externalizable {
 			sb.append("( ").append(i).append(", ").append(pathIds[i]).append(", ").append(versionIds[i]).append(") ");
 		}
 		return sb.toString();
+	}
+
+    public void setVersionId(double versionId) {
+		this.versionId = versionId;
+    }
+
+	public double getVersionId() {
+		return versionId;
 	}
 }
