@@ -71,11 +71,13 @@ public class RandomParallelTester {
             else
                 randomWord=expressions10[rnd.nextInt(expressions10.length)];
             byte[] response = oram.writeMemory(address, randomWord.getBytes());
-            logger.debug("write \""+randomWord+"\" to address"+address+". Response (oldValue): "+response);
+            String responseString = response==null ? "null" : new String(response);
+            logger.debug("write \""+randomWord+"\" to address"+address+". Response (oldValue): "+responseString);
         }
         else{
             byte[] response = oram.readMemory(address);
-            logger.debug("read from address"+address+". Response: "+response);
+            String responseString = response==null ? "null" : new String(response);
+            logger.debug("read from address"+address+". Response: "+responseString);
         }
 
     }
