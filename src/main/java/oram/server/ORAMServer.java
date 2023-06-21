@@ -9,13 +9,10 @@ import oram.messages.CreateORAMMessage;
 import oram.messages.EvictionORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.messages.StashPathORAMMessage;
-import oram.server.structure.EncryptedPositionMap;
-import oram.server.structure.EncryptedStash;
-import oram.server.structure.EncryptedStashesAndPaths;
+import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import oram.server.structure.ORAM;
 import oram.utils.ServerOperationType;
 import oram.utils.Status;
 import vss.secretsharing.VerifiableShare;
@@ -99,8 +96,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null)
 			return null;
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), clientId);
-		logger.debug("{}", oram.printORAM());
+				request.getEncryptedPath(), clientId, request.getPathId());
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -115,7 +111,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
-			encryptedStashesAndPaths.writeExternal(out);
+			if(encryptedStashesAndPaths != null)
+				encryptedStashesAndPaths.writeExternal(out);
 			out.flush();
 			bos.flush();
 			return new ConfidentialMessage(bos.toByteArray());
@@ -154,14 +151,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
-		EncryptedPositionMap[] positionMaps = oram.getPositionMaps(clientId);
-
+		EncryptedPositionMaps positionMaps = oram.getPositionMaps(clientId);
+		int i = 0;
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
-			out.writeInt(positionMaps.length);
-			for (EncryptedPositionMap positionMap : positionMaps) {
-				positionMap.writeExternal(out);
-			}
+			positionMaps.writeExternal(out);
 			out.flush();
 			bos.flush();
 			return new ConfidentialMessage(bos.toByteArray());
