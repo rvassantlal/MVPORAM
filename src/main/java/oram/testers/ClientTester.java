@@ -15,7 +15,7 @@ public class ClientTester {
 	private static final Logger logger = LoggerFactory.getLogger("benchmark");
 
 	// ARGS: clientId, oramName, testSize
-	public static void main(String[] args) throws SecretSharingException {
+	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		Random r = new Random();
 		int clientId = Integer.parseInt(args[0]);
 		int oramId = Integer.parseInt(args[1]);
@@ -34,12 +34,12 @@ public class ClientTester {
 			while (op == null) {
 				op = r.nextBoolean() ? Operation.READ : Operation.WRITE;
 			}
-			int address = r.nextInt(maxAddress);
+			int address = 1;
 			byte[] value;
 			byte[] answer;
 			if (op == Operation.WRITE) {
-				int v = r.nextInt();
-				value = String.valueOf(v).getBytes();
+				//int v = r.nextInt();
+				value = String.valueOf(2).getBytes();
 				answer = oram.writeMemory(address, value);
 			} else {
 				answer = oram.readMemory(address);

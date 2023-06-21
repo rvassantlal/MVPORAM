@@ -40,11 +40,12 @@ public class RandomParallelTester {
         oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 
         for (ORAMManager oramManager : oramManagerList) {
+
             threads.add(new Thread(new Runnable(){
                 @Override
                 public void run() {
                     for (int i = 0; i < testSize; i++) {
-                        randomAccess(oramManager.getORAM(oramManagerList.indexOf(oramManager)));
+                        randomAccess(oramManager.getORAM(oramId));
                     }
                 }
             }));

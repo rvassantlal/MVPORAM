@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class ORAM {
     private final Logger logger = LoggerFactory.getLogger("oram");
@@ -36,28 +35,34 @@ public class ORAM {
         return oramContext;
     }
 
-    public EncryptedPositionMap[] getPositionMaps(int clientId) {
-        EncryptedPositionMap[] result = new EncryptedPositionMap[outstandingTrees.size()];
+    public EncryptedPositionMaps getPositionMaps(int clientId) {
+        EncryptedPositionMap[] encryptedPositionMaps = new EncryptedPositionMap[outstandingTrees.size()];
+        double[] outstandingVersionIds = new double[outstandingTrees.size()];
         OramSnapshot[] currentOutstandingVersions = new OramSnapshot[outstandingTrees.size()];
-        logger.debug("{}", printORAM());
+        //logger.debug("{}", printORAM());
         int i = 0;
+        double currentMax = 0;
         for (OramSnapshot snapshot : outstandingTrees) {
-            result[i] = snapshot.getPositionMap();
+            encryptedPositionMaps[i] = snapshot.getPositionMap();
             snapshot.incrementReferenceCounter();
             currentOutstandingVersions[i] = snapshot;
+            outstandingVersionIds[i] = snapshot.getVersionId();
+            currentMax = Math.max(currentMax, snapshot.getVersionId());
             i++;
         }
+        double newVersionId = (int) currentMax + Double.parseDouble("1." + clientId);
         logger.debug("Creating oram client context for client {} in oram {}", clientId, oramId);
-        ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions);
+        ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);
 
         oramClientContexts.put(clientId, oramClientContext);
-        return result;
+        return new EncryptedPositionMaps(newVersionId, outstandingVersionIds, encryptedPositionMaps);
     }
 
     public EncryptedStashesAndPaths getStashesAndPaths(byte pathId, int clientId) {
         ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
         if (oramClientContext == null) {
-            logger.debug("There is no client context for {} in oram {}", clientId, oramId);
+            logger.error("There is no client context for {} in oram {}", clientId, oramId);
+            logger.error("Was trying to read path no. {}", pathId);
             return null;
         }
         OramSnapshot[] outstanding = oramClientContext.getOutstandingVersions();
@@ -141,12 +146,10 @@ public class ORAM {
             return false;
         }
         OramSnapshot[] outstandingVersions = oramClientContext.getOutstandingVersions();
-        double currentMax = 0;
         for (OramSnapshot outstandingVersion : outstandingVersions) {
-            currentMax = Math.max(currentMax, outstandingVersion.getVersionId());
             outstandingVersion.decrementReferenceCounter();
         }
-        double newVersionId = (int) currentMax + Double.parseDouble("1." + clientId);
+        double newVersionId = oramClientContext.getNewVersionId();
 
         OramSnapshot newVersion = new OramSnapshot(newVersionId, oramContext.getTreeSize(),
                 oramContext.getTreeHeight(), outstandingVersions, encryptedPositionMap, encryptedStash, pathId);
@@ -157,7 +160,7 @@ public class ORAM {
             outstandingTrees.remove(outstandingVersion);
         }
         outstandingTrees.add(newVersion);
-        removeDeadVersions(Arrays.asList(outstandingVersions), pathId);
+        //removeDeadVersions(Arrays.asList(outstandingVersions), pathId);
         return true;
     }
 
@@ -173,6 +176,7 @@ public class ORAM {
         pathIds.add(pathID);
         for (OramSnapshot previousTree : previousTrees) {
             previousTree.removePath(pathIds,taintedSnapshots);
+            previousTree.checkEmpty();
         }
 
     }
@@ -195,20 +199,17 @@ public class ORAM {
                 if (bucket != null) {
                     numberOfNodesByLocation[i]++;
                 }
-                if(lastVersion[i] < snapshot.getVersionId()) {
-                    lastVersion[i] = snapshot.getVersionId();
-                    if (bucket != null) {
+                if (bucket != null) {
                         bucketSize[i] = bucket.getBlocks().length;
-                    }
                 }
             }
             snapshots.addAll(Arrays.asList(snapshot.getPrevious()));
         }
         StringBuilder sb = new StringBuilder();
         sb.append("Printing ORAM ").append(oramId).append("\n");
-        sb.append("(Location, Most Recent Version, Number of Buckets, Number of repetitions)\n");
+        sb.append("(Location, Is Empty?, Number of versions)\n");
         for (int i = 0; i < oramContext.getTreeSize(); i++) {
-            sb.append("(").append(i).append(", ").append(bucketSize[i]).append(", ").append(numberOfNodesByLocation[i]).append(") ");
+            sb.append("(").append(i).append(", ").append(bucketSize[i]==0).append(", ").append(numberOfNodesByLocation[i]).append(") ");
             if(i%7 == 0 && i != 0)
                 sb.append("\n");
         }

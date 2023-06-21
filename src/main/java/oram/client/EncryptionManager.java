@@ -22,19 +22,18 @@ public class EncryptionManager {
 		this.encryptionAbstraction = new EncryptionAbstraction("oram");
 	}
 
-	public PositionMap[] decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
+	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedPositionMaps);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
-			int nPositionMaps = in.readInt();
-			PositionMap[] positionMaps = new PositionMap[nPositionMaps];
-			EncryptedPositionMap encryptedPositionMap;
-			for (int i = 0; i < nPositionMaps; i++) {
-				double versionId = in.readDouble();
-				encryptedPositionMap = new EncryptedPositionMap();
-				encryptedPositionMap.readExternal(in);
-				positionMaps[i] = decryptPositionMap(encryptedPositionMap,versionId);
+			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
+			encryptedPositionMaps.readExternal(in);
+			EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+			PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
+			for (int i = 0; i < encryptedPMs.length; i++) {
+				positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
 			}
-			return positionMaps;
+			return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
+					encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt position map", e);
 			return null;
@@ -92,10 +91,9 @@ public class EncryptionManager {
 		}
 	}
 
-	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap, double versionId) {
+	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
 		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
 		PositionMap deserializedPositionMap = new PositionMap();
-		deserializedPositionMap.setVersionId(versionId);
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
 			deserializedPositionMap.readExternal(in);

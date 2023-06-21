@@ -12,7 +12,7 @@ public class OramSnapshot implements Serializable,Comparable {
 	private final int TREE_SIZE;
 	private final int TREE_HEIGHT;
 	private final OramSnapshot[] previous;
-	private final EncryptedPositionMap positionMap;
+	private EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 
 	private int pathId;
@@ -114,5 +114,11 @@ public class OramSnapshot implements Serializable,Comparable {
 			return Double.compare(this.versionId,((OramSnapshot) o).getVersionId());
 		}
 		throw new IllegalArgumentException();
+	}
+
+	public void checkEmpty(){
+		boolean isEmpty = difTree.isEmpty();
+		if(isEmpty)
+			positionMap=null;
 	}
 }
