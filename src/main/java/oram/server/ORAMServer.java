@@ -152,7 +152,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null)
 			return null;
 		EncryptedPositionMaps positionMaps = oram.getPositionMaps(clientId);
-		int i = 0;
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			positionMaps.writeExternal(out);
