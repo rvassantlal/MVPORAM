@@ -2,7 +2,6 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.utils.ORAMUtils;
 import oram.client.structure.*;
 import oram.messages.EvictionORAMMessage;
 import oram.messages.ORAMMessage;
@@ -10,12 +9,9 @@ import oram.messages.StashPathORAMMessage;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
-import oram.utils.ORAMContext;
+import oram.utils.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import oram.utils.Operation;
-import oram.utils.ServerOperationType;
-import oram.utils.Status;
 import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
@@ -24,7 +20,6 @@ import java.util.*;
 public class ORAMObject {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final ConfidentialServiceProxy serviceProxy;
-	private final int clientId;
 	private final int oramId;
 	private final ORAMContext oramContext;
 	private final EncryptionManager encryptionManager;
@@ -33,12 +28,9 @@ public class ORAMObject {
 	private boolean isRealAccess;
 	byte[] oldContent = null;
 
-	private double maxVersion = 0;
-
-	public ORAMObject(ConfidentialServiceProxy serviceProxy, int clientId, int oramId, ORAMContext oramContext,
+	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
 		this.serviceProxy = serviceProxy;
-		this.clientId = clientId;
 		this.oramId = oramId;
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
@@ -104,7 +96,7 @@ public class ORAMObject {
 			return null;
 		}
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(),
-				stashesAndPaths.getSnapIdsToOutstanding(), positionMaps, mergedPositionMap);
+				stashesAndPaths.getVersionPaths(), positionMaps, mergedPositionMap);
 
 		Block block = mergedStash.getBlock(address);
 
@@ -188,18 +180,19 @@ public class ORAMObject {
 	}
 
 	private Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths,
-									   Map<Double, List<Double>> snapIdsToOutstanding, PositionMaps positionMaps,
+									   Map<Double, Set<Double>> versionPaths, PositionMaps positionMaps,
 									   PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
 		Map<Integer, Double> recentVersionIds = new HashMap<>();
 		PositionMap[] positionMapsArray = positionMaps.getPositionMaps();
 		double[] outstandingIds = positionMaps.getOutstandingVersionIds();
-		Map<Double,PositionMap> positionMapsMap = new HashMap<>(outstandingIds.length);
+		Map<Double, PositionMap> positionMapPerVersion = new HashMap<>(outstandingIds.length);
 		for (int i = 0; i < outstandingIds.length; i++) {
-			positionMapsMap.put(outstandingIds[i], positionMapsArray[i]);
+			positionMapPerVersion.put(outstandingIds[i], positionMapsArray[i]);
 		}
-		mergeStashes(recentBlocks, recentVersionIds, stashes,snapIdsToOutstanding, positionMapsMap, mergedPositionMap);
-		mergePaths(recentBlocks, recentVersionIds, paths,snapIdsToOutstanding, positionMapsMap, mergedPositionMap);
+
+		mergeStashes(recentBlocks, recentVersionIds, stashes, versionPaths, positionMapPerVersion, mergedPositionMap);
+		mergePaths(recentBlocks, recentVersionIds, paths, versionPaths, positionMapPerVersion, mergedPositionMap);
 
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 		for (Block recentBlock : recentBlocks.values()) {
@@ -209,68 +202,47 @@ public class ORAMObject {
 	}
 
 	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							Map<Double, Bucket[]> paths, Map<Double, List<Double>> snapIdsToOutstanding,
+							Map<Double, Bucket[]> paths, Map<Double, Set<Double>> versionPaths,
 							Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
 		for (Map.Entry<Double, Bucket[]> entry : paths.entrySet()) {
+			List<Block> blocks = new LinkedList<>();
 			for (Bucket bucket : entry.getValue()) {
 				for (Block block : bucket.readBucket()) {
-					if (block != null && (recentVersionIds.get(block.getAddress()) == null || !recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
-						int addr = block.getAddress();
-						for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
-							if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
-							snapIdsToOutstandingId.getValue().contains(entry.getKey())){
-								if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
-										mergedPositionMap.getVersionIdAt(addr)) {
-									recentBlocks.put(addr, block);
-									recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
-								}
-							}
-
-						}
-
+					if (block != null) {
+						blocks.add(block);
 					}
 				}
 			}
-
+			blocksToMerge.put(entry.getKey(), blocks);
 		}
+		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
 	}
 
 	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							  Map<Double, Stash> stashes, Map<Double, List<Double>> snapIdsToOutstanding, Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
-		int i = 0;
+							  Map<Double, Stash> stashes, Map<Double, Set<Double>> versionPaths,
+							  Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
 		for (Map.Entry<Double, Stash> entry : stashes.entrySet()) {
-			for (Block block : entry.getValue().getBlocks()) {
-				if (block != null && (recentVersionIds.get(block.getAddress()) == null || !recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
-					int addr = block.getAddress();
-					for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
-						if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
-								snapIdsToOutstandingId.getValue().contains(entry.getKey())){
-							if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
-									mergedPositionMap.getVersionIdAt(addr)) {
-								recentBlocks.put(addr, block);
-								recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
-							}
-						}
-					}
-				}
-			}
-
+			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
 		}
+		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
 	}
 
 	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-									Map<Double, List<Block>> blocks) {
-		for (Map.Entry<Double, List<Block>> entry : blocks.entrySet()) {
+									Map<Double, Set<Double>> versionPaths, Map<Double, PositionMap> positionMaps,
+									PositionMap mergedPositionMap, Map<Double, List<Block>> blocksToMerge) {
+		for (Map.Entry<Double, List<Block>> entry : blocksToMerge.entrySet()) {
+			Set<Double> outstandingTreeIds = versionPaths.get(entry.getKey());
 			for (Block block : entry.getValue()) {
-				if (recentVersionIds.containsKey(block.getAddress())) {
-					double versionId = recentVersionIds.get(block.getAddress());
-					if (entry.getKey() > versionId) {
-						recentBlocks.put(block.getAddress(), block);
-						recentVersionIds.put(block.getAddress(), versionId);
+				for (double outstandingTreeId : outstandingTreeIds) {
+					PositionMap outstandingPositionMap = positionMaps.get(outstandingTreeId);
+					int blockAddress = block.getAddress();
+					double blockVersionIdInOutstandingTree = outstandingPositionMap.getVersionIdAt(blockAddress);
+					if (blockVersionIdInOutstandingTree == mergedPositionMap.getVersionIdAt(blockAddress)) {
+						recentBlocks.put(blockAddress, block);
+						recentVersionIds.put(blockAddress, blockVersionIdInOutstandingTree);
 					}
-				} else {
-					recentVersionIds.put(block.getAddress(), entry.getKey());
-					recentBlocks.put(block.getAddress(), block);
 				}
 			}
 		}

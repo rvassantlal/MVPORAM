@@ -6,25 +6,26 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class EncryptedStashesAndPaths implements Externalizable {
 	private ORAMContext oramContext;
 	private Map<Double, EncryptedStash> encryptedStashes;
 	private Map<Double, EncryptedBucket[]> paths;
-	private Map<Double,List<Double>> snapIdsToOutstanding;
+	private Map<Double, Set<Double>> versionPaths;
+
+	public EncryptedStashesAndPaths() {
+	}
 
 	public EncryptedStashesAndPaths(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(Map<Double, EncryptedStash> encryptedStashes, Map<Double, EncryptedBucket[]> paths, Map<Double, List<Double>> snapIdsToOutstanding) {
+	public EncryptedStashesAndPaths(Map<Double, EncryptedStash> encryptedStashes, Map<Double, EncryptedBucket[]> paths,
+									Map<Double, Set<Double>> versionPaths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
-		this.snapIdsToOutstanding = snapIdsToOutstanding;
+		this.versionPaths = versionPaths;
 	}
 
 	public Map<Double, EncryptedStash> getEncryptedStashes() {
@@ -35,8 +36,8 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		return paths;
 	}
 
-	public Map<Double, List<Double>> getSnapIdsToOutstanding() {
-		return snapIdsToOutstanding;
+	public Map<Double, Set<Double>> getVersionPaths() {
+		return versionPaths;
 	}
 
 	@Override
@@ -54,13 +55,13 @@ public class EncryptedStashesAndPaths implements Externalizable {
 				encryptedBucket.writeExternal(out);
 			}
 		}
-		out.writeInt(snapIdsToOutstanding.size());
-		for (Map.Entry<Double, List<Double>> entry : snapIdsToOutstanding.entrySet()) {
+		out.writeInt(versionPaths.size());
+		for (Map.Entry<Double, Set<Double>> entry : versionPaths.entrySet()) {
 			out.writeDouble(entry.getKey());
-			List<Double> snapIds = entry.getValue();
-			out.writeInt(snapIds.size());
-			for (Double snapId : snapIds) {
-				out.writeDouble(snapId);
+			Set<Double> versionIds = entry.getValue();
+			out.writeInt(versionIds.size());
+			for (double versionId : versionIds) {
+				out.writeDouble(versionId);
 			}
 		}
 	}
@@ -89,15 +90,15 @@ public class EncryptedStashesAndPaths implements Externalizable {
 			paths.put(versionId, encryptedBuckets);
 		}
 		size = in.readInt();
-		snapIdsToOutstanding = new HashMap<>(size);
+		versionPaths = new HashMap<>(size);
 		while (size-- > 0) {
 			double outstandingId = in.readDouble();
 			int nValues = in.readInt();
-			List<Double> snapIds = new ArrayList<>();
+			Set<Double> versionIds = new HashSet<>(nValues);
 			while (nValues-- > 0){
-				snapIds.add(in.readDouble());
+				versionIds.add(in.readDouble());
 			}
-			snapIdsToOutstanding.put(outstandingId,snapIds);
+			versionPaths.put(outstandingId, versionIds);
 		}
 	}
 }

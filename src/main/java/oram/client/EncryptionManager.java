@@ -9,10 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -49,8 +46,8 @@ public class EncryptionManager {
 			Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 					encryptedStashesAndPaths.getEncryptedStashes());
 			Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-			Map<Double, List<Double>> snapIdsToOutstanding = encryptedStashesAndPaths.getSnapIdsToOutstanding();
-			return new StashesAndPaths(stashes, paths , snapIdsToOutstanding);
+			Map<Double, Set<Double>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
+			return new StashesAndPaths(stashes, paths , versionPaths);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
