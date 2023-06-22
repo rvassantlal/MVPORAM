@@ -11,7 +11,7 @@ public class ORAM {
     private final Logger logger = LoggerFactory.getLogger("oram");
     private final int oramId;
     private final ORAMContext oramContext;
-    private final List<OramSnapshot> treeVersions;
+    private int treeVersions;
     private final List<OramSnapshot> outstandingTrees; //all versions that are not previous of any other version
     private final HashMap<Integer, ORAMClientContext> oramClientContexts;
 
@@ -22,7 +22,7 @@ public class ORAM {
         this.oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
         logger.debug("Total number of buckets: {}", treeSize);
         this.outstandingTrees = new LinkedList<>();
-        this.treeVersions = new LinkedList<>();
+        this.treeVersions = 1;
         double versionId = Double.parseDouble("1." + clientId);
 
         OramSnapshot[] previous = new OramSnapshot[0];
@@ -102,7 +102,7 @@ public class ORAM {
                                          Map<Double, Map<Integer, EncryptedBucket>> pathContents) {
         Queue<OramSnapshot> queue = new LinkedList<>();
         queue.add(outstanding);
-        Set<Double> visitedVersions = new HashSet<>(treeVersions.size());
+        Set<Double> visitedVersions = new HashSet<>(treeVersions);
 
         while (!queue.isEmpty()) {
             OramSnapshot version = queue.poll();
@@ -155,8 +155,8 @@ public class ORAM {
             outstandingTrees.remove(outstandingVersion);
         }
         outstandingTrees.add(newVersion);
-        treeVersions.add(newVersion);
-        logger.debug("Number of outstanding versions: {} out of {}", outstandingTrees.size(), treeVersions.size());
+        treeVersions++;
+        logger.debug("Number of outstanding versions: {} out of {}", outstandingTrees.size(), treeVersions);
         //removeDeadVersions(Arrays.asList(outstandingVersions), pathId);
         return true;
     }

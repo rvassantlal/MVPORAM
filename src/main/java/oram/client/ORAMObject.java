@@ -122,11 +122,20 @@ public class ORAMObject {
 		if (op == Operation.WRITE || (op == Operation.READ && oldPathId != ORAMUtils.DUMMY_PATH)) {
 			positionMap.setPathAt(changedAddress, newPathId);
 		}
+		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
+		Stash remainingBlocks = populatePath(positionMap, stash, oldPathId, path);
+
+		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
+		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
+		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
+	}
+
+	private Stash populatePath(PositionMap positionMap, Stash stash, byte oldPathId, Map<Integer, Bucket> pathToPopulate) {
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
 		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
-		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
 		for (int pathLocation : oldPathLocations) {
-			path.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
+			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
 		}
 		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
 		for (Block block : stash.getBlocks()) {
@@ -140,7 +149,7 @@ public class ORAMObject {
 			}
 			boolean isPathEmpty = false;
 			for (int pathLocation : commonPath) {
-				Bucket bucket = path.get(pathLocation);
+				Bucket bucket = pathToPopulate.get(pathLocation);
 				if (bucket.putBlock(block)) {
 					isPathEmpty = true;
 					break;
@@ -150,11 +159,9 @@ public class ORAMObject {
 				remainingBlocks.putBlock(block);
 			}
 		}
-		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
-		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
-		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
+		return remainingBlocks;
 	}
+
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
 										Map<Integer, EncryptedBucket> encryptedPath, byte oldPathId) {
 		try {
