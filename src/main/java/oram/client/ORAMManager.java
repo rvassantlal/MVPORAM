@@ -20,13 +20,11 @@ import java.io.ObjectInputStream;
 
 public class ORAMManager {
 	private final ConfidentialServiceProxy serviceProxy;
-	private final int clientId;
 	private final EncryptionManager encryptionManager;
 
 	public ORAMManager(int clientId) throws SecretSharingException {
 		//Connecting to servers
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
-		this.clientId = clientId;
 		this.encryptionManager = new EncryptionManager();
 	}
 
@@ -50,7 +48,7 @@ public class ORAMManager {
 			}
 			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 			ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
-			return new ORAMObject(serviceProxy, clientId, oramId, oramContext, encryptionManager);
+			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
 			return null;
 		}
@@ -78,7 +76,7 @@ public class ORAMManager {
 				int blockSize = in.readInt();
 				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 				ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
-				return new ORAMObject(serviceProxy, clientId, oramId, oramContext, encryptionManager);
+				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
 		} catch (SecretSharingException | IOException e) {
 			return null;

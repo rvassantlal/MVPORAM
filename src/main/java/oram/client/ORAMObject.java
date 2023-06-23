@@ -24,7 +24,6 @@ import java.util.*;
 public class ORAMObject {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final ConfidentialServiceProxy serviceProxy;
-	private final int clientId;
 	private final int oramId;
 	private final ORAMContext oramContext;
 	private final EncryptionManager encryptionManager;
@@ -33,12 +32,9 @@ public class ORAMObject {
 	private boolean isRealAccess;
 	byte[] oldContent = null;
 
-	private double maxVersion = 0;
-
-	public ORAMObject(ConfidentialServiceProxy serviceProxy, int clientId, int oramId, ORAMContext oramContext,
+	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
 		this.serviceProxy = serviceProxy;
-		this.clientId = clientId;
 		this.oramId = oramId;
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
@@ -96,6 +92,7 @@ public class ORAMObject {
 		}
 		return pathId;
 	}
+
 	public Stash getPS(byte pathId, Operation op, int address, byte[] newContent,
 					   PositionMaps positionMaps, PositionMap mergedPositionMap) {
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
@@ -283,7 +280,7 @@ public class ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeUnordered(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
 			if (response == null || response.getPainData() == null)
 				return null;
 

@@ -95,8 +95,13 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
+		long start, end, delay;
+		start = System.nanoTime();
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
 				request.getEncryptedPath(), clientId, request.getPathId());
+		end = System.nanoTime();
+		delay = end - start;
+		logger.debug("performEviction: {} ms", delay / 1_000_000);
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -108,6 +113,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
+		long start, end, delay;
+		start = System.nanoTime();
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
@@ -119,6 +126,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} catch (IOException e) {
 			logger.debug("Failed to serialize encrypted stashes and paths: {}",  e.getMessage());
 			return new ConfidentialMessage();
+		} finally {
+			end = System.nanoTime();
+			delay = end - start;
+			logger.debug("getStashesAndPaths: {} ms", delay / 1000000);
 		}
 	}
 
@@ -127,6 +138,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null) {
 			return new ConfidentialMessage(new byte[]{-1});
 		} else {
+			long start, end, delay;
+			start = System.nanoTime();
 			ORAMContext oramContext = oram.getOramContext();
 			int treeHeight = oramContext.getTreeHeight();
 			int nBlocksPerBucket = oramContext.getBucketSize();
@@ -143,6 +156,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				logger.debug("Failed to serialize oram context: {}",  e.getMessage());
 				return new ConfidentialMessage();
 			}
+			finally {
+				end = System.nanoTime();
+				delay = end - start;
+				logger.info("getORAM: {} ms", delay / 1_000_000);
+			}
 		}
 	}
 
@@ -151,8 +169,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
+		long start, end, delay;
+		start = System.nanoTime();
 		EncryptedPositionMaps positionMaps = oram.getPositionMaps(clientId);
-		int i = 0;
+
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			positionMaps.writeExternal(out);
@@ -162,6 +182,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} catch (IOException e) {
 			logger.debug("Failed to serialize position maps: {}",  e.getMessage());
 			return new ConfidentialMessage();
+		} finally {
+			end = System.nanoTime();
+			delay = end - start;
+			logger.info("getPositionMap: {} ms", delay / 1_000_000);
 		}
 	}
 
