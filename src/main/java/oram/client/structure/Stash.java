@@ -46,10 +46,11 @@ public class Stash implements Externalizable {
 
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		int size = blocks.size();
+		int size = in.readInt();
 		while (size-- > 0) {
 			Block block = new Block(blockSize);
 			block.readExternal(in);
+			blocks.add(block);
 		}
 	}
 

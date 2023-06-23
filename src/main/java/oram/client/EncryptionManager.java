@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class EncryptionManager {
@@ -21,18 +22,18 @@ public class EncryptionManager {
 		this.encryptionAbstraction = new EncryptionAbstraction("oram");
 	}
 
-	public PositionMap[] decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
+	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedPositionMaps);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
-			int nPositionMaps = in.readInt();
-			PositionMap[] positionMaps = new PositionMap[nPositionMaps];
-			EncryptedPositionMap encryptedPositionMap;
-			for (int i = 0; i < nPositionMaps; i++) {
-				encryptedPositionMap = new EncryptedPositionMap();
-				encryptedPositionMap.readExternal(in);
-				positionMaps[i] = decryptPositionMap(encryptedPositionMap);
+			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
+			encryptedPositionMaps.readExternal(in);
+			EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+			PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
+			for (int i = 0; i < encryptedPMs.length; i++) {
+				positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
 			}
-			return positionMaps;
+			return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
+					encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt position map", e);
 			return null;
@@ -48,7 +49,8 @@ public class EncryptionManager {
 			Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 					encryptedStashesAndPaths.getEncryptedStashes());
 			Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-			return new StashesAndPaths(stashes, paths);
+			Map<Double, List<Double>> snapIdsToOutstanding = encryptedStashesAndPaths.getSnapIdsToOutstanding();
+			return new StashesAndPaths(stashes, paths , snapIdsToOutstanding);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
