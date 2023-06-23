@@ -51,7 +51,6 @@ public class LocalORAMBenchmark {
 
 		byte[] oldContent = null;
 
-
 		PositionMaps oldPositionMaps = getPositionsMaps(oram, clientId);
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps.getPositionMaps());
 
@@ -120,7 +119,7 @@ public class LocalORAMBenchmark {
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return oram.performEviction(encryptedStash, encryptedPositionMap, encryptedPath, clientId, oldPathId);
+		return oram.performEviction(encryptedStash, encryptedPositionMap, encryptedPath, clientId);
 	}
 
 	public static Stash getPS(ORAM oram, int clientId, byte pathId, PositionMaps positionMaps,

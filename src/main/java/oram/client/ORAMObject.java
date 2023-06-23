@@ -129,7 +129,7 @@ public class ORAMObject {
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
 	private Stash populatePath(PositionMap positionMap, Stash stash, byte oldPathId, Map<Integer, Bucket> pathToPopulate) {
@@ -164,9 +164,9 @@ public class ORAMObject {
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-										Map<Integer, EncryptedBucket> encryptedPath, byte oldPathId) {
+										Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
-			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath, oldPathId);
+			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
 			if (serializedRequest == null) {
 				return false;

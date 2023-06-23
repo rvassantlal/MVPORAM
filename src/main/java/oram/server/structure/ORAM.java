@@ -134,7 +134,7 @@ public class ORAM {
     }
 
     public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-                                   Map<Integer, EncryptedBucket> encryptedPath, int clientId, int pathId) {
+                                   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
         ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
         if (oramClientContext == null) {
             return false;
@@ -164,30 +164,8 @@ public class ORAM {
 
 
     private void garbageCollect(OramSnapshot newVersion) {
-        /*Queue<OramSnapshot> versionsQueue = new LinkedList<>();
-        versionsQueue.add(newVersion);
-        Set<Double> visitedVersions = new HashSet<>();
-        List<OramSnapshot> versionsToClean = new LinkedList<>();
-
-        while (!versionsQueue.isEmpty()) {
-            OramSnapshot version = versionsQueue.poll();
-            if (version.getReferenceCounter() == 0) {
-                visitedVersions.add(version.getVersionId());
-                versionsToClean.add(version);
-                for (OramSnapshot previous : version.getPrevious()) {
-                    if (!visitedVersions.contains(previous.getVersionId())) {
-                        versionsQueue.add(previous);
-                    }
-                }
-            }
-        }*/
-
-
         boolean[] locationsMarker = new boolean[oramContext.getTreeSize()];
         newVersion.garbageCollect(locationsMarker);
-        //Set<Integer> existingLocations = new HashSet<>(oramContext.getTreeSize());//Locations to delete
-        //Set<Double> visitedVersions = new HashSet<>(treeVersions);
-        //newVersion.garbageCollect(existingLocations, visitedVersions);
     }
 
     @Override

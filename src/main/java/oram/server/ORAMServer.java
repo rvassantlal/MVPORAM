@@ -98,7 +98,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long start, end, delay;
 		start = System.nanoTime();
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), clientId, request.getPathId());
+				request.getEncryptedPath(), clientId);
 		end = System.nanoTime();
 		delay = end - start;
 		logger.debug("performEviction: {} ms", delay / 1_000_000);

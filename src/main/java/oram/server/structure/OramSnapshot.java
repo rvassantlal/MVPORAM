@@ -5,7 +5,7 @@ import java.io.Serializable;
 import java.util.*;
 
 
-public class OramSnapshot implements Serializable, Comparable {
+public class OramSnapshot implements Serializable {
 	private final double versionId;
 	private final List<OramSnapshot> previous;
 	private final EncryptedPositionMap positionMap;
@@ -38,10 +38,6 @@ public class OramSnapshot implements Serializable, Comparable {
 		}
 	}
 
-	public int getReferenceCounter() {
-		return referenceCounter;
-	}
-
 	public void garbageCollect(boolean[] locationsMarker) {
 		if (referenceCounter > 0) {
 			return;
@@ -67,27 +63,6 @@ public class OramSnapshot implements Serializable, Comparable {
 		}
 
 		previous.removeAll(previousToRemove);
-	}
-
-	public void garbageCollect(Set<Integer> existingLocations, Set<Double> visitedVersions) {
-		if (referenceCounter > 0) {
-			return;
-		}
-		System.out.println("Garbage collecting version " + versionId + " | difSize: " + difTree.size());
-		List<Integer> locations = new ArrayList<>(difTree.keySet());
-		visitedVersions.add(versionId);
-		for (int location : locations) {
-			if (existingLocations.contains(location)) {
-				difTree.remove(location);
-			} else {
-				existingLocations.add(location);
-			}
-		}
-		for (OramSnapshot oramSnapshot : previous) {
-			if (!visitedVersions.contains(oramSnapshot.getVersionId())) {
-				oramSnapshot.garbageCollect(existingLocations, visitedVersions);
-			}
-		}
 	}
 
 	public EncryptedPositionMap getPositionMap(){
@@ -127,13 +102,5 @@ public class OramSnapshot implements Serializable, Comparable {
 	@Override
 	public int hashCode() {
 		return Objects.hash(versionId);
-	}
-
-	@Override
-	public int compareTo(Object o) {
-		if (o instanceof OramSnapshot){
-			return Double.compare(this.versionId,((OramSnapshot) o).getVersionId());
-		}
-		throw new IllegalArgumentException();
 	}
 }
