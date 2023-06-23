@@ -119,7 +119,7 @@ public class ORAM {
                     for (OramSnapshot previousVersion : version.getPrevious()) {
                         if (!visitedVersions.contains(previousVersion.getVersionId())) {
                             if (toVisit == null) {
-                                toVisit = new HashSet<>(version.getPrevious().length);
+                                toVisit = new HashSet<>(version.getPrevious().size());
                             }
                             toVisit.add(previousVersion);
                         }
@@ -210,7 +210,7 @@ public class ORAM {
                         bucketSize[i] = bucket.getBlocks().length;
                 }
             }
-            snapshots.addAll(Arrays.asList(snapshot.getPrevious()));
+            snapshots.addAll(snapshot.getPrevious());
         }
         StringBuilder sb = new StringBuilder();
         sb.append("Printing ORAM ").append(oramId).append("\n");

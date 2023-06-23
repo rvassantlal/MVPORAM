@@ -77,7 +77,7 @@ public class LocalORAMBenchmark {
 			System.err.println("Failed to do eviction");
 		}
 
-		System.out.println("Old content: " + Arrays.toString(oldContent));
+		//System.out.println("Old content: " + Arrays.toString(oldContent));
 	}
 
 	public static boolean evict(ORAM oram, int clientId, PositionMap positionMap, Stash stash, byte oldPathId,

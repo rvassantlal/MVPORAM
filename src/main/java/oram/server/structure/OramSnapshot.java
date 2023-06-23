@@ -7,7 +7,7 @@ import java.util.*;
 
 public class OramSnapshot implements Serializable, Comparable {
 	private final double versionId;
-	private final OramSnapshot[] previous;
+	private final List<OramSnapshot> previous;
 	private final EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 	private int referenceCounter;
@@ -20,7 +20,8 @@ public class OramSnapshot implements Serializable, Comparable {
 
 		positionMap = encryptedPositionMap;
 		stash = encryptedStash;
-		previous = previousTrees;
+		previous = new ArrayList<>(previousTrees.length);
+		previous.addAll(Arrays.asList(previousTrees));
 	}
 
 	public void incrementReferenceCounter() {
@@ -56,13 +57,16 @@ public class OramSnapshot implements Serializable, Comparable {
 			}
 		}
 
+		List<OramSnapshot> previousToRemove = new ArrayList<>(previous.size());
 		for (OramSnapshot oramSnapshot : previous) {
 			boolean[] newLocationsMarker = Arrays.copyOf(locationsMarker, locationsMarker.length);
 			oramSnapshot.garbageCollect(newLocationsMarker);
-			if (oramSnapshot.previous.length == 0 && oramSnapshot.difTree.isEmpty()) {
-				//TODO work here
+			if (oramSnapshot.previous.isEmpty() && oramSnapshot.difTree.isEmpty()) {
+				previousToRemove.add(oramSnapshot);
 			}
 		}
+
+		previous.removeAll(previousToRemove);
 	}
 
 	public void garbageCollect(Set<Integer> existingLocations, Set<Double> visitedVersions) {
@@ -90,7 +94,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		return positionMap;
 	}
 
-	public OramSnapshot[] getPrevious(){
+	public List<OramSnapshot> getPrevious(){
 		return previous;
 	}
 
