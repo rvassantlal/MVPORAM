@@ -164,27 +164,30 @@ public class ORAM {
 
 
     private void garbageCollect(OramSnapshot newVersion) {
-        Queue<OramSnapshot> versionsToCollect = new LinkedList<>();
-        versionsToCollect.add(newVersion);
+        /*Queue<OramSnapshot> versionsQueue = new LinkedList<>();
+        versionsQueue.add(newVersion);
         Set<Double> visitedVersions = new HashSet<>();
         List<OramSnapshot> versionsToClean = new LinkedList<>();
-        while (!versionsToCollect.isEmpty()) {
-            OramSnapshot version = versionsToCollect.poll();
+
+        while (!versionsQueue.isEmpty()) {
+            OramSnapshot version = versionsQueue.poll();
             if (version.getReferenceCounter() == 0) {
                 visitedVersions.add(version.getVersionId());
                 versionsToClean.add(version);
                 for (OramSnapshot previous : version.getPrevious()) {
                     if (!visitedVersions.contains(previous.getVersionId())) {
-                        versionsToCollect.add(previous);
+                        versionsQueue.add(previous);
                     }
                 }
             }
-        }
+        }*/
 
-        Set<Integer> existingLocations = new HashSet<>(oramContext.getTreeSize());//Locations to delete
-        for (OramSnapshot snapshot : versionsToClean) {
-            snapshot.garbageCollect(existingLocations);
-        }
+
+        boolean[] locationsMarker = new boolean[oramContext.getTreeSize()];
+        newVersion.garbageCollect(locationsMarker);
+        //Set<Integer> existingLocations = new HashSet<>(oramContext.getTreeSize());//Locations to delete
+        //Set<Double> visitedVersions = new HashSet<>(treeVersions);
+        //newVersion.garbageCollect(existingLocations, visitedVersions);
     }
 
     @Override

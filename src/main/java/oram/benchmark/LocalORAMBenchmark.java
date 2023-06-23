@@ -8,10 +8,7 @@ import oram.utils.ORAMUtils;
 import oram.utils.Operation;
 
 import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class LocalORAMBenchmark {
 	private static EncryptionManager encryptionManager;
@@ -25,7 +22,7 @@ public class LocalORAMBenchmark {
 		int bucketSize = 4;
 		int blockSize = 32;
 		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
-		int nClients = 2;
+		int nClients = 4;
 		int nOperations = 100;
 		oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 		encryptionManager = new EncryptionManager();
@@ -35,7 +32,7 @@ public class LocalORAMBenchmark {
 		ORAM oram = new ORAM(oramId, oramContext.getTreeHeight(), initClientId, oramContext.getBucketSize(),
 				oramContext.getBlockSize(), initialEncryptedPositionMap, emptyEncryptedStash);
 
-		int[] clientOperations = new int[nOperations * 2];
+		int[] clientOperations = new int[nOperations * nClients];
 		for (int i = 0; i < clientOperations.length; i++) {
 			clientOperations[i] = rndGenerator.nextInt(nClients);
 		}
@@ -133,22 +130,23 @@ public class LocalORAMBenchmark {
 				encryptedStashesAndPaths);
 
 		return mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(),
-				stashesAndPaths.getSnapIdsToOutstanding(), positionMaps, mergedPositionMap);
+				stashesAndPaths.getVersionPaths(), positionMaps, mergedPositionMap);
 	}
 
 	private static Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths,
-											  Map<Double, List<Double>> snapIdsToOutstanding, PositionMaps positionMaps,
+											  Map<Double, Set<Double>> versionPaths, PositionMaps positionMaps,
 											  PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
 		Map<Integer, Double> recentVersionIds = new HashMap<>();
 		PositionMap[] positionMapsArray = positionMaps.getPositionMaps();
 		double[] outstandingIds = positionMaps.getOutstandingVersionIds();
-		Map<Double,PositionMap> positionMapsMap = new HashMap<>(outstandingIds.length);
+		Map<Double, PositionMap> positionMapPerVersion = new HashMap<>(outstandingIds.length);
 		for (int i = 0; i < outstandingIds.length; i++) {
-			positionMapsMap.put(outstandingIds[i], positionMapsArray[i]);
+			positionMapPerVersion.put(outstandingIds[i], positionMapsArray[i]);
 		}
-		mergeStashes(recentBlocks, recentVersionIds, stashes,snapIdsToOutstanding, positionMapsMap, mergedPositionMap);
-		mergePaths(recentBlocks, recentVersionIds, paths,snapIdsToOutstanding, positionMapsMap, mergedPositionMap);
+
+		mergeStashes(recentBlocks, recentVersionIds, stashes, versionPaths, positionMapPerVersion, mergedPositionMap);
+		mergePaths(recentBlocks, recentVersionIds, paths, versionPaths, positionMapPerVersion, mergedPositionMap);
 
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 		for (Block recentBlock : recentBlocks.values()) {
@@ -157,54 +155,50 @@ public class LocalORAMBenchmark {
 		return mergedStash;
 	}
 
-	private static void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-									 Map<Double, Stash> stashes, Map<Double, List<Double>> snapIdsToOutstanding,
-									 Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
-		for (Map.Entry<Double, Stash> entry : stashes.entrySet()) {
-			for (Block block : entry.getValue().getBlocks()) {
-				if (block != null && (recentVersionIds.get(block.getAddress()) == null ||
-						!recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
-					int addr = block.getAddress();
-					for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
-						if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
-								snapIdsToOutstandingId.getValue().contains(entry.getKey())){
-							if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
-									mergedPositionMap.getVersionIdAt(addr)) {
-								recentBlocks.put(addr, block);
-								recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
-							}
-						}
-					}
-				}
-			}
-
-		}
-	}
-
 	private static void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-								   Map<Double, Bucket[]> paths, Map<Double, List<Double>> snapIdsToOutstanding,
+								   Map<Double, Bucket[]> paths, Map<Double, Set<Double>> versionPaths,
 								   Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
 		for (Map.Entry<Double, Bucket[]> entry : paths.entrySet()) {
+			List<Block> blocks = new LinkedList<>();
 			for (Bucket bucket : entry.getValue()) {
 				for (Block block : bucket.readBucket()) {
-					if (block != null && (recentVersionIds.get(block.getAddress()) == null || !recentVersionIds.get(block.getAddress()).equals(mergedPositionMap.getVersionIdAt(block.getAddress())))) {
-						int addr = block.getAddress();
-						for (Map.Entry<Double, List<Double>> snapIdsToOutstandingId : snapIdsToOutstanding.entrySet()) {
-							if(entry.getKey().equals(snapIdsToOutstandingId.getKey()) ||
-									snapIdsToOutstandingId.getValue().contains(entry.getKey())){
-								if(positionMaps.get(snapIdsToOutstandingId.getKey()).getVersionIdAt(addr) ==
-										mergedPositionMap.getVersionIdAt(addr)) {
-									recentBlocks.put(addr, block);
-									recentVersionIds.put(addr, mergedPositionMap.getVersionIdAt(addr));
-								}
-							}
-
-						}
-
+					if (block != null) {
+						blocks.add(block);
 					}
 				}
 			}
+			blocksToMerge.put(entry.getKey(), blocks);
+		}
+		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
+	}
 
+	private static void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
+									 Map<Double, Stash> stashes, Map<Double, Set<Double>> versionPaths,
+									 Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
+		for (Map.Entry<Double, Stash> entry : stashes.entrySet()) {
+			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
+		}
+		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
+	}
+
+	private static void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
+										   Map<Double, Set<Double>> versionPaths, Map<Double, PositionMap> positionMaps,
+										   PositionMap mergedPositionMap, Map<Double, List<Block>> blocksToMerge) {
+		for (Map.Entry<Double, List<Block>> entry : blocksToMerge.entrySet()) {
+			Set<Double> outstandingTreeIds = versionPaths.get(entry.getKey());
+			for (Block block : entry.getValue()) {
+				for (double outstandingTreeId : outstandingTreeIds) {
+					PositionMap outstandingPositionMap = positionMaps.get(outstandingTreeId);
+					int blockAddress = block.getAddress();
+					double blockVersionIdInOutstandingTree = outstandingPositionMap.getVersionIdAt(blockAddress);
+					if (blockVersionIdInOutstandingTree == mergedPositionMap.getVersionIdAt(blockAddress)) {
+						recentBlocks.put(blockAddress, block);
+						recentVersionIds.put(blockAddress, blockVersionIdInOutstandingTree);
+					}
+				}
+			}
 		}
 	}
 

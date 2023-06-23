@@ -41,14 +41,47 @@ public class OramSnapshot implements Serializable, Comparable {
 		return referenceCounter;
 	}
 
-	public void garbageCollect(Set<Integer> existingLocations) {
-		System.out.println("Garbage collecting version " + versionId);
+	public void garbageCollect(boolean[] locationsMarker) {
+		if (referenceCounter > 0) {
+			return;
+		}
+		System.out.println("Garbage collecting version " + versionId + " | difSize: " + difTree.size());
+
 		List<Integer> locations = new ArrayList<>(difTree.keySet());
+		for (int location : locations) {
+			if (locationsMarker[location]) {
+				difTree.remove(location);
+			} else {
+				locationsMarker[location] = true;
+			}
+		}
+
+		for (OramSnapshot oramSnapshot : previous) {
+			boolean[] newLocationsMarker = Arrays.copyOf(locationsMarker, locationsMarker.length);
+			oramSnapshot.garbageCollect(newLocationsMarker);
+			if (oramSnapshot.previous.length == 0 && oramSnapshot.difTree.isEmpty()) {
+				//TODO work here
+			}
+		}
+	}
+
+	public void garbageCollect(Set<Integer> existingLocations, Set<Double> visitedVersions) {
+		if (referenceCounter > 0) {
+			return;
+		}
+		System.out.println("Garbage collecting version " + versionId + " | difSize: " + difTree.size());
+		List<Integer> locations = new ArrayList<>(difTree.keySet());
+		visitedVersions.add(versionId);
 		for (int location : locations) {
 			if (existingLocations.contains(location)) {
 				difTree.remove(location);
 			} else {
 				existingLocations.add(location);
+			}
+		}
+		for (OramSnapshot oramSnapshot : previous) {
+			if (!visitedVersions.contains(oramSnapshot.getVersionId())) {
+				oramSnapshot.garbageCollect(existingLocations, visitedVersions);
 			}
 		}
 	}

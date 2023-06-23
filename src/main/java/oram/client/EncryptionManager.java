@@ -60,8 +60,8 @@ public class EncryptionManager {
 		Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 				encryptedStashesAndPaths.getEncryptedStashes());
 		Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-		Map<Double, List<Double>> snapIdsToOutstanding = encryptedStashesAndPaths.getSnapIdsToOutstanding();
-		return new StashesAndPaths(stashes, paths , snapIdsToOutstanding);
+		Map<Double, Set<Double>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
+		return new StashesAndPaths(stashes, paths , versionPaths);
 	}
 
 	private Map<Double, Stash> decryptStashes(int blockSize, Map<Double, EncryptedStash> encryptedStashes) {
