@@ -5,102 +5,108 @@ import java.io.Serializable;
 import java.util.*;
 
 
-public class OramSnapshot implements Serializable {
-	private final double versionId;
-	private final List<OramSnapshot> previous;
-	private final EncryptedPositionMap positionMap;
-	private final EncryptedStash stash;
-	private int referenceCounter;
-	private final TreeMap<Integer, EncryptedBucket> difTree;
+public class OramSnapshot implements Serializable, Comparable {
+    private final Double versionId;
+    private final List<OramSnapshot> previous;
+    private final EncryptedPositionMap positionMap;
+    private final EncryptedStash stash;
+    private final TreeMap<Integer, EncryptedBucket> difTree;
 
-	public OramSnapshot(double versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
-						EncryptedStash encryptedStash) {
-		this.versionId = versionId;
-		this.difTree = new TreeMap<>();
+    public OramSnapshot(double versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
+                        EncryptedStash encryptedStash) {
+        this.versionId = versionId;
+        this.difTree = new TreeMap<>();
+        positionMap = encryptedPositionMap;
+        stash = encryptedStash;
+        previous = new LinkedList<>();
+        Collections.addAll(previous, previousTrees);
+    }
 
-		positionMap = encryptedPositionMap;
-		stash = encryptedStash;
-		previous = new ArrayList<>(previousTrees.length);
-		previous.addAll(Arrays.asList(previousTrees));
-	}
+    public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Double> visitedVersions) {
+        if (!visitedVersions.contains(versionId)) {
+            visitedVersions.add(versionId);
+            for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
+                if (!locationsMarker.get(location.getKey())) {
+                    locationsMarker.set(location.getKey(), true);
+                    location.getValue().taintBucket();
+                } else {
+                    location.getValue().untaintBucket();
+                }
+            }
+            if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
+                for (OramSnapshot oramSnapshot : previous) {
+                    oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions);
+                }
+            }
+        }
+    }
 
-	public void incrementReferenceCounter() {
-		referenceCounter++;
-		for (OramSnapshot oramSnapshot : previous) {
-			oramSnapshot.incrementReferenceCounter();
-		}
-	}
+    public EncryptedPositionMap getPositionMap() {
+        return positionMap;
+    }
 
-	public void decrementReferenceCounter() {
-		referenceCounter--;
-		for (OramSnapshot oramSnapshot : previous) {
-			oramSnapshot.decrementReferenceCounter();
-		}
-	}
+    public List<OramSnapshot> getPrevious() {
+        return previous;
+    }
 
-	public void garbageCollect(boolean[] locationsMarker) {
-		if (referenceCounter > 0) {
-			return;
-		}
-		System.out.println("Garbage collecting version " + versionId + " | difSize: " + difTree.size());
+    public EncryptedStash getStash() {
+        return stash;
+    }
 
-		List<Integer> locations = new ArrayList<>(difTree.keySet());
-		for (int location : locations) {
-			if (locationsMarker[location]) {
-				difTree.remove(location);
-			} else {
-				locationsMarker[location] = true;
-			}
-		}
+    public EncryptedBucket getFromLocation(Integer location) {
+        if (difTree.containsKey(location))
+            return difTree.get(location);
+        return null;
+    }
 
-		List<OramSnapshot> previousToRemove = new ArrayList<>(previous.size());
-		for (OramSnapshot oramSnapshot : previous) {
-			boolean[] newLocationsMarker = Arrays.copyOf(locationsMarker, locationsMarker.length);
-			oramSnapshot.garbageCollect(newLocationsMarker);
-			if (oramSnapshot.previous.isEmpty() && oramSnapshot.difTree.isEmpty()) {
-				previousToRemove.add(oramSnapshot);
-			}
-		}
+    public void setToLocation(int location, EncryptedBucket encryptedBucket) {
+        difTree.put(location, encryptedBucket);
+    }
 
-		previous.removeAll(previousToRemove);
-	}
+    public Double getVersionId() {
+        return versionId;
+    }
 
-	public EncryptedPositionMap getPositionMap(){
-		return positionMap;
-	}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OramSnapshot that = (OramSnapshot) o;
+        return Double.compare(that.versionId, versionId) == 0;
+    }
 
-	public List<OramSnapshot> getPrevious(){
-		return previous;
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(versionId);
+    }
 
-	public EncryptedStash getStash() {
-		return stash;
-	}
+    @Override
+    public int compareTo(Object o) {
+        if (o instanceof OramSnapshot) {
+            return Double.compare(this.versionId, ((OramSnapshot) o).getVersionId());
+        }
+        throw new IllegalArgumentException();
+    }
 
-	public EncryptedBucket getFromLocation(int location) {
-		if (difTree.containsKey(location))
-			return difTree.get(location);
-		return null;
-	}
+    public boolean removeNonTainted() {
+        boolean allNonTainted = true;
+        for (Map.Entry<Integer, EncryptedBucket> entry : difTree.entrySet()) {
+            if (entry.getValue().isTainted()) {
+                allNonTainted = false;
+                break;
+            }
+        }
+        return allNonTainted;
+    }
 
-	public void setToLocation(int location, EncryptedBucket encryptedBucket) {
-		difTree.put(location, encryptedBucket);
-	}
+    public void addPrevious(List<OramSnapshot> previousFromPrevious) {
+        for (OramSnapshot fromPrevious : previousFromPrevious) {
+            if(!previous.contains(fromPrevious))
+                previous.add(fromPrevious);
+        }
+    }
 
-	public double getVersionId() {
-		return versionId;
-	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
-		OramSnapshot that = (OramSnapshot) o;
-		return Double.compare(that.versionId, versionId) == 0;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(versionId);
-	}
+    public void removePrevious(List<OramSnapshot> previousVersion) {
+        previous.removeAll(previousVersion);
+    }
 }

@@ -58,7 +58,7 @@ public class Stash implements Externalizable {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		for (Block block : blocks) {
-			sb.append(block).append("\n");
+			sb.append(block).append(", ");
 		}
 		return sb.toString();
 	}

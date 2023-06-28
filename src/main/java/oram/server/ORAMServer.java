@@ -11,6 +11,7 @@ import oram.messages.ORAMMessage;
 import oram.messages.StashPathORAMMessage;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
+import org.apache.commons.lang3.tuple.Triple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import oram.utils.ServerOperationType;
@@ -18,11 +19,25 @@ import oram.utils.Status;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.TreeMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class ORAMServer implements ConfidentialSingleExecutable {
+	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(0);
+	private final ScheduledFuture printer;
+
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final TreeMap<Integer, ORAM> orams;
+
+	private final ArrayList<Integer> getORAMTimes;
+	private final ArrayList<Integer> getPMTimes;
+	private final ArrayList<Integer> getPSTimes;
+	private final ArrayList<Integer> evictTimes;
+
 
 	public static void main(String[] args) {
 		new ORAMServer(Integer.parseInt(args[0]));
@@ -30,6 +45,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 	public ORAMServer(int processId) {
 		this.orams = new TreeMap<>();
+		this.getORAMTimes = new ArrayList<>();
+		this.getPMTimes = new ArrayList<>();
+		this.getPSTimes = new ArrayList<>();
+		this.evictTimes = new ArrayList<>();
+		printer = scheduler.scheduleWithFixedDelay(this::printReport, 30,30, TimeUnit.SECONDS);
 		//Starting server
 		new ConfidentialServerFacade(processId, this);
 	}
@@ -44,7 +64,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case CREATE_ORAM:
 					request = new CreateORAMMessage();
 					request.readExternal(in);
-					return createORAM((CreateORAMMessage)request, msgCtx.getSender());
+					return createORAM((CreateORAMMessage)request, msgCtx);
 				case GET_ORAM:
 					request = new ORAMMessage();
 					request.readExternal(in);
@@ -52,7 +72,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case GET_POSITION_MAP:
 					request = new ORAMMessage();
 					request.readExternal(in);
-					return getPositionMap(request, msgCtx.getSender());
+					return getPositionMap(request, msgCtx);
 				case GET_STASH_AND_PATH:
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
@@ -60,7 +80,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case EVICTION:
 					request = new EvictionORAMMessage();
 					request.readExternal(in);
-					return performEviction((EvictionORAMMessage)request, msgCtx.getSender());
+					return performEviction((EvictionORAMMessage)request, msgCtx);
 			}
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
@@ -90,18 +110,16 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		return null;
 	}
 
-	private ConfidentialMessage performEviction(EvictionORAMMessage request, int clientId) {
+	private ConfidentialMessage performEviction(EvictionORAMMessage request, MessageContext msgCtx) {
 		int oramId =  request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
-		long start, end, delay;
-		start = System.nanoTime();
+		long start = System.nanoTime();
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), clientId);
-		end = System.nanoTime();
-		delay = end - start;
-		logger.debug("performEviction: {} ms", delay / 1_000_000);
+				request.getEncryptedPath(), msgCtx.getSender());
+		long end = System.nanoTime();
+		storeTime(start,end,evictTimes);
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -113,10 +131,13 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
-		long start, end, delay;
-		start = System.nanoTime();
+
+		long start = System.nanoTime();
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		int size = 0;
+		if(encryptedStashesAndPaths != null)
+			size = encryptedStashesAndPaths.getSize(oram.getOramContext());
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(size);
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			if(encryptedStashesAndPaths != null)
 				encryptedStashesAndPaths.writeExternal(out);
@@ -127,9 +148,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			logger.debug("Failed to serialize encrypted stashes and paths: {}",  e.getMessage());
 			return new ConfidentialMessage();
 		} finally {
-			end = System.nanoTime();
-			delay = end - start;
-			logger.debug("getStashesAndPaths: {} ms", delay / 1000000);
+			long end = System.nanoTime();
+			storeTime(start, end, getPSTimes);
 		}
 	}
 
@@ -138,8 +158,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null) {
 			return new ConfidentialMessage(new byte[]{-1});
 		} else {
-			long start, end, delay;
-			start = System.nanoTime();
+			long start = System.nanoTime();
 			ORAMContext oramContext = oram.getOramContext();
 			int treeHeight = oramContext.getTreeHeight();
 			int nBlocksPerBucket = oramContext.getBucketSize();
@@ -157,21 +176,19 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				return new ConfidentialMessage();
 			}
 			finally {
-				end = System.nanoTime();
-				delay = end - start;
-				logger.info("getORAM: {} ms", delay / 1_000_000);
+				long end = System.nanoTime();
+				storeTime(start, end, getORAMTimes);
 			}
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(ORAMMessage request, int clientId) {
+	private ConfidentialMessage getPositionMap(ORAMMessage request, MessageContext msgCtx) {
 		int oramId =  request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
-		long start, end, delay;
-		start = System.nanoTime();
-		EncryptedPositionMaps positionMaps = oram.getPositionMaps(clientId);
+		long start = System.nanoTime();
+		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender());
 
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
@@ -183,13 +200,12 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			logger.debug("Failed to serialize position maps: {}",  e.getMessage());
 			return new ConfidentialMessage();
 		} finally {
-			end = System.nanoTime();
-			delay = end - start;
-			logger.info("getPositionMap: {} ms", delay / 1_000_000);
+			long end = System.nanoTime();
+			storeTime(start, end, getPMTimes);
 		}
 	}
 
-	private ConfidentialMessage createORAM(CreateORAMMessage request, int clientId) {
+	private ConfidentialMessage createORAM(CreateORAMMessage request, MessageContext msgCtx) {
 		int oramId = request.getOramId();
 		int treeHeight = request.getTreeHeight();
 		int nBlocksPerBucket = request.getNBlocksPerBucket();
@@ -201,11 +217,46 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 		} else {
 			logger.debug("Created an ORAM with id {} of {} levels", oramId, treeHeight + 1);
-			ORAM oram = new ORAM(oramId,treeHeight, clientId, nBlocksPerBucket, blockSize, encryptedPositionMap,
-					encryptedStash);
+			ORAM oram = new ORAM(oramId,treeHeight, msgCtx.getSender(), nBlocksPerBucket, blockSize,
+					encryptedPositionMap, encryptedStash);
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}
+	}
+
+	private void storeTime(long start, long end, ArrayList<Integer> evictTimes) {
+		int delay = (int) ((end - start) / 1_000_000);
+		evictTimes.add(delay);
+	}
+
+	public void printReport(){
+		logger.info("-----EXECUTION TIMES (average, min, max) in ms-----");
+		Triple<Integer, Integer, Double> stats = getStatisticsFromList(getORAMTimes);
+		logger.info("getORAM ({}, {}, {})",stats.getRight(),stats.getLeft(),stats.getMiddle());
+		stats = getStatisticsFromList(getPMTimes);
+		logger.info("getPM ({}, {}, {})",stats.getRight(),stats.getLeft(),stats.getMiddle());
+		stats = getStatisticsFromList(getPSTimes);
+		logger.info("getPS ({}, {}, {})",stats.getRight(),stats.getLeft(),stats.getMiddle());
+		stats = getStatisticsFromList(evictTimes);
+		logger.info("evict ({}, {}, {})",stats.getRight(),stats.getLeft(),stats.getMiddle());
+	}
+
+	private Triple<Integer, Integer, Double> getStatisticsFromList(ArrayList<Integer> timeList) {
+		double sum = 0;
+		Integer max = -1;
+		Integer min = Integer.MAX_VALUE;
+		for (Integer getORAMTime : timeList) {
+			sum += getORAMTime;
+			if(getORAMTime > max){
+				max = getORAMTime;
+			}
+			if(getORAMTime < min){
+				min = getORAMTime;
+			}
+		}
+		Double average =  sum / timeList.size();
+		timeList.clear();
+		return Triple.of(min,max,average);
 	}
 
 	@Override

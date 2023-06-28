@@ -35,6 +35,18 @@ public class ORAMUtils {
 		return locations;
 	}
 
+	public static List<Integer> computePathLocationsList(byte pathId, int treeHeight) {
+		int offset = pathId;
+		List<Integer> locations = new ArrayList<>(treeHeight+1);
+		for (int height = treeHeight; height >= 0; height--) {
+			int level = (1 << height) - 1;
+			if (height < treeHeight)
+				offset = offset / 2;
+			locations.add(treeHeight - height, level + offset);
+		}
+		return locations;
+	}
+
 	public static List<Integer> computePathIntersection(int treeLevels, int[] pathLocationsA, int[] pathLocationsB) {
 		List<Integer> commonNodes = new ArrayList<>();
 		for (int levels = treeLevels - 1; levels >= 0; levels--) {

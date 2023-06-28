@@ -13,6 +13,8 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	private Map<Double, EncryptedStash> encryptedStashes;
 	private Map<Double, EncryptedBucket[]> paths;
 	private Map<Double, Set<Double>> versionPaths;
+	private int doubles = 0;
+	private int buckets = 0;
 
 	public EncryptedStashesAndPaths() {
 	}
@@ -69,6 +71,7 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
 		int size = in.readInt();
+		doubles += size;
 		encryptedStashes = new HashMap<>(size);
 		while (size-- > 0) {
 			double versionId = in.readDouble();
@@ -77,10 +80,12 @@ public class EncryptedStashesAndPaths implements Externalizable {
 			encryptedStashes.put(versionId, encryptedStash);
 		}
 		size = in.readInt();
+		doubles += size;
 		paths = new HashMap<>(size);
 		while (size-- > 0) {
 			double versionId = in.readDouble();
 			int nValues = in.readInt();
+			buckets += nValues;
 			EncryptedBucket[] encryptedBuckets = new EncryptedBucket[nValues];
 			for (int i = 0; i < nValues; i++) {
 				EncryptedBucket bucket = new EncryptedBucket(oramContext.getBucketSize());
@@ -94,11 +99,16 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		while (size-- > 0) {
 			double outstandingId = in.readDouble();
 			int nValues = in.readInt();
+			doubles += (nValues+1);
 			Set<Double> versionIds = new HashSet<>(nValues);
 			while (nValues-- > 0){
 				versionIds.add(in.readDouble());
 			}
 			versionPaths.put(outstandingId, versionIds);
 		}
+	}
+
+	public int getSize(ORAMContext oramContext) {
+		return doubles * 8 + buckets * oramContext.getBucketSize() * oramContext.getBlockSize();
 	}
 }
