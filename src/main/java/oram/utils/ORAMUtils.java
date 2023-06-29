@@ -1,6 +1,7 @@
 package oram.utils;
 
 import oram.messages.ORAMMessage;
+import org.apache.commons.lang3.tuple.Triple;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -58,6 +59,24 @@ public class ORAMUtils {
 
 		Collections.reverse(commonNodes);
 		return commonNodes;
+	}
+
+	public static Triple<Integer, Integer, Double> getStatisticsFromList(List<Integer> timeList) {
+		double sum = 0;
+		Integer max = -1;
+		Integer min = Integer.MAX_VALUE;
+		for (Integer getORAMTime : timeList) {
+			sum += getORAMTime;
+			if(getORAMTime > max){
+				max = getORAMTime;
+			}
+			if(getORAMTime < min){
+				min = getORAMTime;
+			}
+		}
+		Double average =  sum / timeList.size();
+		timeList.clear();
+		return Triple.of(min,max,average);
 	}
 
 	public static byte[] serializeRequest(ServerOperationType operation, ORAMMessage request) {

@@ -26,6 +26,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import static oram.utils.ORAMUtils.getStatisticsFromList;
+
 public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(0);
 	private final ScheduledFuture printer;
@@ -224,9 +226,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private void storeTime(long start, long end, ArrayList<Integer> evictTimes) {
+	private void storeTime(long start, long end, ArrayList<Integer> times) {
 		int delay = (int) ((end - start) / 1_000_000);
-		evictTimes.add(delay);
+		times.add(delay);
 	}
 
 	public void printReport(){
@@ -241,23 +243,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		logger.info("evict ({}, {}, {})",stats.getRight(),stats.getLeft(),stats.getMiddle());
 	}
 
-	private Triple<Integer, Integer, Double> getStatisticsFromList(ArrayList<Integer> timeList) {
-		double sum = 0;
-		Integer max = -1;
-		Integer min = Integer.MAX_VALUE;
-		for (Integer getORAMTime : timeList) {
-			sum += getORAMTime;
-			if(getORAMTime > max){
-				max = getORAMTime;
-			}
-			if(getORAMTime < min){
-				min = getORAMTime;
-			}
-		}
-		Double average =  sum / timeList.size();
-		timeList.clear();
-		return Triple.of(min,max,average);
-	}
 
 	@Override
 	public ConfidentialSnapshot getConfidentialSnapshot() {
