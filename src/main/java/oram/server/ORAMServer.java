@@ -20,7 +20,9 @@ import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static oram.utils.ORAMUtils.getStatisticsFromList;
 
@@ -31,7 +33,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
     private final ArrayList<Integer> getPMTimes;
     private final ArrayList<Integer> getPSTimes;
     private final ArrayList<Integer> evictTimes;
+
+    private final TreeSet<Integer> senders;
     private long lastPrint;
+
 
 
     public ORAMServer(int processId) {
@@ -40,8 +45,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         this.getPMTimes = new ArrayList<>();
         this.getPSTimes = new ArrayList<>();
         this.evictTimes = new ArrayList<>();
+        senders = new TreeSet<>();
         //Starting server
         new ConfidentialServerFacade(processId, this);
+
     }
 
     public static void main(String[] args) {
@@ -54,6 +61,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
              ObjectInputStream in = new ObjectInputStream(bis)) {
             ServerOperationType op = ServerOperationType.getOperation(in.read());
             ORAMMessage request;
+            senders.add(msgCtx.getSender());
             switch (op) {
                 case CREATE_ORAM:
                     request = new CreateORAMMessage();
@@ -88,6 +96,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
              ObjectInputStream in = new ObjectInputStream(bis)) {
             ServerOperationType op = ServerOperationType.getOperation(in.read());
             ORAMMessage request;
+            senders.add(msgCtx.getSender());
             switch (op) {
                 case GET_ORAM:
                     request = new ORAMMessage();
@@ -219,7 +228,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
     }
 
     private void storeTime(long start, long end, ArrayList<Integer> times) {
-        int delay = (int) ((end - start) / 1_000_000);
+        int delay = (int) ((end - start) / 1_000);
         times.add(delay);
     }
 
@@ -227,7 +236,16 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         long end = System.nanoTime();
         int delay = (int) ((end - lastPrint) / 1_000_000);
         if (delay > 2000) {
-            logger.info("-----EXECUTION TIMES (average, min, max) in ms-----");
+            int numRequests = getORAMTimes.size() + getPMTimes.size() + getPSTimes.size() + evictTimes.size();
+            logger.info("M:(clients[#]|requests[#]|delta[ns]|throughput[ops/s])>({}|{}|{}|{})",
+                    senders.size(), numRequests, delay, numRequests/(delay/1000));
+            //////// FOR USE WHEN FURTHER INFO COMMENTED, COMMENT OTHERWISE
+            getORAMTimes.clear();
+            getPMTimes.clear();
+            getPSTimes.clear();
+            evictTimes.clear();
+            //////// UNCOMMENT FOR FURTHER INFO
+            /*logger.info("-----EXECUTION TIMES (average, min, max) in us-----");
             Triple<Integer, Integer, Double> stats = getStatisticsFromList(getORAMTimes);
             logger.info("getORAM ({}, {}, {})", stats.getRight(), stats.getLeft(), stats.getMiddle());
             stats = getStatisticsFromList(getPMTimes);
@@ -240,8 +258,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
             for (ORAM value : orams.values()) {
                 logger.info("ORAM {} : There are {} outstanding versions in a total of {} versions",
                         value.getOramId(), value.getOutstandingNumber(), value.getAllVersionNumber());
-            }
-
+            }*/
             lastPrint = end;
         }
     }
