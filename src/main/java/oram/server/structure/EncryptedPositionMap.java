@@ -26,7 +26,7 @@ public class EncryptedPositionMap implements Externalizable {
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(ObjectInput in) throws IOException {
 		int len = in.readInt();
 		if (len != -1) {
 			encryptedPositionMap = new byte[len];

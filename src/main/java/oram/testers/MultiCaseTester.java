@@ -36,7 +36,7 @@ public class MultiCaseTester {
         testSmallTreeAndBigBuckets(10, 512);
         testBigTreeAndSmallBuckets(10, 512);
         testBigTreeAndBigBuckets(10, 512);
-            // Big Blocks //
+        // Big Blocks //
         testSmallTreeAndBuckets(10, 4096);
         testSmallTreeAndBigBuckets(10, 4096);
         testBigTreeAndSmallBuckets(10, 4096);
@@ -46,49 +46,56 @@ public class MultiCaseTester {
         testSmallTreeAndBigBuckets(50, 512);
         testBigTreeAndSmallBuckets(50, 512);
         testBigTreeAndBigBuckets(50, 512);
-            // Big blocks //
+        // Big blocks //
         testSmallTreeAndBuckets(50, 4096);
         testSmallTreeAndBigBuckets(50, 4096);
         testBigTreeAndSmallBuckets(50, 4096);
         testBigTreeAndBigBuckets(50, 4096);
-
-
     }
 
-    private static void testBigTreeAndSmallBuckets(int nClients, int blockSize) throws SecretSharingException, InterruptedException {
+    private static void testBigTreeAndSmallBuckets(int nClients, int blockSize) throws SecretSharingException,
+            InterruptedException {
         List<ORAMManager> oramManagerList = new ArrayList<>();
         for (int i = 1; i < nClients + 1; i++) {
             oramManagerList.add(new ORAMManager(i));
         }
         generateTest(oramId++, oramManagerList, new ArrayList<>(), 7, 4, blockSize,
-                "testBigTreeAndSmallBuckets"+nClients+"Clients"+blockSize+"ByteBlock");
+                "testBigTreeAndSmallBuckets" + nClients + "Clients" + blockSize + "ByteBlock");
     }
-    private static void testBigTreeAndBigBuckets(int nClients, int blockSize) throws SecretSharingException, InterruptedException {
+
+    private static void testBigTreeAndBigBuckets(int nClients, int blockSize) throws SecretSharingException,
+            InterruptedException {
         List<ORAMManager> oramManagerList = new ArrayList<>();
         for (int i = 1; i < nClients + 1; i++) {
             oramManagerList.add(new ORAMManager(i));
         }
         generateTest(oramId++, oramManagerList, new ArrayList<>(), 7, 24, blockSize,
-                "testBigTreeAndBigBuckets"+nClients+"Clients"+blockSize+"ByteBlock");
+                "testBigTreeAndBigBuckets" + nClients + "Clients" + blockSize + "ByteBlock");
     }
-    private static void testSmallTreeAndBigBuckets(int nClients, int blockSize) throws SecretSharingException, InterruptedException {
+
+    private static void testSmallTreeAndBigBuckets(int nClients, int blockSize) throws SecretSharingException,
+            InterruptedException {
         List<ORAMManager> oramManagerList = new ArrayList<>();
         for (int i = 1; i < nClients + 1; i++) {
             oramManagerList.add(new ORAMManager(i));
         }
         generateTest(oramId++, oramManagerList, new ArrayList<>(), 3, 24, blockSize,
-                "testSmallTreeAndBigBuckets"+nClients+"Clients"+blockSize+"ByteBlock");
+                "testSmallTreeAndBigBuckets" + nClients + "Clients" + blockSize + "ByteBlock");
     }
-    private static void testSmallTreeAndBuckets(int nClients, int blockSize) throws SecretSharingException, InterruptedException {
+
+    private static void testSmallTreeAndBuckets(int nClients, int blockSize) throws SecretSharingException,
+            InterruptedException {
         List<ORAMManager> oramManagerList = new ArrayList<>();
         for (int i = 1; i < nClients + 1; i++) {
             oramManagerList.add(new ORAMManager(i));
         }
         generateTest(oramId++, oramManagerList, new ArrayList<>(), 3, 4, blockSize,
-                "testSmallTreeAndBuckets"+nClients+"Clients"+blockSize+"ByteBlock");
+                "testSmallTreeAndBuckets" + nClients + "Clients" + blockSize + "ByteBlock");
     }
+
     private static void generateTest(int oramId, List<ORAMManager> oramManagerList, List<Thread> threads,
-                                     int treeHeight, int nBlocksPerBucket, int blockSize, String identifier) throws InterruptedException {
+                                     int treeHeight, int nBlocksPerBucket, int blockSize, String identifier)
+            throws InterruptedException {
 
         maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
 
@@ -115,8 +122,8 @@ public class MultiCaseTester {
             oramManager.close();
         }
         logger.info("-----EXECUTION TIMES (average, min, max) in ms-----");
-        Triple<Integer, Integer, Double> stats = getStatisticsFromList(times.stream().collect(Collectors.toList()));
-        logger.info("{}: ({}, {}, {})",identifier,stats.getRight(),stats.getLeft(),stats.getMiddle());
+        Triple<Integer, Integer, Double> stats = getStatisticsFromList(new ArrayList<>(times));
+        logger.info("{}: ({}, {}, {})", identifier, stats.getRight(), stats.getLeft(), stats.getMiddle());
     }
 
     private static void randomAccess(ORAMObject oram) {
@@ -130,7 +137,8 @@ public class MultiCaseTester {
                 randomWord = expressions10[rnd.nextInt(expressions10.length)];
             byte[] response = oram.writeMemory(address, randomWord.getBytes());
             String responseString = response == null ? "null" : new String(response);
-            logger.debug("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): " + responseString);
+            logger.debug("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): "
+                    + responseString);
         } else {
             byte[] response = oram.readMemory(address);
             String responseString = response == null ? "null" : new String(response);

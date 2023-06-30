@@ -14,7 +14,7 @@ public class ORAMUtils {
 	public static final double DUMMY_VERSION = 0;
 	public static final byte DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
-	public static byte[] DUMMY_BLOCK = new byte[0];
+	public static final byte[] DUMMY_BLOCK = new byte[0];
 
 	public static int computeNumberOfNodes(int treeHeight) {
 		int nNodes = 0;
@@ -63,8 +63,8 @@ public class ORAMUtils {
 
 	public static Triple<Integer, Integer, Double> getStatisticsFromList(List<Integer> timeList) {
 		double sum = 0;
-		Integer max = -1;
-		Integer min = Integer.MAX_VALUE;
+		int max = -1;
+		int min = Integer.MAX_VALUE;
 		for (Integer getORAMTime : timeList) {
 			sum += getORAMTime;
 			if(getORAMTime > max){

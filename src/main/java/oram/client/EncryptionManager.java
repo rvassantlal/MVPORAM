@@ -166,7 +166,7 @@ public class EncryptionManager {
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedBlock);
 				 ObjectInputStream in = new ObjectInputStream(bis)) {
 				deserializedBlock.readExternal(in);
-			} catch (IOException | ClassNotFoundException e) {
+			} catch (IOException e) {
 				logger.error("Failed to decrypt block", e);
 				return null;
 			}

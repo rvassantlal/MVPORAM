@@ -29,7 +29,7 @@ public class LocalORAMBenchmark {
 		rndGenerator = new SecureRandom("oram".getBytes());
 		EncryptedPositionMap initialEncryptedPositionMap = initializeEmptyPositionMap();
 		EncryptedStash emptyEncryptedStash = initializeEmptyStash(oramContext.getBlockSize());
-		ORAM oram = new ORAM(oramId, oramContext.getTreeHeight(), initClientId, oramContext.getBucketSize(),
+		ORAM oram = new ORAM(oramId, oramContext.getTreeHeight(), oramContext.getBucketSize(),
 				oramContext.getBlockSize(), initialEncryptedPositionMap, emptyEncryptedStash);
 
 		int[] clientOperations = new int[nOperations * nClients];

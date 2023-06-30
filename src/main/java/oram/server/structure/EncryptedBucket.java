@@ -44,7 +44,7 @@ public class EncryptedBucket implements Externalizable {
     }
 
     @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput in) throws IOException {
         for (int i = 0; i < blocks.length; i++) {
             blocks[i] = new byte[in.readInt()];
             in.readFully(blocks[i]);

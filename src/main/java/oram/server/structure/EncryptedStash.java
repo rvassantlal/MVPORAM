@@ -27,7 +27,7 @@ public class EncryptedStash implements Externalizable {
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(ObjectInput in) throws IOException {
 		int size = in.readInt();
 		if (size != -1) {
 			encryptedStash = new byte[size];

@@ -26,7 +26,7 @@ public class RandomParallelTester {
         int nClients = Integer.parseInt(args[0]);
         int oramId = Integer.parseInt(args[1]);
         testSize = Integer.parseInt(args[2]);
-        List<ORAMManager> oramManagerList = new ArrayList<ORAMManager>();
+        List<ORAMManager> oramManagerList = new ArrayList<>();
         List<Thread> threads = new ArrayList<>();
         for (int i = 1; i < nClients + 1; i++) {
             oramManagerList.add(new ORAMManager(i));
@@ -40,12 +40,9 @@ public class RandomParallelTester {
 
         for (ORAMManager oramManager : oramManagerList) {
 
-            threads.add(new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    for (int i = 0; i < testSize; i++) {
-                        randomAccess(oramManager.getORAM(oramId));
-                    }
+            threads.add(new Thread(() -> {
+                for (int i = 0; i < testSize; i++) {
+                    randomAccess(oramManager.getORAM(oramId));
                 }
             }));
         }

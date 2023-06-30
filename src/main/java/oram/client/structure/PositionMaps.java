@@ -33,7 +33,7 @@ public class PositionMaps implements Externalizable {
     }
 
     @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput in) throws IOException {
         newVersionId = in.readDouble();
         int size = in.readInt();
         outstandingVersionIds = new double[size];

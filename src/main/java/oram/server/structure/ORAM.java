@@ -16,7 +16,7 @@ public class ORAM {
     private final List<OramSnapshot> allTrees;
     private int sequenceNumber = 0;
 
-    public ORAM(int oramId, int treeHeight, int clientId, int bucketSize, int blockSize,
+    public ORAM(int oramId, int treeHeight, int bucketSize, int blockSize,
                 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
         this.oramId = oramId;
         this.allTrees = new ArrayList<>();
@@ -197,6 +197,18 @@ public class ORAM {
     @Override
     public String toString() {
         return String.valueOf(oramId);
+    }
+
+    public int getOramId() {
+        return oramId;
+    }
+
+    public int getOutstandingNumber() {
+        return outstandingTrees.size();
+    }
+
+    public int getAllVersionNumber() {
+        return allTrees.size();
     }
 
     public String printORAM() {

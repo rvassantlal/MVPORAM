@@ -15,7 +15,7 @@ public class ClientTester {
 	private static final Logger logger = LoggerFactory.getLogger("benchmark");
 
 	// ARGS: clientId, oramName, testSize
-	public static void main(String[] args) throws SecretSharingException, InterruptedException {
+	public static void main(String[] args) throws SecretSharingException {
 		Random r = new Random();
 		int clientId = Integer.parseInt(args[0]);
 		int oramId = Integer.parseInt(args[1]);

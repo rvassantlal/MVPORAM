@@ -4,12 +4,10 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 public class Bucket implements Externalizable {
-	private Block[] blocks;
+	private final Block[] blocks;
 	private final int blockSize;
 	private int index;
 

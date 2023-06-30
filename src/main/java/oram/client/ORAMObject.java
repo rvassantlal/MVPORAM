@@ -77,7 +77,8 @@ public class ORAMObject {
         PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps.getPositionMaps());
         byte pathId = getPathId(mergedPositionMap, address);
         Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps, mergedPositionMap);
-        boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
+        boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address,
+                oldPositionMaps.getNewVersionId());
 
         if (!isEvicted) {
             logger.error("Failed to do eviction on oram {}", oramId);
@@ -145,7 +146,8 @@ public class ORAMObject {
         return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
     }
 
-    private Stash populatePath(PositionMap positionMap, Stash stash, byte oldPathId, Map<Integer, Bucket> pathToPopulate) {
+    private Stash populatePath(PositionMap positionMap, Stash stash, byte oldPathId,
+                               Map<Integer, Bucket> pathToPopulate) {
         int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
         Map<Byte, List<Integer>> commonPaths = new HashMap<>();
         for (int pathLocation : oldPathLocations) {
@@ -158,7 +160,8 @@ public class ORAMObject {
             List<Integer> commonPath = commonPaths.get(pathId);
             if (commonPath == null) {
                 int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
-                commonPath = ORAMUtils.computePathIntersection(oramContext.getTreeLevels(), oldPathLocations, pathLocations);
+                commonPath = ORAMUtils.computePathIntersection(oramContext.getTreeLevels(), oldPathLocations,
+                        pathLocations);
                 commonPaths.put(pathId, commonPath);
             }
             boolean isPathEmpty = false;

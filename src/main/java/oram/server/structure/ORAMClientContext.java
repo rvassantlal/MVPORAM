@@ -2,7 +2,7 @@ package oram.server.structure;
 
 public class ORAMClientContext {
 	private final OramSnapshot[] outstandingVersion;
-	private double newVersionId;
+	private final double newVersionId;
 
 	public ORAMClientContext(OramSnapshot[] versions, double newVersionId) {
 		this.outstandingVersion = versions;
