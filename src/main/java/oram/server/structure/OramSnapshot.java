@@ -1,124 +1,112 @@
 package oram.server.structure;
 
 
-import oram.utils.ORAMUtils;
-
 import java.io.Serializable;
 import java.util.*;
 
 
-public class OramSnapshot implements Serializable,Comparable {
-	private final double versionId;
-	private final int TREE_SIZE;
-	private final int TREE_HEIGHT;
-	private final OramSnapshot[] previous;
-	private EncryptedPositionMap positionMap;
-	private final EncryptedStash stash;
+public class OramSnapshot implements Serializable, Comparable {
+    private final Double versionId;
+    private final List<OramSnapshot> previous;
+    private final EncryptedPositionMap positionMap;
+    private final EncryptedStash stash;
+    private final TreeMap<Integer, EncryptedBucket> difTree;
 
-	private int pathId;
-	private int referenceCounter;
-	private final TreeMap<Integer, EncryptedBucket> difTree;
+    public OramSnapshot(double versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
+                        EncryptedStash encryptedStash) {
+        this.versionId = versionId;
+        this.difTree = new TreeMap<>();
+        positionMap = encryptedPositionMap;
+        stash = encryptedStash;
+        previous = new LinkedList<>();
+        Collections.addAll(previous, previousTrees);
+    }
 
-	public OramSnapshot(double versionId, int treeSize, int treeHeight, OramSnapshot[] previousTrees,
-						EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash, int pathId) {
-		this.versionId = versionId;
-		this.pathId = pathId;
-		this.difTree = new TreeMap<>();
+    public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Double> visitedVersions) {
+        if (!visitedVersions.contains(versionId)) {
+            visitedVersions.add(versionId);
+            for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
+                if (!locationsMarker.get(location.getKey())) {
+                    locationsMarker.set(location.getKey(), true);
+                    location.getValue().taintBucket();
+                } else {
+                    location.getValue().untaintBucket();
+                }
+            }
+            if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
+                for (OramSnapshot oramSnapshot : previous) {
+                    oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions);
+                }
+            }
+        }
+    }
 
-		positionMap = encryptedPositionMap;
-		stash = encryptedStash;
-		TREE_SIZE = treeSize;
-		TREE_HEIGHT = treeHeight;
-		previous = previousTrees;
-	}
+    public EncryptedPositionMap getPositionMap() {
+        return positionMap;
+    }
 
-	public int getReferenceCounter(){
-		return referenceCounter;
-	}
+    public List<OramSnapshot> getPrevious() {
+        return previous;
+    }
 
-	public void incrementReferenceCounter() {
-		referenceCounter++;
-	}
+    public EncryptedStash getStash() {
+        return stash;
+    }
 
-	public void decrementReferenceCounter() {
-		referenceCounter--;
-	}
+    public EncryptedBucket getFromLocation(Integer location) {
+        if (difTree.containsKey(location))
+            return difTree.get(location);
+        return null;
+    }
 
-	public EncryptedPositionMap getPositionMap(){
-		return positionMap;
-	}
+    public void setToLocation(int location, EncryptedBucket encryptedBucket) {
+        difTree.put(location, encryptedBucket);
+    }
 
-	public OramSnapshot[] getPrevious(){
-		return previous;
-	}
+    public Double getVersionId() {
+        return versionId;
+    }
 
-	public EncryptedStash getStash() {
-		return stash;
-	}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OramSnapshot that = (OramSnapshot) o;
+        return Double.compare(that.versionId, versionId) == 0;
+    }
 
-	public EncryptedBucket getFromLocation(int location) {
-		if (difTree.containsKey(location))
-			return difTree.get(location);
-		return null;
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(versionId);
+    }
 
-	public void setToLocation(int location, EncryptedBucket encryptedBucket) {
-		difTree.put(location, encryptedBucket);
-	}
+    @Override
+    public int compareTo(Object o) {
+        if (o instanceof OramSnapshot) {
+            return Double.compare(this.versionId, ((OramSnapshot) o).getVersionId());
+        }
+        throw new IllegalArgumentException();
+    }
 
-	public void removePath(List<Integer> pathIDs, Set<OramSnapshot> taintedSnapshots) {
-		if (!taintedSnapshots.contains(this)) {
-			for (Integer pathID : pathIDs) {
-				int[] locations = ORAMUtils.computePathLocations(pathID.byteValue(), TREE_HEIGHT);
-				for (int location : locations) {
-					difTree.remove(location);
-				}
-			}
-			pathIDs.add(this.pathId);
-			for (OramSnapshot oramSnapshot : previous) {
-				oramSnapshot.removePath(pathIDs, taintedSnapshots);
-			}
-		}
-	}
+    public boolean removeNonTainted() {
+        boolean allNonTainted = true;
+        for (Map.Entry<Integer, EncryptedBucket> entry : difTree.entrySet()) {
+            if (entry.getValue().isTainted()) {
+                allNonTainted = false;
+                break;
+            }
+        }
+        return allNonTainted;
+    }
 
+    public void addPrevious(List<OramSnapshot> previousFromPrevious) {
+        for (OramSnapshot fromPrevious : previousFromPrevious) {
+            if(!previous.contains(fromPrevious))
+                previous.add(fromPrevious);
+        }
+    }
 
-	public double getVersionId() {
-		return versionId;
-	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
-		OramSnapshot that = (OramSnapshot) o;
-		return Double.compare(that.versionId, versionId) == 0;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(versionId);
-	}
-
-	public Set<OramSnapshot> getPaths() {
-		Set<OramSnapshot> paths = new TreeSet<>();
-		paths.add(this);
-		for (OramSnapshot oramSnapshot : previous) {
-			paths.addAll(oramSnapshot.getPaths());
-		}
-		return paths;
-	}
-
-	@Override
-	public int compareTo(Object o) {
-		if (o instanceof OramSnapshot){
-			return Double.compare(this.versionId,((OramSnapshot) o).getVersionId());
-		}
-		throw new IllegalArgumentException();
-	}
-
-	public void checkEmpty(){
-		boolean isEmpty = difTree.isEmpty();
-		if(isEmpty)
-			positionMap=null;
-	}
+    public void removePrevious(List<OramSnapshot> previousVersion) {
+        previous.removeAll(previousVersion);
+    }
 }

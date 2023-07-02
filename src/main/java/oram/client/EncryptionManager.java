@@ -9,10 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -27,17 +24,22 @@ public class EncryptionManager {
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
 			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
 			encryptedPositionMaps.readExternal(in);
-			EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
-			PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
-			for (int i = 0; i < encryptedPMs.length; i++) {
-				positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
-			}
-			return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
-					encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
+			return decryptPositionMaps(encryptedPositionMaps);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt position map", e);
 			return null;
 		}
+	}
+
+	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
+		EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+		PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
+		for (int i = 0; i < encryptedPMs.length; i++) {
+			positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
+		}
+		return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
+				encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
+
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
@@ -46,15 +48,20 @@ public class EncryptionManager {
 			EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
 			encryptedStashesAndPaths.readExternal(in);
 
-			Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
-					encryptedStashesAndPaths.getEncryptedStashes());
-			Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-			Map<Double, List<Double>> snapIdsToOutstanding = encryptedStashesAndPaths.getSnapIdsToOutstanding();
-			return new StashesAndPaths(stashes, paths , snapIdsToOutstanding);
+			return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
 		}
+	}
+
+	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
+												  EncryptedStashesAndPaths encryptedStashesAndPaths) {
+		Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
+				encryptedStashesAndPaths.getEncryptedStashes());
+		Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
+		Map<Double, Set<Double>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
+		return new StashesAndPaths(stashes, paths , versionPaths);
 	}
 
 	private Map<Double, Stash> decryptStashes(int blockSize, Map<Double, EncryptedStash> encryptedStashes) {
@@ -159,7 +166,7 @@ public class EncryptionManager {
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedBlock);
 				 ObjectInputStream in = new ObjectInputStream(bis)) {
 				deserializedBlock.readExternal(in);
-			} catch (IOException | ClassNotFoundException e) {
+			} catch (IOException e) {
 				logger.error("Failed to decrypt block", e);
 				return null;
 			}

@@ -7,39 +7,54 @@ import java.io.ObjectOutput;
 import java.util.Arrays;
 
 public class EncryptedBucket implements Externalizable {
-	private final byte[][] blocks;
+    private final byte[][] blocks;
 
-	public EncryptedBucket(int bucketSize) {
-		this.blocks = new byte[bucketSize][];
-	}
-	public EncryptedBucket(byte[][] blocks) {
-		this.blocks = blocks;
-	}
+    private boolean tainted;
 
-	public byte[][] getBlocks() {
-		return blocks;
-	}
+    public EncryptedBucket(int bucketSize) {
+        this.blocks = new byte[bucketSize][];
+    }
 
-	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
-		for (byte[] block : blocks) {
-			out.writeInt(block.length);
-			out.write(block);
-		}
-	}
+    public EncryptedBucket(byte[][] blocks) {
+        this.blocks = blocks;
+    }
 
-	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		for (int i = 0; i < blocks.length; i++) {
-			blocks[i] = new byte[in.readInt()];
-			in.readFully(blocks[i]);
-		}
-	}
+    public byte[][] getBlocks() {
+        return blocks;
+    }
 
-	@Override
-	public String toString() {
-		return "EncryptedBucket{" +
-				Arrays.toString(blocks) +
-				'}';
-	}
+    public void taintBucket() {
+        tainted = true;
+    }
+
+    public void untaintBucket() {
+        tainted = false;
+    }
+
+    public boolean isTainted() {
+        return tainted;
+    }
+
+    @Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+        for (byte[] block : blocks) {
+            out.writeInt(block.length);
+            out.write(block);
+        }
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException {
+        for (int i = 0; i < blocks.length; i++) {
+            blocks[i] = new byte[in.readInt()];
+            in.readFully(blocks[i]);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "EncryptedBucket{" +
+                Arrays.toString(blocks) +
+                '}';
+    }
 }

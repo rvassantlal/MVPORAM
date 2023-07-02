@@ -47,7 +47,7 @@ public class Block implements Externalizable {
     }
 
     @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput in) throws IOException {
         address = in.readInt();
         byte[] paddedContent = new byte[blockSize + 4];
         in.readFully(paddedContent);
@@ -74,8 +74,7 @@ public class Block implements Externalizable {
 
     @Override
     public String toString() {
-        return "Block{" + address +
-                ", " + Arrays.toString(content) +
-                '}';
+        String contentString = content==null ? "null" : new String(content);
+        return "Block{" + address + ", " + contentString + '}';
     }
 }

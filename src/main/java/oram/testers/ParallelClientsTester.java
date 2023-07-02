@@ -61,21 +61,26 @@ public class ParallelClientsTester {
         t2.start();
         t2.join();
         t.join();
-        logger.debug("Read from address 1");
+
         byte[] response = oram.readMemory(1);
-        logger.debug(Arrays.toString(response));
+        String answer = response==null ? "null" : new String(response);
+        logger.debug("Read from address 1: " + answer);
 
-        logger.debug("Read from address 2");
+
         response = oram.readMemory(2);
-        logger.debug(Arrays.toString(response));
+        answer = response==null ? "null" : new String(response);
+        logger.debug("Read from address 2: " + answer);
 
-        logger.debug("Read from address 1");
+
         response = oram2.readMemory(1);
-        logger.debug(Arrays.toString(response));
+        answer = response==null ? "null" : new String(response);
+        logger.debug("Read from address 1: " + answer);
 
-        logger.debug("Read from address 2");
+
         response = oram2.readMemory(2);
-        logger.debug(Arrays.toString(response));
+        answer = response==null ? "null" : new String(response);
+        logger.debug("Read from address 2: " + answer);
+
         oramManager.close();
     }
 

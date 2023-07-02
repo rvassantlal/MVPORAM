@@ -1,6 +1,7 @@
 package oram.utils;
 
 import oram.messages.ORAMMessage;
+import org.apache.commons.lang3.tuple.Triple;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,7 +14,7 @@ public class ORAMUtils {
 	public static final double DUMMY_VERSION = 0;
 	public static final byte DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
-	public static byte[] DUMMY_BLOCK = new byte[0];
+	public static final byte[] DUMMY_BLOCK = new byte[0];
 
 	public static int computeNumberOfNodes(int treeHeight) {
 		int nNodes = 0;
@@ -35,6 +36,18 @@ public class ORAMUtils {
 		return locations;
 	}
 
+	public static List<Integer> computePathLocationsList(byte pathId, int treeHeight) {
+		int offset = pathId;
+		List<Integer> locations = new ArrayList<>(treeHeight+1);
+		for (int height = treeHeight; height >= 0; height--) {
+			int level = (1 << height) - 1;
+			if (height < treeHeight)
+				offset = offset / 2;
+			locations.add(treeHeight - height, level + offset);
+		}
+		return locations;
+	}
+
 	public static List<Integer> computePathIntersection(int treeLevels, int[] pathLocationsA, int[] pathLocationsB) {
 		List<Integer> commonNodes = new ArrayList<>();
 		for (int levels = treeLevels - 1; levels >= 0; levels--) {
@@ -46,6 +59,24 @@ public class ORAMUtils {
 
 		Collections.reverse(commonNodes);
 		return commonNodes;
+	}
+
+	public static Triple<Integer, Integer, Double> getStatisticsFromList(List<Integer> timeList) {
+		double sum = 0;
+		int max = -1;
+		int min = Integer.MAX_VALUE;
+		for (Integer getORAMTime : timeList) {
+			sum += getORAMTime;
+			if(getORAMTime > max){
+				max = getORAMTime;
+			}
+			if(getORAMTime < min){
+				min = getORAMTime;
+			}
+		}
+		Double average =  sum / timeList.size();
+		timeList.clear();
+		return Triple.of(min,max,average);
 	}
 
 	public static byte[] serializeRequest(ServerOperationType operation, ORAMMessage request) {

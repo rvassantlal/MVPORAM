@@ -34,12 +34,12 @@
 		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
-	<logger name="oram" level="DEBUG">
+	<logger name="oram" level="INFO">
 		<appender-ref ref="MIN-STDOUT" />
 		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
-	<logger name="benchmark" level="DEBUG">
+	<logger name="benchmark" level="INFO">
 		<appender-ref ref="MIN-STDOUT" />
 		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
