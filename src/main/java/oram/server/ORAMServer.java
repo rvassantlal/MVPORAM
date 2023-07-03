@@ -108,7 +108,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
                     return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
             }
         } catch (IOException | ClassNotFoundException e) {
-            logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
+            logger.error("Failed to attend unordered request from {}", msgCtx.getSender(), e);
         }
         return null;
     }
@@ -236,9 +236,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         long end = System.nanoTime();
         int delay = (int) ((end - lastPrint) / 1_000_000);
         if (delay > 2000) {
-            int numRequests = getORAMTimes.size() + getPMTimes.size() + getPSTimes.size() + evictTimes.size();
-            logger.info("M:(clients[#]|requests[#]|delta[ns]|throughput[ops/s])>({}|{}|{}|{})",
-                    senders.size(), numRequests, delay, numRequests/(delay/1000));
+            logger.info("M:(clients[#]|delta[ns]|requestsGetORAM[#]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]" +
+                            ")>({}|{}|{}|{}|{}|{})",
+                    senders.size(), delay, getORAMTimes.size(), getPMTimes.size(),  getPSTimes.size(), evictTimes.size());
             //////// FOR USE WHEN FURTHER INFO COMMENTED, COMMENT OTHERWISE
             getORAMTimes.clear();
             getPMTimes.clear();
