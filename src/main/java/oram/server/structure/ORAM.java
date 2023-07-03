@@ -61,8 +61,7 @@ public class ORAM {
 	public EncryptedStashesAndPaths getStashesAndPaths(byte pathId, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
 		if (oramClientContext == null) {
-			logger.error("There is no client context for {} in oram {} ({})", clientId, oramId,
-					oramClientContexts.keySet());
+			logger.error("There is no client context for {} in oram {}", clientId, oramId);
 			return null;
 		}
 		OramSnapshot[] outstandingTrees = oramClientContext.getOutstandingVersions();
