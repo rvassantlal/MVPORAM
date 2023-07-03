@@ -3,6 +3,8 @@ package oram.benchmark;
 import controller.IBenchmarkStrategy;
 import controller.IWorkerStatusListener;
 import controller.WorkerHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import util.Storage;
 import worker.IProcessingResult;
 import worker.ProcessInformation;
@@ -25,6 +27,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatusListener {
+	private final Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	private final Lock lock;
 	private final Condition sleepCondition;
 	private final Set<Integer> serverWorkersIds;
@@ -103,14 +106,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		while (true) {
 			try {
 				lock.lock();
-				System.out.printf("============ Round: %d ============\n", round);
+				logger.info("============ Round: {} ============", round);
 				int nClients = clientsPerRound[round - 1];
 
 				//Distribute clients per workers
 				int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients, maxClientsPerProcess);
 				String vector = Arrays.toString(clientsPerWorker);
 				int total = Arrays.stream(clientsPerWorker).sum();
-				System.out.printf("Clients per worker: %s -> Total: %d\n", vector, total);
+				logger.info("Clients per worker: {} -> Total: {}", vector, total);
 
 				//Start servers
 				startServers(nServerWorkers, workingDirectory, serverWorkers);
@@ -120,7 +123,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 						clientWorkers, measurementClient, clientsPerWorker);
 
 				//Wait for system to stabilize
-				System.out.println("Waiting 10s...");
+				logger.info("Waiting 10s...");
 				sleepSeconds(10);
 
 				//Get measurements
@@ -137,7 +140,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				}
 
 				//Wait between round
-				System.out.printf("Waiting %ds before new round\n", sleepBetweenRounds);
+				logger.info("Waiting {}s before new round", sleepBetweenRounds);
 				sleepSeconds(sleepBetweenRounds);
 			} catch (InterruptedException e) {
 				break;
@@ -148,7 +151,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	}
 
 	private void startServers(int nServerWorkers, String workingDirectory, WorkerHandler[] serverWorkers) throws InterruptedException {
-		System.out.println("Starting servers...");
+		logger.info("Starting servers...");
 		serversReadyCounter = new CountDownLatch(nServerWorkers);
 		for (int i = 0; i < serverWorkers.length; i++) {
 			String command = serverCommand + i;
@@ -163,7 +166,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private void startClients(int nServerWorkers, String workingDirectory, int maxClientsPerProcess, int nRequests,
 							  WorkerHandler[] clientWorkers, WorkerHandler measurementClient,
 							  int[] clientsPerWorker) throws InterruptedException {
-		System.out.println("Starting clients...");
+		logger.info("Starting clients...");
 		clientsReadyCounter = new CountDownLatch(clientsPerWorker.length);
 		int clientInitialId = nServerWorkers + 1000;
 
@@ -213,12 +216,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	private void getMeasurements(WorkerHandler measurementServer, WorkerHandler measurementClient) throws InterruptedException {
 		//Start measurements
-		System.out.println("Starting measurements...");
+		logger.info("Starting measurements...");
 		measurementClient.startProcessing();
 		measurementServer.startProcessing();
 
 		//Wait for measurements
-		System.out.println("Measuring during 120s");
+		logger.info("Measuring during 120s");
 		sleepSeconds(120);
 
 		//Stop measurements
@@ -226,7 +229,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		measurementServer.stopProcessing();
 
 		//Get measurement results
-		System.out.println("Getting measurements...");
+		logger.info("Getting measurements...");
 		measurementDeliveredCounter = new CountDownLatch(2);
 		measurementClient.requestProcessingResult();
 		measurementServer.requestProcessingResult();
@@ -293,11 +296,11 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	@Override
 	public void onError(int workerId, String errorMessage) {
 		if (serverWorkersIds.contains(workerId)) {
-			System.err.printf("Error in server worker %d: %s\n", workerId, errorMessage);
+			logger.error("Error in server worker {}: {}", workerId, errorMessage);
 		} else if (clientWorkersIds.contains(workerId)) {
-			System.err.printf("Error in client worker %d: %s\n", workerId, errorMessage);
+			logger.error("Error in client worker {}: {}", workerId, errorMessage);
 		} else {
-			System.out.printf("Error in unused worker %d: %s\n", workerId, errorMessage);
+			logger.error("Error in unused worker {}: {}", workerId, errorMessage);
 		}
 	}
 
@@ -306,10 +309,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Measurement measurement = (Measurement) processingResult;
 		long[][] measurements = measurement.getMeasurements();
 		if (measurements.length == 1) {
-			System.out.println("Received client measurement results");
+			logger.debug("Received client measurement results");
 			processClientMeasurementResults(measurements[0]);
 		} else {
-			System.out.println("Received server measurement results");
+			logger.debug("Received server measurement results");
 			processServerMeasurementResults(measurements[0], measurements[1], measurements[2], measurements[3],
 					measurements[4], measurements[5], measurements[6], measurements[7]);
 		}
@@ -320,7 +323,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private void processClientMeasurementResults(long[] latencies) {
 		saveClientMeasurements(round, latencies);
 		Storage st = new Storage(latencies);
-		System.out.printf("Client Measurement[ms] - avg:%f dev:%f max:%d\n", st.getAverage(true) / 1000000,
+		logger.info("Client Measurement[ms] - avg:{} dev:{} max:{}", st.getAverage(true) / 1000000,
 				st.getDP(true) / 1000000, st.getMax(true) / 1000000);
 		avgLatency[round - 1] = st.getAverage(true);
 		latencyDev[round - 1] = st.getDP(true);
@@ -342,7 +345,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			evictionThroughput[i] = (long) (nEvictionRequests[i] / (delta[i] / 1_000_000_000.0));
 		}
 		Storage st = new Storage(evictionThroughput);
-		System.out.printf("Server Measurement[evictions/s] - avg:%f dev:%f max:%d | minClients:%d maxClients:%d\n",
+		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{}\n",
 				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients);
 		numMaxRealClients[round - 1] = (int) maxClients;
 		avgThroughput[round - 1] = st.getAverage(true);

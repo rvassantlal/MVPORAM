@@ -3,12 +3,15 @@ package oram.benchmark;
 import oram.client.ORAMManager;
 import oram.client.ORAMObject;
 import oram.utils.ORAMUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 public class ORAMBenchmarkClient {
+	private final static Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		if (args.length != 7) {
 			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
@@ -37,7 +40,7 @@ public class ORAMBenchmarkClient {
 		new Thread(() -> {
 			try {
 				latch.await();
-				System.out.println("Executing experiment");
+				logger.info("Executing experiment");
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -87,12 +90,11 @@ public class ORAMBenchmarkClient {
 					t2 = System.nanoTime();
 					delay = t2 - t1;
 					if (!Arrays.equals(blockContent, oldContent)) {
-						System.out.println("[Client " + clientId + "] Content at address " + address
-								+ " is different (" + Arrays.toString(oldContent) + ")");
+						logger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
 						break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
-						System.out.println("M: " + delay);
+						logger.info("M: " + delay);
 					}
 				}
 			} finally {

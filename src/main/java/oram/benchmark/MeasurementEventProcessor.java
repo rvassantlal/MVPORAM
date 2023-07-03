@@ -1,11 +1,14 @@
 package oram.benchmark;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import worker.IProcessingResult;
 import worker.IWorkerEventProcessor;
 
 import java.util.LinkedList;
 
 public class MeasurementEventProcessor implements IWorkerEventProcessor {
+	private final Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	private static final String SERVER_READY_PATTERN = "Ready to process operations";
 	private static final String CLIENT_READY_PATTERN = "Executing experiment";
 	private static final String MEASUREMENT_PATTERN = "M:";
@@ -53,7 +56,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 
 	@Override
 	public void startProcessing() {
-		System.out.println("Measuring");
+		logger.debug("Measuring");
 		rawGlobalMeasurements.clear();
 		rawGetPMMeasurements.clear();
 		rawGetPSMeasurements.clear();
@@ -63,7 +66,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 
 	@Override
 	public void stopProcessing() {
-		System.out.println("Not Measuring");
+		logger.debug("Not Measuring");
 		doMeasurement = false;
 	}
 
@@ -77,11 +80,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 	}
 
 	private IProcessingResult processClientMeasurements() {
-		long[] latencies = new long[rawGlobalMeasurements.size()];
-		int i = 0;
-		for (String rawMeasurement : rawGlobalMeasurements) {
-			latencies[i++] = Long.parseLong(rawMeasurement.split(" ")[1]);
-		}
+		long[] latencies = parseLatency(rawGlobalMeasurements);
 		return new Measurement(latencies);
 	}
 
@@ -116,7 +115,8 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 		long[] latency = new long[rawMeasurements.size()];
 		int i = 0;
 		for (String rawMeasurement : rawMeasurements) {
-			latency[i++] = Long.parseLong(rawMeasurement.split(" ")[2]);
+			String[] tokens = rawMeasurement.split(" ");
+			latency[i++] = Long.parseLong(tokens[tokens.length - 1]);
 		}
 		return latency;
 	}

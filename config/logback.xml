@@ -39,11 +39,19 @@
 		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
-	<logger name="benchmark" level="INFO">
+	<logger name="benchmark.oram" level="INFO">
 		<appender-ref ref="MIN-STDOUT" />
 		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
 	<logger name="bftsmart.reconfiguration.util.RSAKeyLoader" level="TRACE"></logger>
+
+	<logger name="benchmark.controller" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
+
+	<logger name="benchmark.worker" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
 
 </configuration>
