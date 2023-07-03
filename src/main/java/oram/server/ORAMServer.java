@@ -222,9 +222,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	public void printReport() {
 		long end = System.nanoTime();
 		long delay = end - lastPrint;
-		if (delay > 2_000_000) {
+		if (delay >= 2_000_000_000) {
 			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]" +
-							")>({}|{}|{}|{}|{}|{})",
+							")>({}|{}|{}|{}|{})",
 					senders.size(), delay, getPMCounter, getPSCounter, evictCounter);
 			getPMCounter = 0;
 			getPSCounter = 0;
