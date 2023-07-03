@@ -11,7 +11,9 @@ public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
 	private byte[] pathIds;
 	private double[] versionIds;
-	public PositionMap() {}
+
+	public PositionMap() {
+	}
 
 	public PositionMap(double[] versionIds, byte[] pathIds) {
 		this.versionIds = versionIds;
@@ -72,5 +74,4 @@ public class PositionMap implements Externalizable {
 		}
 		return sb.toString();
 	}
-	
 }

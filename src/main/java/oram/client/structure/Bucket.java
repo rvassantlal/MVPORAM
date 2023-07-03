@@ -11,7 +11,7 @@ public class Bucket implements Externalizable {
 	private final int blockSize;
 	private int index;
 
-	public Bucket(int bucketSize, int blockSize){
+	public Bucket(int bucketSize, int blockSize) {
 		blocks = new Block[bucketSize];
 		this.blockSize = blockSize;
 	}
@@ -26,10 +26,11 @@ public class Bucket implements Externalizable {
 	public int getBlockSize() {
 		return blockSize;
 	}
+
 	public Block[] readBucket() {
 		return this.blocks;
 	}
-	
+
 	public String toString() {
 		return Arrays.toString(blocks);
 	}
@@ -37,7 +38,7 @@ public class Bucket implements Externalizable {
 
 	@Override
 	public void writeExternal(ObjectOutput objectOutput) throws IOException {
-		for (Block block : blocks){
+		for (Block block : blocks) {
 			block.writeExternal(objectOutput);
 		}
 	}
