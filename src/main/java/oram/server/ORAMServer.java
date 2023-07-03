@@ -13,38 +13,26 @@ import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ServerOperationType;
 import oram.utils.Status;
-import org.apache.commons.lang3.tuple.Triple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-
-import static oram.utils.ORAMUtils.getStatisticsFromList;
 
 public class ORAMServer implements ConfidentialSingleExecutable {
     private final Logger logger = LoggerFactory.getLogger("oram");
     private final TreeMap<Integer, ORAM> orams;
-    private final ArrayList<Integer> getORAMTimes;
-    private final ArrayList<Integer> getPMTimes;
-    private final ArrayList<Integer> getPSTimes;
-    private final ArrayList<Integer> evictTimes;
-
     private final TreeSet<Integer> senders;
+    private int getPMCounter = 0;
+    private int getPSCounter = 0;
+    private int evictCounter = 0;
     private long lastPrint;
-
 
 
     public ORAMServer(int processId) {
         this.orams = new TreeMap<>();
-        this.getORAMTimes = new ArrayList<>();
-        this.getPMTimes = new ArrayList<>();
-        this.getPSTimes = new ArrayList<>();
-        this.evictTimes = new ArrayList<>();
         senders = new TreeSet<>();
         //Starting server
         new ConfidentialServerFacade(processId, this);
@@ -86,6 +74,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
             }
         } catch (IOException | ClassNotFoundException e) {
             logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
+        } finally {
+            printReport();
         }
         return null;
     }
@@ -122,8 +112,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
                 request.getEncryptedPath(), msgCtx.getSender());
         long end = System.nanoTime();
-        storeTime(start, end, evictTimes);
-        printReport();
+        long delay = end - start;
+        logger.info("M3:(eviction[ns])>({})", delay);
+        evictCounter++;
         if (isEvicted)
             return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
         else
@@ -153,7 +144,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
             return new ConfidentialMessage();
         } finally {
             long end = System.nanoTime();
-            storeTime(start, end, getPSTimes);
+            long delay = end - start;
+            logger.info("M2:(getPathStash[ns])>({})", delay);
+            getPSCounter++;
         }
     }
 
@@ -162,7 +155,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         if (oram == null) {
             return new ConfidentialMessage(new byte[]{-1});
         } else {
-            long start = System.nanoTime();
             ORAMContext oramContext = oram.getOramContext();
             int treeHeight = oramContext.getTreeHeight();
             int nBlocksPerBucket = oramContext.getBucketSize();
@@ -178,9 +170,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
             } catch (IOException e) {
                 logger.debug("Failed to serialize oram context: {}", e.getMessage());
                 return new ConfidentialMessage();
-            } finally {
-                long end = System.nanoTime();
-                storeTime(start, end, getORAMTimes);
             }
         }
     }
@@ -204,7 +193,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
             return new ConfidentialMessage();
         } finally {
             long end = System.nanoTime();
-            storeTime(start, end, getPMTimes);
+            long delay = end - start;
+            logger.info("M1:(getPositionMap[ns])>({})", delay);
+            getPMCounter++;
         }
     }
 
@@ -227,38 +218,17 @@ public class ORAMServer implements ConfidentialSingleExecutable {
         }
     }
 
-    private void storeTime(long start, long end, ArrayList<Integer> times) {
-        int delay = (int) ((end - start) / 1_000);
-        times.add(delay);
-    }
 
     public void printReport() {
         long end = System.nanoTime();
-        int delay = (int) ((end - lastPrint) / 1_000_000);
-        if (delay > 2000) {
-            logger.info("M:(clients[#]|delta[ns]|requestsGetORAM[#]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]" +
+        long delay = end - lastPrint;
+        if (delay > 2_000_000) {
+            logger.info("M0:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]" +
                             ")>({}|{}|{}|{}|{}|{})",
-                    senders.size(), delay, getORAMTimes.size(), getPMTimes.size(),  getPSTimes.size(), evictTimes.size());
-            //////// FOR USE WHEN FURTHER INFO COMMENTED, COMMENT OTHERWISE
-            getORAMTimes.clear();
-            getPMTimes.clear();
-            getPSTimes.clear();
-            evictTimes.clear();
-            //////// UNCOMMENT FOR FURTHER INFO
-            /*logger.info("-----EXECUTION TIMES (average, min, max) in us-----");
-            Triple<Integer, Integer, Double> stats = getStatisticsFromList(getORAMTimes);
-            logger.info("getORAM ({}, {}, {})", stats.getRight(), stats.getLeft(), stats.getMiddle());
-            stats = getStatisticsFromList(getPMTimes);
-            logger.info("getPM ({}, {}, {})", stats.getRight(), stats.getLeft(), stats.getMiddle());
-            stats = getStatisticsFromList(getPSTimes);
-            logger.info("getPS ({}, {}, {})", stats.getRight(), stats.getLeft(), stats.getMiddle());
-            stats = getStatisticsFromList(evictTimes);
-            logger.info("evict ({}, {}, {})", stats.getRight(), stats.getLeft(), stats.getMiddle());
-            logger.info("-----SYSTEM STATUS-----");
-            for (ORAM value : orams.values()) {
-                logger.info("ORAM {} : There are {} outstanding versions in a total of {} versions",
-                        value.getOramId(), value.getOutstandingNumber(), value.getAllVersionNumber());
-            }*/
+                    senders.size(), delay, getPMCounter, getPSCounter, evictCounter);
+            getPMCounter = 0;
+            getPSCounter = 0;
+            evictCounter = 0;
             lastPrint = end;
         }
     }
