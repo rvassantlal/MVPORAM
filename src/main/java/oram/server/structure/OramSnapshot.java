@@ -3,11 +3,12 @@ package oram.server.structure;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 
 public class OramSnapshot implements Serializable, Comparable {
 	private final Double versionId;
-	private final List<OramSnapshot> previous;
+	private final ConcurrentLinkedQueue<OramSnapshot> previous;
 	private final EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
@@ -18,7 +19,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		this.difTree = new TreeMap<>();
 		positionMap = encryptedPositionMap;
 		stash = encryptedStash;
-		previous = new LinkedList<>();
+		previous = new ConcurrentLinkedQueue<OramSnapshot>();
 		Collections.addAll(previous, previousTrees);
 	}
 
@@ -45,7 +46,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		return positionMap;
 	}
 
-	public List<OramSnapshot> getPrevious() {
+	public ConcurrentLinkedQueue<OramSnapshot> getPrevious() {
 		return previous;
 	}
 
