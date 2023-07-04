@@ -29,7 +29,7 @@ remotes {
     master {
 		host = '<ip>'
 		user = '<username>'
-		identity='<private key>' //or password = '<password>'
+		identity = file("<ssh private key file>") //or password = '<password>'
     }
 }
 
