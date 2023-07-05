@@ -114,8 +114,9 @@ public class ORAMObject {
 				logger.error(stashesAndPaths.toString());
 				logger.error(mergedPositionMap.toString());
 				logger.error(mergedStash.toString());
+			}else {
+				oldContent = block.getContent();
 			}
-			oldContent = block.getContent();
 		} else if (op == Operation.WRITE) {
 			if (block == null) {
 				block = new Block(oramContext.getBlockSize(), address, newContent);

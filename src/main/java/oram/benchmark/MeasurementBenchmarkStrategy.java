@@ -345,7 +345,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			evictionThroughput[i] = (long) (nEvictionRequests[i] / (delta[i] / 1_000_000_000.0));
 		}
 		Storage st = new Storage(evictionThroughput);
-		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{}\n",
+		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{}",
 				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients);
 		numMaxRealClients[round - 1] = (int) maxClients;
 		avgThroughput[round - 1] = st.getAverage(true);

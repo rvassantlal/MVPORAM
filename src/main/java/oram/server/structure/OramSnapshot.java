@@ -3,12 +3,11 @@ package oram.server.structure;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 
 public class OramSnapshot implements Serializable, Comparable {
 	private final Double versionId;
-	private final ConcurrentLinkedQueue<OramSnapshot> previous;
+	private final List<OramSnapshot> previous;
 	private final EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
@@ -19,7 +18,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		this.difTree = new TreeMap<>();
 		positionMap = encryptedPositionMap;
 		stash = encryptedStash;
-		previous = new ConcurrentLinkedQueue<OramSnapshot>();
+		previous = new LinkedList<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
@@ -46,7 +45,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		return positionMap;
 	}
 
-	public ConcurrentLinkedQueue<OramSnapshot> getPrevious() {
+	public List<OramSnapshot> getPrevious() {
 		return previous;
 	}
 
@@ -101,13 +100,17 @@ public class OramSnapshot implements Serializable, Comparable {
 	}
 
 	public void addPrevious(List<OramSnapshot> previousFromPrevious) {
-		for (OramSnapshot fromPrevious : previousFromPrevious) {
-			if(!previous.contains(fromPrevious))
-				previous.add(fromPrevious);
+		synchronized (previous) {
+			for (OramSnapshot fromPrevious : previousFromPrevious) {
+				if (!previous.contains(fromPrevious))
+					previous.add(fromPrevious);
+			}
 		}
 	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
-		previous.removeAll(previousVersion);
+		synchronized (previous) {
+			previous.removeAll(previousVersion);
+		}
 	}
 }
