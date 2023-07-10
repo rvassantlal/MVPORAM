@@ -6,13 +6,13 @@ import java.util.*;
 
 
 public class OramSnapshot implements Serializable, Comparable {
-	private final Double versionId;
+	private final Integer versionId;
 	private final List<OramSnapshot> previous;
-	private final EncryptedPositionMap positionMap;
+	private EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
 
-	public OramSnapshot(double versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
+	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
 						EncryptedStash encryptedStash) {
 		this.versionId = versionId;
 		this.difTree = new TreeMap<>();
@@ -22,7 +22,10 @@ public class OramSnapshot implements Serializable, Comparable {
 		Collections.addAll(previous, previousTrees);
 	}
 
-	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Double> visitedVersions) {
+	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions, TreeSet<OramSnapshot> versions) {
+		if(!versions.contains(this)){
+			this.positionMap = null;
+		}
 		if (!visitedVersions.contains(versionId)) {
 			visitedVersions.add(versionId);
 			for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
@@ -35,7 +38,7 @@ public class OramSnapshot implements Serializable, Comparable {
 			}
 			if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
 				for (OramSnapshot oramSnapshot : previous) {
-					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions);
+					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions, versions);
 				}
 			}
 		}
@@ -63,7 +66,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		difTree.put(location, encryptedBucket);
 	}
 
-	public Double getVersionId() {
+	public int getVersionId() {
 		return versionId;
 	}
 
@@ -72,7 +75,7 @@ public class OramSnapshot implements Serializable, Comparable {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		OramSnapshot that = (OramSnapshot) o;
-		return Double.compare(that.versionId, versionId) == 0;
+		return (int) that.versionId == versionId;
 	}
 
 	@Override
@@ -83,7 +86,7 @@ public class OramSnapshot implements Serializable, Comparable {
 	@Override
 	public int compareTo(Object o) {
 		if (o instanceof OramSnapshot) {
-			return Double.compare(this.versionId, ((OramSnapshot) o).getVersionId());
+			return Integer.compare(this.versionId, ((OramSnapshot) o).getVersionId());
 		}
 		throw new IllegalArgumentException();
 	}

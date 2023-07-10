@@ -2,9 +2,9 @@ package oram.server.structure;
 
 public class ORAMClientContext {
 	private final OramSnapshot[] outstandingVersion;
-	private final double newVersionId;
+	private final int newVersionId;
 
-	public ORAMClientContext(OramSnapshot[] versions, double newVersionId) {
+	public ORAMClientContext(OramSnapshot[] versions, int newVersionId) {
 		this.outstandingVersion = versions;
 		this.newVersionId = newVersionId;
 	}
@@ -13,7 +13,7 @@ public class ORAMClientContext {
 		return outstandingVersion;
 	}
 
-	public double getNewVersionId() {
+	public int getNewVersionId() {
 		return newVersionId;
 	}
 }

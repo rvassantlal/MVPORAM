@@ -57,24 +57,24 @@ public class EncryptionManager {
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
 												  EncryptedStashesAndPaths encryptedStashesAndPaths) {
-		Map<Double, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
+		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 				encryptedStashesAndPaths.getEncryptedStashes());
-		Map<Double, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-		Map<Double, Set<Double>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
+		Map<Integer, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
+		Map<Integer, Set<Integer>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
 		return new StashesAndPaths(stashes, paths , versionPaths);
 	}
 
-	private Map<Double, Stash> decryptStashes(int blockSize, Map<Double, EncryptedStash> encryptedStashes) {
-		Map<Double, Stash> stashes = new HashMap<>(encryptedStashes.size());
-		for (Map.Entry<Double, EncryptedStash> entry : encryptedStashes.entrySet()) {
+	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
+		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.size());
+		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
 			stashes.put(entry.getKey(), decryptStash(blockSize, entry.getValue()));
 		}
 		return stashes;
 	}
 
-	private Map<Double, Bucket[]> decryptPaths(ORAMContext oramContext, Map<Double, EncryptedBucket[]> encryptedPaths) {
-		Map<Double, Bucket[]> paths = new HashMap<>(encryptedPaths.size());
-		for (Map.Entry<Double, EncryptedBucket[]> entry : encryptedPaths.entrySet()) {
+	private Map<Integer, Bucket[]> decryptPaths(ORAMContext oramContext, Map<Integer, EncryptedBucket[]> encryptedPaths) {
+		Map<Integer, Bucket[]> paths = new HashMap<>(encryptedPaths.size());
+		for (Map.Entry<Integer, EncryptedBucket[]> entry : encryptedPaths.entrySet()) {
 			EncryptedBucket[] encryptedBuckets = entry.getValue();
 			Bucket[] buckets = new Bucket[encryptedBuckets.length];
 			for (int i = 0; i < encryptedBuckets.length; i++) {
