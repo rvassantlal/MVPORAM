@@ -68,20 +68,25 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String workingDirectory = benchmarkParameters.getProperty("experiment.working_directory");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
 		int nClientWorkers = workers.length - nServerWorkers;
-		int maxClientsPerProcess = 30;
+		int maxClientsPerProcess = 3;
 		int nRequests = 10_000_000;
 		int sleepBetweenRounds = 10;
 		int[] clientsPerRound = new int[tokens.length];
 		for (int i = 0; i < tokens.length; i++) {
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
-		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
-		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
-		blockSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.block_size"));
+		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
+		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
+		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
 
-		int[] allTreeHeights = {22, 21, 20, 19, 16, 15, 14, 13};
-		int[] allBucketSizes = {4, 8, 16, 31, 4, 8, 16, 31};
-		int[] allBlockSizes = {64, 64, 64, 64, 4096, 4096, 4096, 4096};
+		int[] treeHeights = new int[treeHeightTokens.length];
+		int[] bucketSizes = new int[bucketSizeTokens.length];
+		int[] blockSizes = new int[blockSizeTokens.length];
+		for (int i = 0; i < treeHeightTokens.length; i++) {
+			treeHeights[i] = Integer.parseInt(treeHeightTokens[i]);
+			bucketSizes[i] = Integer.parseInt(bucketSizeTokens[i]);
+			blockSizes[i] = Integer.parseInt(blockSizeTokens[i]);
+		}
 
 		//Separate workers
 		WorkerHandler[] serverWorkers = new WorkerHandler[nServerWorkers];
@@ -98,9 +103,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
 
 		for (int i = 0; i < 8; i++) {
-			treeHeight = allTreeHeights[i];
-			bucketSize = allBucketSizes[i];
-			blockSize = allBlockSizes[i];
+			logger.info("============ Strategy Parameters ============");
+			treeHeight = treeHeights[i];
+			bucketSize = bucketSizes[i];
+			blockSize = blockSizes[i];
+
+			logger.info("Tree height: {}", treeHeight);
+			logger.info("Bucket size: {}", bucketSize);
+			logger.info("Block size: {}", blockSize);
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
