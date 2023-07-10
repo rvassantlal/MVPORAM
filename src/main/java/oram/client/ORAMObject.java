@@ -278,7 +278,7 @@ public class ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeUnordered(serializedRequest);
+			Response response = serviceProxy.invokeUnorderedHashed(serializedRequest);
 			if (response == null || response.getPainData() == null)
 				return null;
 
