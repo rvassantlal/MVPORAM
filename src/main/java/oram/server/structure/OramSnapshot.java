@@ -100,13 +100,17 @@ public class OramSnapshot implements Serializable, Comparable {
 	}
 
 	public void addPrevious(List<OramSnapshot> previousFromPrevious) {
-		for (OramSnapshot fromPrevious : previousFromPrevious) {
-			if(!previous.contains(fromPrevious))
-				previous.add(fromPrevious);
+		synchronized (previous) {
+			for (OramSnapshot fromPrevious : previousFromPrevious) {
+				if (!previous.contains(fromPrevious))
+					previous.add(fromPrevious);
+			}
 		}
 	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
-		previous.removeAll(previousVersion);
+		synchronized (previous) {
+			previous.removeAll(previousVersion);
+		}
 	}
 }

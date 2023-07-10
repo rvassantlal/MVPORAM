@@ -20,9 +20,9 @@ public class ORAM {
 				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.allTrees = new ArrayList<>();
-		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
 		this.oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
-		logger.debug("Total number of buckets: {}", treeSize);
+		logger.debug("Total number of blocks: {}", treeSize);
 		this.outstandingTrees = new LinkedList<>();
 		sequenceNumber++;
 		double versionId = sequenceNumber;
@@ -61,7 +61,6 @@ public class ORAM {
 	public EncryptedStashesAndPaths getStashesAndPaths(byte pathId, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
 		if (oramClientContext == null) {
-			logger.error("There is no client context for {} in oram {}", clientId, oramId);
 			return null;
 		}
 		OramSnapshot[] outstandingTrees = oramClientContext.getOutstandingVersions();
@@ -115,10 +114,13 @@ public class ORAM {
 					}
 				}
 			}
-			for (OramSnapshot oramSnapshot : version.getPrevious()) {
-				if (!visitedVersionsPerSnapshot.contains(oramSnapshot.getVersionId())) {
-					visitedVersionsPerSnapshot.add(oramSnapshot.getVersionId());
-					queue.add(oramSnapshot);
+			List<OramSnapshot> previous = version.getPrevious();
+			synchronized (previous) {
+				for (OramSnapshot oramSnapshot : previous) {
+					if (!visitedVersionsPerSnapshot.contains(oramSnapshot.getVersionId())) {
+						visitedVersionsPerSnapshot.add(oramSnapshot.getVersionId());
+						queue.add(oramSnapshot);
+					}
 				}
 			}
 		}
