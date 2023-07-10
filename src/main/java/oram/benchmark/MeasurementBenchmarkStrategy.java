@@ -67,10 +67,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		int f = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
 		String workingDirectory = benchmarkParameters.getProperty("experiment.working_directory");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
-		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
-		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
-		blockSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.block_size"));
-
 		int nClientWorkers = workers.length - nServerWorkers;
 		int maxClientsPerProcess = 30;
 		int nRequests = 10_000_000;
@@ -79,14 +75,13 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		for (int i = 0; i < tokens.length; i++) {
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
-		nRounds = clientsPerRound.length;
-		numMaxRealClients = new int[nRounds];
-		avgLatency = new double[nRounds];
-		latencyDev = new double[nRounds];
-		avgThroughput = new double[nRounds];
-		throughputDev = new double[nRounds];
-		maxLatency = new double[nRounds];
-		maxThroughput = new double[nRounds];
+		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
+		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
+		blockSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.block_size"));
+
+		int[] allTreeHeights = {22, 21, 20, 19, 16, 15, 14, 13};
+		int[] allBucketSizes = {4, 8, 16, 31, 4, 8, 16, 31};
+		int[] allBlockSizes = {64, 64, 64, 64, 4096, 4096, 4096, 4096};
 
 		//Separate workers
 		WorkerHandler[] serverWorkers = new WorkerHandler[nServerWorkers];
@@ -102,50 +97,65 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String setupInformation = String.format("%d\t%d", nServerWorkers, f);
 		Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
 
-		round = 1;
-		while (true) {
-			try {
-				lock.lock();
-				logger.info("============ Round: {} ============", round);
-				int nClients = clientsPerRound[round - 1];
+		for (int i = 0; i < 8; i++) {
+			treeHeight = allTreeHeights[i];
+			bucketSize = allBucketSizes[i];
+			blockSize = allBlockSizes[i];
 
-				//Distribute clients per workers
-				int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients, maxClientsPerProcess);
-				String vector = Arrays.toString(clientsPerWorker);
-				int total = Arrays.stream(clientsPerWorker).sum();
-				logger.info("Clients per worker: {} -> Total: {}", vector, total);
+			nRounds = clientsPerRound.length;
+			numMaxRealClients = new int[nRounds];
+			avgLatency = new double[nRounds];
+			latencyDev = new double[nRounds];
+			avgThroughput = new double[nRounds];
+			throughputDev = new double[nRounds];
+			maxLatency = new double[nRounds];
+			maxThroughput = new double[nRounds];
 
-				//Start servers
-				startServers(nServerWorkers, workingDirectory, serverWorkers);
+			round = 1;
+			while (true) {
+				try {
+					lock.lock();
+					logger.info("============ Round: {} ============", round);
+					int nClients = clientsPerRound[round - 1];
 
-				//Start Clients
-				startClients(nServerWorkers, workingDirectory, maxClientsPerProcess, nRequests,
-						clientWorkers, measurementClient, clientsPerWorker);
+					//Distribute clients per workers
+					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients, maxClientsPerProcess);
+					String vector = Arrays.toString(clientsPerWorker);
+					int total = Arrays.stream(clientsPerWorker).sum();
+					logger.info("Clients per worker: {} -> Total: {}", vector, total);
 
-				//Wait for system to stabilize
-				logger.info("Waiting 10s...");
-				sleepSeconds(10);
+					//Start servers
+					startServers(nServerWorkers, workingDirectory, serverWorkers);
 
-				//Get measurements
-				getMeasurements(measurementServer, measurementClient);
+					//Start Clients
+					startClients(nServerWorkers, workingDirectory, maxClientsPerProcess, nRequests,
+							clientWorkers, measurementClient, clientsPerWorker);
 
-				//Stop processes
-				Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
+					//Wait for system to stabilize
+					logger.info("Waiting 10s...");
+					sleepSeconds(10);
 
-				round++;
-				if (round > nRounds) {
-					storeResumedMeasurements(numMaxRealClients, avgLatency, latencyDev, avgThroughput,
-							throughputDev, maxLatency, maxThroughput);
+					//Get measurements
+					getMeasurements(measurementServer, measurementClient);
+
+					//Stop processes
+					Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
+
+					round++;
+					if (round > nRounds) {
+						storeResumedMeasurements(numMaxRealClients, avgLatency, latencyDev, avgThroughput,
+								throughputDev, maxLatency, maxThroughput);
+						break;
+					}
+
+					//Wait between round
+					logger.info("Waiting {}s before new round", sleepBetweenRounds);
+					sleepSeconds(sleepBetweenRounds);
+				} catch (InterruptedException e) {
 					break;
+				} finally {
+					lock.unlock();
 				}
-
-				//Wait between round
-				logger.info("Waiting {}s before new round", sleepBetweenRounds);
-				sleepSeconds(sleepBetweenRounds);
-			} catch (InterruptedException e) {
-				break;
-			} finally {
-				lock.unlock();
 			}
 		}
 	}
@@ -356,7 +366,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	public void saveServerMeasurements(int round, long[] clients, long[] delta, long[] nGetPMRequests,
 									   long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
 									   long[] getPSLatency, long[] evictionLatency) {
-		String fileName = "server_global_" + round + ".csv";
+		String fileName = String.format("server-global-height-%d-bucket-%d-block-%d-round-%d.csv",
+				treeHeight, bucketSize, blockSize, round);
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
 			int size = clients.length;
@@ -369,16 +380,20 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		String getPMFileName = "server_getPM_" + round + ".csv";
+		String getPMFileName = String.format("server-getPM-height-%d-bucket-%d-block-%d-round-%d.csv",
+				treeHeight, bucketSize, blockSize, round);
 		saveLatency(getPMFileName, getPMLatency);
-		String getPSFileName = "server_getPS_" + round + ".csv";
+		String getPSFileName = String.format("server-getPS-height-%d-bucket-%d-block-%d-round-%d.csv",
+				treeHeight, bucketSize, blockSize, round);
 		saveLatency(getPSFileName, getPSLatency);
-		String evictionFileName = "server_eviction_" + round + ".csv";
+		String evictionFileName = String.format("server-eviction-height-%d-bucket-%d-block-%d-round-%d.csv",
+				treeHeight, bucketSize, blockSize, round);
 		saveLatency(evictionFileName, evictionLatency);
 	}
 
 	public void saveClientMeasurements(int round, long[] latencies) {
-		String fileName = "client_" + round + ".csv";
+		String fileName = String.format("client-height-%d-bucket-%d-block-%d-round-%d.csv",
+				treeHeight, bucketSize, blockSize, round);
 		saveLatency(fileName, latencies);
 	}
 
