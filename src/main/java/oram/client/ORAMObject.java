@@ -75,7 +75,7 @@ public class ORAMObject {
 		}
 
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps.getPositionMaps());
-		byte pathId = getPathId(mergedPositionMap, address);
+		int pathId = getPathId(mergedPositionMap, address);
 		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps, mergedPositionMap);
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address,
 				oldPositionMaps.getNewVersionId());
@@ -86,8 +86,8 @@ public class ORAMObject {
 		return oldContent;
 	}
 
-	public byte getPathId(PositionMap mergedPositionMap, int address) {
-		byte pathId = mergedPositionMap.getPathAt(address);
+	public int getPathId(PositionMap mergedPositionMap, int address) {
+		int pathId = mergedPositionMap.getPathAt(address);
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
 			this.isRealAccess = false;
@@ -95,7 +95,7 @@ public class ORAMObject {
 		return pathId;
 	}
 
-	public Stash getPS(byte pathId, Operation op, int address, byte[] newContent,
+	public Stash getPS(int pathId, Operation op, int address, byte[] newContent,
 					   PositionMaps positionMaps, PositionMap mergedPositionMap) {
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
@@ -129,7 +129,7 @@ public class ORAMObject {
 		return mergedStash;
 	}
 
-	public boolean evict(PositionMap positionMap, Stash stash, byte oldPathId,
+	public boolean evict(PositionMap positionMap, Stash stash, int oldPathId,
 						 Operation op, int changedAddress, int newVersionId) {
 		byte newPathId = generateRandomPathId();
 		if (op == Operation.WRITE) {
@@ -147,17 +147,17 @@ public class ORAMObject {
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private Stash populatePath(PositionMap positionMap, Stash stash, byte oldPathId,
+	private Stash populatePath(PositionMap positionMap, Stash stash, int oldPathId,
 							   Map<Integer, Bucket> pathToPopulate) {
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
-		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
+		Map<Integer, List<Integer>> commonPaths = new HashMap<>();
 		for (int pathLocation : oldPathLocations) {
 			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
 		}
 		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
 		for (Block block : stash.getBlocks()) {
 			int address = block.getAddress();
-			byte pathId = positionMap.getPathAt(address);
+			int pathId = positionMap.getPathAt(address);
 			List<Integer> commonPath = commonPaths.get(pathId);
 			if (commonPath == null) {
 				int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
@@ -272,7 +272,7 @@ public class ORAMObject {
 			}
 		}
 	}
-	private StashesAndPaths getStashesAndPaths(byte pathId) {
+	private StashesAndPaths getStashesAndPaths(int pathId) {
 		try {
 			ORAMMessage request = new StashPathORAMMessage(oramId, pathId);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_STASH_AND_PATH, request);
@@ -291,16 +291,16 @@ public class ORAMObject {
 
 	private PositionMap mergePositionMaps(PositionMap[] positionMaps) {
 		int treeSize = oramContext.getTreeSize();
-		byte[] pathIds = new byte[treeSize];
+		int[] pathIds = new int[treeSize];
 		int[] versionIds = new int[treeSize];
 
 		for (int address = 0; address < treeSize; address++) {
-			byte recentPathId = ORAMUtils.DUMMY_PATH;
+			int recentPathId = ORAMUtils.DUMMY_PATH;
 			int recentVersionId = ORAMUtils.DUMMY_VERSION;
 			for (PositionMap positionMap : positionMaps) {
 				if (positionMap.getPathIds().length == 0)
 					continue;
-				byte pathId = positionMap.getPathAt(address);
+				int pathId = positionMap.getPathAt(address);
 				int versionId = positionMap.getVersionIdAt(address);
 				if (versionId > recentVersionId) {
 					recentVersionId = versionId;

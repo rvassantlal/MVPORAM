@@ -89,7 +89,7 @@ public class ORAMManager {
 	}
 
 	private EncryptedPositionMap initializeEmptyPositionMap() {
-		byte[] positionMap = new byte[0];
+		int[] positionMap = new int[0];
 		int[] versionIds = new int[0];
 		PositionMap pm = new PositionMap(versionIds, positionMap);
 		return encryptionManager.encryptPositionMap(pm);

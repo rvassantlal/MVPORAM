@@ -58,7 +58,7 @@ public class ORAM {
 		return new EncryptedPositionMaps(newVersionId, outstandingVersionIds, encryptedPositionMaps);
 	}
 
-	public EncryptedStashesAndPaths getStashesAndPaths(byte pathId, int clientId) {
+	public EncryptedStashesAndPaths getStashesAndPaths(int pathId, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
 		if (oramClientContext == null) {
 			return null;

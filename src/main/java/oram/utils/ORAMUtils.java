@@ -12,7 +12,7 @@ import java.util.List;
 
 public class ORAMUtils {
 	public static final int DUMMY_VERSION = 0;
-	public static final byte DUMMY_PATH = -1;
+	public static final int DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
 	public static final byte[] DUMMY_BLOCK = new byte[0];
 
@@ -24,7 +24,7 @@ public class ORAMUtils {
 		return nNodes;
 	}
 
-	public static int[] computePathLocations(byte pathId, int treeHeight) {
+	public static int[] computePathLocations(int pathId, int treeHeight) {
 		int offset = pathId;
 		int[] locations = new int[treeHeight + 1];
 		for (int height = treeHeight; height >= 0; height--) {
@@ -36,7 +36,7 @@ public class ORAMUtils {
 		return locations;
 	}
 
-	public static List<Integer> computePathLocationsList(byte pathId, int treeHeight) {
+	public static List<Integer> computePathLocationsList(int pathId, int treeHeight) {
 		int offset = pathId;
 		List<Integer> locations = new ArrayList<>(treeHeight+1);
 		for (int height = treeHeight; height >= 0; height--) {

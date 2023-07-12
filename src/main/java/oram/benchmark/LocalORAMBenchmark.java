@@ -54,7 +54,7 @@ public class LocalORAMBenchmark {
 		PositionMaps oldPositionMaps = getPositionsMaps(oram, clientId);
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps.getPositionMaps());
 
-		byte pathId = mergedPositionMap.getPathAt(address);
+		int pathId = mergedPositionMap.getPathAt(address);
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
 		}
@@ -79,7 +79,7 @@ public class LocalORAMBenchmark {
 		//System.out.println("Old content: " + Arrays.toString(oldContent));
 	}
 
-	public static boolean evict(ORAM oram, int clientId, PositionMap positionMap, Stash stash, byte oldPathId,
+	public static boolean evict(ORAM oram, int clientId, PositionMap positionMap, Stash stash, int oldPathId,
 								Operation op, int changedAddress, int newVersionId) {
 		byte newPathId = generateRandomPathId();
 		if (op == Operation.WRITE){
@@ -89,7 +89,7 @@ public class LocalORAMBenchmark {
 			positionMap.setPathAt(changedAddress, newPathId);
 		}
 		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
-		Map<Byte, List<Integer>> commonPaths = new HashMap<>();
+		Map<Integer, List<Integer>> commonPaths = new HashMap<>();
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
 		for (int pathLocation : oldPathLocations) {
 			path.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
@@ -97,7 +97,7 @@ public class LocalORAMBenchmark {
 		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
 		for (Block block : stash.getBlocks()) {
 			int address = block.getAddress();
-			byte pathId = positionMap.getPathAt(address);
+			int pathId = positionMap.getPathAt(address);
 			List<Integer> commonPath = commonPaths.get(pathId);
 			if (commonPath == null) {
 				int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
@@ -122,7 +122,7 @@ public class LocalORAMBenchmark {
 		return oram.performEviction(encryptedStash, encryptedPositionMap, encryptedPath, clientId);
 	}
 
-	public static Stash getPS(ORAM oram, int clientId, byte pathId, PositionMaps positionMaps,
+	public static Stash getPS(ORAM oram, int clientId, int pathId, PositionMaps positionMaps,
 							  PositionMap mergedPositionMap) {
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(pathId, clientId);
 		StashesAndPaths stashesAndPaths = encryptionManager.decryptStashesAndPaths(oramContext,
@@ -210,16 +210,16 @@ public class LocalORAMBenchmark {
 
 	private static PositionMap mergePositionMaps(PositionMap[] positionMaps) {
 		int treeSize = oramContext.getTreeSize();
-		byte[] pathIds = new byte[treeSize];
+		int[] pathIds = new int[treeSize];
 		int[] versionIds = new int[treeSize];
 
 		for (int address = 0; address < treeSize; address++) {
-			byte recentPathId = ORAMUtils.DUMMY_PATH;
+			int recentPathId = ORAMUtils.DUMMY_PATH;
 			int recentVersionId = ORAMUtils.DUMMY_VERSION;
 			for (PositionMap positionMap : positionMaps) {
 				if (positionMap.getPathIds().length == 0)
 					continue;
-				byte pathId = positionMap.getPathAt(address);
+				int pathId = positionMap.getPathAt(address);
 				int versionId = positionMap.getVersionIdAt(address);
 				if (versionId != ORAMUtils.DUMMY_VERSION && versionId > recentVersionId) {
 					recentVersionId = versionId;
@@ -238,7 +238,7 @@ public class LocalORAMBenchmark {
 	}
 
 	private static EncryptedPositionMap initializeEmptyPositionMap() {
-		byte[] positionMap = new byte[0];
+		int[] positionMap = new int[0];
 		int[] versionIds = new int[0];
 		PositionMap pm = new PositionMap(versionIds, positionMap);
 		return encryptionManager.encryptPositionMap(pm);
