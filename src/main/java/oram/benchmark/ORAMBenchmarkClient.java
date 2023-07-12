@@ -37,17 +37,16 @@ public class ORAMBenchmarkClient {
 			Thread.sleep(10);
 		}
 
-		new Thread(() -> {
-			try {
-				latch.await();
-				logger.info("Executing experiment");
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}).start();
+		try {
+			latch.await();
+			logger.info("Executing experiment");
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private static class Client extends Thread {
+		private final Logger logger = LoggerFactory.getLogger("benchmark.oram");
 		private final int initialClientId;
 		private final ORAMManager oramManager;
 		private final int clientId;
@@ -66,10 +65,13 @@ public class ORAMBenchmarkClient {
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
+			System.err.println("[Client {" + clientId + "}] Before getting oram (" + measurementLeader + ")");
 			this.oram = oramManager.createORAM(oramId, treeHeight, bucketSize, blockSize);
+			System.err.println("[Client {" + clientId + "}] After creating oram (" + measurementLeader + ")");
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}
+			System.err.println("[Client {" + clientId + "}] After getting oram (" + measurementLeader + ")");
 
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
