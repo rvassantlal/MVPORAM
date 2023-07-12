@@ -115,12 +115,10 @@ public class ORAM {
 				}
 			}
 			List<OramSnapshot> previous = version.getPrevious();
-			synchronized (previous) {
-				for (OramSnapshot oramSnapshot : previous) {
-					if (!visitedVersionsPerSnapshot.contains(oramSnapshot.getVersionId())) {
-						visitedVersionsPerSnapshot.add(oramSnapshot.getVersionId());
-						queue.add(oramSnapshot);
-					}
+			for (OramSnapshot oramSnapshot : previous) {
+				if (!visitedVersionsPerSnapshot.contains(oramSnapshot.getVersionId())) {
+					visitedVersionsPerSnapshot.add(oramSnapshot.getVersionId());
+					queue.add(oramSnapshot);
 				}
 			}
 		}
