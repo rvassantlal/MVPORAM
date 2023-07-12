@@ -140,7 +140,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			bos.flush();
 			return new ConfidentialMessage(bos.toByteArray());
 		} catch (IOException e) {
-			logger.debug("Failed to serialize encrypted stashes and paths: {}", e.getMessage());
+			logger.error("Failed to serialize encrypted stashes and paths: {}", e.getMessage());
 			return new ConfidentialMessage();
 		} finally {
 			long end = System.nanoTime();
@@ -168,7 +168,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				bos.flush();
 				return new ConfidentialMessage(bos.toByteArray());
 			} catch (IOException e) {
-				logger.debug("Failed to serialize oram context: {}", e.getMessage());
+				logger.error("Failed to serialize oram context: {}", e.getMessage());
 				return new ConfidentialMessage();
 			}
 		}
@@ -189,7 +189,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			bos.flush();
 			return new ConfidentialMessage(bos.toByteArray());
 		} catch (IOException e) {
-			logger.debug("Failed to serialize position maps: {}", e.getMessage());
+			logger.error("Failed to serialize position maps: {}", e.getMessage());
 			return new ConfidentialMessage();
 		} finally {
 			long end = System.nanoTime();
