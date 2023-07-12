@@ -54,4 +54,20 @@
 		<appender-ref ref="MIN-STDOUT" />
 	</logger>
 
+	<logger name="communication" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
+
+	<logger name="state_transfer" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
+
+	<logger name="polynomial_generation" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
+
+	<logger name="confidential" level="INFO">
+		<appender-ref ref="MIN-STDOUT" />
+	</logger>
+
 </configuration>
