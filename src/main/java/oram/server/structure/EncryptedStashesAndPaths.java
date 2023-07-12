@@ -10,10 +10,10 @@ import java.util.*;
 
 public class EncryptedStashesAndPaths implements Externalizable {
 	private ORAMContext oramContext;
-	private Map<Double, EncryptedStash> encryptedStashes;
-	private Map<Double, EncryptedBucket[]> paths;
-	private Map<Double, Set<Double>> versionPaths;
-	private int doubles = 0;
+	private Map<Integer, EncryptedStash> encryptedStashes;
+	private Map<Integer, EncryptedBucket[]> paths;
+	private Map<Integer, Set<Integer>> versionPaths;
+	private int ints = 0;
 	private int buckets = 0;
 
 	public EncryptedStashesAndPaths() {
@@ -23,47 +23,47 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(Map<Double, EncryptedStash> encryptedStashes, Map<Double, EncryptedBucket[]> paths,
-									Map<Double, Set<Double>> versionPaths) {
+	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths,
+									Map<Integer, Set<Integer>> versionPaths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
 		this.versionPaths = versionPaths;
 	}
 
-	public Map<Double, EncryptedStash> getEncryptedStashes() {
+	public Map<Integer, EncryptedStash> getEncryptedStashes() {
 		return encryptedStashes;
 	}
 
-	public Map<Double, EncryptedBucket[]> getPaths() {
+	public Map<Integer, EncryptedBucket[]> getPaths() {
 		return paths;
 	}
 
-	public Map<Double, Set<Double>> getVersionPaths() {
+	public Map<Integer, Set<Integer>> getVersionPaths() {
 		return versionPaths;
 	}
 
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		out.writeInt(encryptedStashes.size());
-		for (Map.Entry<Double, EncryptedStash> entry : encryptedStashes.entrySet()) {
-			out.writeDouble(entry.getKey());
+		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
+			out.writeInt(entry.getKey());
 			entry.getValue().writeExternal(out);
 		}
 		out.writeInt(paths.size());
-		for (Map.Entry<Double, EncryptedBucket[]> entry : paths.entrySet()) {
-			out.writeDouble(entry.getKey());
+		for (Map.Entry<Integer, EncryptedBucket[]> entry : paths.entrySet()) {
+			out.writeInt(entry.getKey());
 			out.writeInt(entry.getValue().length);
 			for (EncryptedBucket encryptedBucket : entry.getValue()) {
 				encryptedBucket.writeExternal(out);
 			}
 		}
 		out.writeInt(versionPaths.size());
-		for (Map.Entry<Double, Set<Double>> entry : versionPaths.entrySet()) {
-			out.writeDouble(entry.getKey());
-			Set<Double> versionIds = entry.getValue();
+		for (Map.Entry<Integer, Set<Integer>> entry : versionPaths.entrySet()) {
+			out.writeInt(entry.getKey());
+			Set<Integer> versionIds = entry.getValue();
 			out.writeInt(versionIds.size());
-			for (double versionId : versionIds) {
-				out.writeDouble(versionId);
+			for (int versionId : versionIds) {
+				out.writeInt(versionId);
 			}
 		}
 	}
@@ -71,19 +71,19 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
 		int size = in.readInt();
-		doubles += size;
+		ints += size;
 		encryptedStashes = new HashMap<>(size);
 		while (size-- > 0) {
-			double versionId = in.readDouble();
+			int versionId = in.readInt();
 			EncryptedStash encryptedStash = new EncryptedStash();
 			encryptedStash.readExternal(in);
 			encryptedStashes.put(versionId, encryptedStash);
 		}
 		size = in.readInt();
-		doubles += size;
+		ints += size;
 		paths = new HashMap<>(size);
 		while (size-- > 0) {
-			double versionId = in.readDouble();
+			int versionId = in.readInt();
 			int nValues = in.readInt();
 			buckets += nValues;
 			EncryptedBucket[] encryptedBuckets = new EncryptedBucket[nValues];
@@ -97,18 +97,18 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		size = in.readInt();
 		versionPaths = new HashMap<>(size);
 		while (size-- > 0) {
-			double outstandingId = in.readDouble();
+			int outstandingId = in.readInt();
 			int nValues = in.readInt();
-			doubles += (nValues+1);
-			Set<Double> versionIds = new HashSet<>(nValues);
+			ints += (nValues+1);
+			Set<Integer> versionIds = new HashSet<>(nValues);
 			while (nValues-- > 0){
-				versionIds.add(in.readDouble());
+				versionIds.add(in.readInt());
 			}
 			versionPaths.put(outstandingId, versionIds);
 		}
 	}
 
 	public int getSize(ORAMContext oramContext) {
-		return doubles * 8 + buckets * oramContext.getBucketSize() * oramContext.getBlockSize();
+		return ints * 8 + buckets * oramContext.getBucketSize() * oramContext.getBlockSize();
 	}
 }

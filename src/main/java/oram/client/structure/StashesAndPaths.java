@@ -6,26 +6,26 @@ import java.util.Set;
 
 public class StashesAndPaths {
 
-	private final Map<Double, Stash> stashes;
-	private final Map<Double, Bucket[]> paths;
-	private final Map<Double, Set<Double>> versionPaths;
+	private final Map<Integer, Stash> stashes;
+	private final Map<Integer, Bucket[]> paths;
+	private final Map<Integer, Set<Integer>> versionPaths;
 
-	public StashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths,
-						   Map<Double, Set<Double>> versionPaths) {
+	public StashesAndPaths(Map<Integer, Stash> stashes, Map<Integer, Bucket[]> paths,
+						   Map<Integer, Set<Integer>> versionPaths) {
 		this.stashes = stashes;
 		this.paths = paths;
 		this.versionPaths = versionPaths;
 	}
 
-	public Map<Double, Stash> getStashes() {
+	public Map<Integer, Stash> getStashes() {
 		return stashes;
 	}
 
-	public Map<Double, Bucket[]> getPaths() {
+	public Map<Integer, Bucket[]> getPaths() {
 		return paths;
 	}
 
-	public Map<Double, Set<Double>> getVersionPaths() {
+	public Map<Integer, Set<Integer>> getVersionPaths() {
 		return versionPaths;
 	}
 

@@ -7,13 +7,13 @@ import java.io.ObjectOutput;
 
 public class EncryptedPositionMaps implements Externalizable {
 
-	private double newVersionId;
-	private double[] outstandingVersionIds;
+	private int newVersionId;
+	private int[] outstandingVersionIds;
 	private EncryptedPositionMap[] encryptedPositionMaps;
 
 	public EncryptedPositionMaps(){}
 
-	public EncryptedPositionMaps(double newVersionId, double[] outstandingVersionIds,
+	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
 								 EncryptedPositionMap[] encryptedPositionMaps) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
@@ -22,10 +22,10 @@ public class EncryptedPositionMaps implements Externalizable {
 
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeDouble(newVersionId);
+		out.writeInt(newVersionId);
 		out.writeInt(outstandingVersionIds.length);
-		for (double outstandingVersionId : outstandingVersionIds) {
-			out.writeDouble(outstandingVersionId);
+		for (int outstandingVersionId : outstandingVersionIds) {
+			out.writeInt(outstandingVersionId);
 		}
 		for (EncryptedPositionMap encryptedPositionMap : encryptedPositionMaps) {
 			encryptedPositionMap.writeExternal(out);
@@ -34,12 +34,12 @@ public class EncryptedPositionMaps implements Externalizable {
 
 	@Override
 	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-		newVersionId = in.readDouble();
+		newVersionId = in.readInt();
 		int size = in.readInt();
-		outstandingVersionIds = new double[size];
+		outstandingVersionIds = new int[size];
 		encryptedPositionMaps = new EncryptedPositionMap[size];
 		for (int i = 0; i < size; i++) {
-			outstandingVersionIds[i] = in.readDouble();
+			outstandingVersionIds[i] = in.readInt();
 		}
 		for (int i = 0; i < size; i++) {
 			EncryptedPositionMap e = new EncryptedPositionMap();
@@ -48,7 +48,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		}
 	}
 
-	public double[] getOutstandingVersionIds() {
+	public int[] getOutstandingVersionIds() {
 		return outstandingVersionIds;
 	}
 
@@ -56,7 +56,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		return encryptedPositionMaps;
 	}
 
-	public double getNewVersionId() {
+	public int getNewVersionId() {
 		return newVersionId;
 	}
 }

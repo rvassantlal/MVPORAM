@@ -6,14 +6,14 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
 public class PositionMaps implements Externalizable {
-	private double newVersionId;
-	private double[] outstandingVersionIds;
+	private int newVersionId;
+	private int[] outstandingVersionIds;
 	private PositionMap[] positionMaps;
 
 	public PositionMaps() {
 	}
 
-	public PositionMaps(double newVersionId, double[] outstandingVersionIds,
+	public PositionMaps(int newVersionId, int[] outstandingVersionIds,
 						PositionMap[] positionMaps) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
@@ -22,10 +22,10 @@ public class PositionMaps implements Externalizable {
 
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeDouble(newVersionId);
+		out.writeInt(newVersionId);
 		out.writeInt(outstandingVersionIds.length);
-		for (double outstandingVersionId : outstandingVersionIds) {
-			out.writeDouble(outstandingVersionId);
+		for (int outstandingVersionId : outstandingVersionIds) {
+			out.writeInt(outstandingVersionId);
 		}
 		for (PositionMap positionMap : positionMaps) {
 			positionMap.writeExternal(out);
@@ -34,12 +34,12 @@ public class PositionMaps implements Externalizable {
 
 	@Override
 	public void readExternal(ObjectInput in) throws IOException {
-		newVersionId = in.readDouble();
+		newVersionId = in.readInt();
 		int size = in.readInt();
-		outstandingVersionIds = new double[size];
+		outstandingVersionIds = new int[size];
 		positionMaps = new PositionMap[size];
 		for (int i = 0; i < size; i++) {
-			outstandingVersionIds[i] = in.readDouble();
+			outstandingVersionIds[i] = in.readInt();
 		}
 		for (int i = 0; i < size; i++) {
 			PositionMap e = new PositionMap();
@@ -48,7 +48,7 @@ public class PositionMaps implements Externalizable {
 		}
 	}
 
-	public double[] getOutstandingVersionIds() {
+	public int[] getOutstandingVersionIds() {
 		return outstandingVersionIds;
 	}
 
@@ -56,7 +56,7 @@ public class PositionMaps implements Externalizable {
 		return positionMaps;
 	}
 
-	public double getNewVersionId() {
+	public int getNewVersionId() {
 		return newVersionId;
 	}
 

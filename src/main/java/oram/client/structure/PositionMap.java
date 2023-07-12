@@ -10,12 +10,12 @@ import java.io.ObjectOutput;
 public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
 	private byte[] pathIds;
-	private double[] versionIds;
+	private int[] versionIds;
 
 	public PositionMap() {
 	}
 
-	public PositionMap(double[] versionIds, byte[] pathIds) {
+	public PositionMap(int[] versionIds, byte[] pathIds) {
 		this.versionIds = versionIds;
 		this.pathIds = pathIds;
 	}
@@ -32,15 +32,15 @@ public class PositionMap implements Externalizable {
 		return pathIds;
 	}
 
-	public double getVersionIdAt(int address) {
+	public int getVersionIdAt(int address) {
 		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
 	}
 
-	public double[] getVersionIds() {
+	public int[] getVersionIds() {
 		return versionIds;
 	}
 
-	public void setVersionIdAt(int address, double newVersionId) {
+	public void setVersionIdAt(int address, int newVersionId) {
 		versionIds[address] = newVersionId;
 	}
 
@@ -49,7 +49,7 @@ public class PositionMap implements Externalizable {
 		out.writeInt(pathIds == null ? -1 : pathIds.length);
 		for (int i = 0; i < pathIds.length; i++) {
 			out.write(pathIds[i]);
-			out.writeDouble(versionIds[i]);
+			out.writeInt(versionIds[i]);
 		}
 	}
 
@@ -58,10 +58,10 @@ public class PositionMap implements Externalizable {
 		int size = in.readInt();
 		if (size != -1) {
 			pathIds = new byte[size];
-			versionIds = new double[size];
+			versionIds = new int[size];
 			for (int i = 0; i < size; i++) {
 				pathIds[i] = (byte) in.read();
-				versionIds[i] = in.readDouble();
+				versionIds[i] = in.readInt();
 			}
 		}
 	}

@@ -130,7 +130,7 @@ public class ORAMObject {
 	}
 
 	public boolean evict(PositionMap positionMap, Stash stash, byte oldPathId,
-						 Operation op, int changedAddress, double newVersionId) {
+						 Operation op, int changedAddress, int newVersionId) {
 		byte newPathId = generateRandomPathId();
 		if (op == Operation.WRITE) {
 			positionMap.setVersionIdAt(changedAddress, newVersionId);
@@ -204,14 +204,14 @@ public class ORAMObject {
 		return (byte) rndGenerator.nextInt(1 << oramContext.getTreeHeight()); //2^height
 	}
 
-	private Stash mergeStashesAndPaths(Map<Double, Stash> stashes, Map<Double, Bucket[]> paths,
-									   Map<Double, Set<Double>> versionPaths, PositionMaps positionMaps,
+	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Map<Integer, Bucket[]> paths,
+									   Map<Integer, Set<Integer>> versionPaths, PositionMaps positionMaps,
 									   PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
-		Map<Integer, Double> recentVersionIds = new HashMap<>();
+		Map<Integer, Integer> recentVersionIds = new HashMap<>();
 		PositionMap[] positionMapsArray = positionMaps.getPositionMaps();
-		double[] outstandingIds = positionMaps.getOutstandingVersionIds();
-		Map<Double, PositionMap> positionMapPerVersion = new HashMap<>(outstandingIds.length);
+		int[] outstandingIds = positionMaps.getOutstandingVersionIds();
+		Map<Integer, PositionMap> positionMapPerVersion = new HashMap<>(outstandingIds.length);
 		for (int i = 0; i < outstandingIds.length; i++) {
 			positionMapPerVersion.put(outstandingIds[i], positionMapsArray[i]);
 		}
@@ -226,11 +226,11 @@ public class ORAMObject {
 		return mergedStash;
 	}
 
-	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							Map<Double, Bucket[]> paths, Map<Double, Set<Double>> versionPaths,
-							Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
-		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
-		for (Map.Entry<Double, Bucket[]> entry : paths.entrySet()) {
+	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
+							Map<Integer, Bucket[]> paths, Map<Integer, Set<Integer>> versionPaths,
+							Map<Integer, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
+		for (Map.Entry<Integer, Bucket[]> entry : paths.entrySet()) {
 			List<Block> blocks = new LinkedList<>();
 			for (Bucket bucket : entry.getValue()) {
 				for (Block block : bucket.readBucket()) {
@@ -244,26 +244,26 @@ public class ORAMObject {
 		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
 	}
 
-	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-							  Map<Double, Stash> stashes, Map<Double, Set<Double>> versionPaths,
-							  Map<Double, PositionMap> positionMaps, PositionMap mergedPositionMap) {
-		Map<Double, List<Block>> blocksToMerge = new HashMap<>();
-		for (Map.Entry<Double, Stash> entry : stashes.entrySet()) {
+	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
+							  Map<Integer, Stash> stashes, Map<Integer, Set<Integer>> versionPaths,
+							  Map<Integer, PositionMap> positionMaps, PositionMap mergedPositionMap) {
+		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
+		for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
 			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
 		}
 		selectRecentBlocks(recentBlocks, recentVersionIds, versionPaths, positionMaps, mergedPositionMap, blocksToMerge);
 	}
 
-	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Double> recentVersionIds,
-									Map<Double, Set<Double>> versionPaths, Map<Double, PositionMap> positionMaps,
-									PositionMap mergedPositionMap, Map<Double, List<Block>> blocksToMerge) {
-		for (Map.Entry<Double, List<Block>> entry : blocksToMerge.entrySet()) {
-			Set<Double> outstandingTreeIds = versionPaths.get(entry.getKey());
+	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
+									Map<Integer, Set<Integer>> versionPaths, Map<Integer, PositionMap> positionMaps,
+									PositionMap mergedPositionMap, Map<Integer, List<Block>> blocksToMerge) {
+		for (Map.Entry<Integer, List<Block>> entry : blocksToMerge.entrySet()) {
+			Set<Integer> outstandingTreeIds = versionPaths.get(entry.getKey());
 			for (Block block : entry.getValue()) {
-				for (double outstandingTreeId : outstandingTreeIds) {
+				for (int outstandingTreeId : outstandingTreeIds) {
 					PositionMap outstandingPositionMap = positionMaps.get(outstandingTreeId);
 					int blockAddress = block.getAddress();
-					double blockVersionIdInOutstandingTree = outstandingPositionMap.getVersionIdAt(blockAddress);
+					int blockVersionIdInOutstandingTree = outstandingPositionMap.getVersionIdAt(blockAddress);
 					if (blockVersionIdInOutstandingTree == mergedPositionMap.getVersionIdAt(blockAddress)) {
 						recentBlocks.put(blockAddress, block);
 						recentVersionIds.put(blockAddress, blockVersionIdInOutstandingTree);
@@ -292,16 +292,16 @@ public class ORAMObject {
 	private PositionMap mergePositionMaps(PositionMap[] positionMaps) {
 		int treeSize = oramContext.getTreeSize();
 		byte[] pathIds = new byte[treeSize];
-		double[] versionIds = new double[treeSize];
+		int[] versionIds = new int[treeSize];
 
 		for (int address = 0; address < treeSize; address++) {
 			byte recentPathId = ORAMUtils.DUMMY_PATH;
-			double recentVersionId = ORAMUtils.DUMMY_VERSION;
+			int recentVersionId = ORAMUtils.DUMMY_VERSION;
 			for (PositionMap positionMap : positionMaps) {
 				if (positionMap.getPathIds().length == 0)
 					continue;
 				byte pathId = positionMap.getPathAt(address);
-				double versionId = positionMap.getVersionIdAt(address);
+				int versionId = positionMap.getVersionIdAt(address);
 				if (versionId > recentVersionId) {
 					recentVersionId = versionId;
 					recentPathId = pathId;
