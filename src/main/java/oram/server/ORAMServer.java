@@ -113,7 +113,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				request.getEncryptedPath(), msgCtx.getSender());
 		long end = System.nanoTime();
 		long delay = end - start;
-		logger.info("eviction[ns]: {}", delay/1_000_000);
+		logger.info("eviction[ns]: {}", delay);
 		evictCounter++;
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
@@ -145,7 +145,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
-			logger.info("getPathStash[ns]: {}", delay/1_000_000);
+			logger.info("getPathStash[ns]: {}", delay);
 			getPSCounter++;
 		}
 	}
@@ -194,7 +194,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
-			logger.info("getPositionMap[ns]: {}", delay/1_000_000);
+			logger.info("getPositionMap[ns]: {}", delay);
 			getPMCounter++;
 		}
 	}
