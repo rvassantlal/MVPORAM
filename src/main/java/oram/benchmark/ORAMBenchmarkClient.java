@@ -65,14 +65,10 @@ public class ORAMBenchmarkClient {
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
-			System.err.println("[Client {" + clientId + "}] Before getting oram (" + measurementLeader + ")");
 			this.oram = oramManager.createORAM(oramId, treeHeight, bucketSize, blockSize);
-			System.err.println("[Client {" + clientId + "}] After creating oram (" + measurementLeader + ")");
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}
-			System.err.println("[Client {" + clientId + "}] After getting oram (" + measurementLeader + ")");
-
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
 			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
@@ -93,7 +89,6 @@ public class ORAMBenchmarkClient {
 					delay = t2 - t1;
 					if (!Arrays.equals(blockContent, oldContent)) {
 						logger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
-						break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
 						logger.info("M: " + delay);

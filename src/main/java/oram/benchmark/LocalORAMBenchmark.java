@@ -1,17 +1,7 @@
 package oram.benchmark;
 
-import oram.client.EncryptionManager;
-import oram.client.structure.*;
-import oram.server.structure.*;
-import oram.utils.ORAMContext;
-import oram.utils.ORAMUtils;
-import oram.utils.Operation;
-
-import java.security.SecureRandom;
-import java.util.*;
-
 public class LocalORAMBenchmark {
-	private static EncryptionManager encryptionManager;
+	/*private static EncryptionManager encryptionManager;
 	private static ORAMContext oramContext;
 	private static SecureRandom rndGenerator;
 
@@ -204,7 +194,7 @@ public class LocalORAMBenchmark {
 	}
 
 	private static PositionMaps getPositionsMaps(ORAM oram, int clientId) {
-		EncryptedPositionMaps encryptedPositionMaps = oram.getPositionMaps(clientId);
+		EncryptedPositionMaps encryptedPositionMaps = oram.getPositionMaps(clientId, request.getLastVersion());
 		return encryptionManager.decryptPositionMaps(encryptedPositionMaps);
 	}
 
@@ -229,7 +219,7 @@ public class LocalORAMBenchmark {
 			pathIds[address] = recentPathId;
 			versionIds[address] = recentVersionId;
 		}
-		return new PositionMap(versionIds, pathIds);
+		return new PositionMap(versionIds, pathIds, address);
 	}
 
 	private static EncryptedStash initializeEmptyStash(int blockSize) {
@@ -240,7 +230,7 @@ public class LocalORAMBenchmark {
 	private static EncryptedPositionMap initializeEmptyPositionMap() {
 		int[] positionMap = new int[0];
 		int[] versionIds = new int[0];
-		PositionMap pm = new PositionMap(versionIds, positionMap);
+		PositionMap pm = new PositionMap(versionIds, positionMap, address);
 		return encryptionManager.encryptPositionMap(pm);
-	}
+	}*/
 }

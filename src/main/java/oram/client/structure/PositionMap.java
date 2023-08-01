@@ -9,63 +9,65 @@ import java.io.ObjectOutput;
 
 public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
-	private int[] pathIds;
-	private int[] versionIds;
+	private int pathId;
+	private int versionId;
+
+	private int address;
 
 	public PositionMap() {
 	}
 
-	public PositionMap(int[] versionIds, int[] pathIds) {
-		this.versionIds = versionIds;
-		this.pathIds = pathIds;
+	public PositionMap(int versionId, int pathId, int address) {
+		this.versionId = versionId;
+		this.pathId = pathId;
+		this.address = address;
 	}
 
 	public int getPathAt(int address) {
-		return pathIds == null || pathIds.length < address ? ORAMUtils.DUMMY_PATH : pathIds[address];
+		return address != this.address ? ORAMUtils.DUMMY_PATH : pathId;
 	}
 
 	public void setPathAt(int address, int pathId) {
-		pathIds[address] = pathId;
+		if (address == this.address)
+			this.pathId = pathId;
 	}
 
-	public int[] getPathIds() {
-		return pathIds;
+	public int getPathId() {
+		return pathId;
 	}
 
 	public int getVersionIdAt(int address) {
-		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
+		return address != this.address ? ORAMUtils.DUMMY_PATH : versionId;
 	}
 
-	public int[] getVersionIds() {
-		return versionIds;
+	public int getVersionId() {
+		return versionId;
 	}
 
 	public void setVersionIdAt(int address, int newVersionId) {
-		versionIds[address] = newVersionId;
+		if (address == this.address)
+			versionId = newVersionId;
 	}
 
+	public int getAddress() {
+		return address;
+	}
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeInt(pathIds == null ? -1 : pathIds.length);
-		for (int i = 0; i < pathIds.length; i++) {
-			out.writeInt(pathIds[i]);
-			out.writeInt(versionIds[i]);
-		}
+		out.writeInt(address);
+		out.writeInt(pathId);
+		out.writeInt(versionId);
 	}
 
 	@Override
 	public void readExternal(ObjectInput in) throws IOException {
-		int size = in.readInt();
-		if (size != -1) {
-			pathIds = new int[size];
-			versionIds = new int[size];
-			for (int i = 0; i < size; i++) {
-				pathIds[i] = in.readInt();
-				versionIds[i] = in.readInt();
-			}
-		}
+		address = in.readInt();
+		pathId = in.readInt();
+		versionId = in.readInt();
 	}
 
+
+	/*
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -73,5 +75,5 @@ public class PositionMap implements Externalizable {
 			sb.append("( ").append(i).append(", ").append(pathIds[i]).append(", ").append(versionIds[i]).append(") ");
 		}
 		return sb.toString();
-	}
+	}*/
 }

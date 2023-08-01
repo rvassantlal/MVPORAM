@@ -12,15 +12,18 @@ import java.util.Objects;
 public class Block implements Externalizable {
 	private final int blockSize;
 	private int address;
+
+	private int versionId;
 	private byte[] content;
 
 	public Block(int blockSize) {
 		this.blockSize = blockSize;
 	}
 
-	public Block(int blockSize, int address, byte[] newContent) {
+	public Block(int blockSize, int address,int versionId, byte[] newContent) {
 		this.address = address;
 		this.content = newContent;
+		this.versionId = versionId;
 		this.blockSize = blockSize;
 	}
 
@@ -39,6 +42,7 @@ public class Block implements Externalizable {
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		out.writeInt(address);
+		out.writeInt(versionId);
 		byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
 		int emptyBytes = blockSize - content.length;
 		byte[] serializedNEmptyBytes = ORAMUtils.toBytes(emptyBytes);
@@ -49,6 +53,7 @@ public class Block implements Externalizable {
 	@Override
 	public void readExternal(ObjectInput in) throws IOException {
 		address = in.readInt();
+		versionId = in.readInt();
 		byte[] paddedContent = new byte[blockSize + 4];
 		in.readFully(paddedContent);
 		byte[] serializedNEmptyBytes = new byte[4];
@@ -76,5 +81,13 @@ public class Block implements Externalizable {
 	public String toString() {
 		String contentString = content == null ? "null" : new String(content);
 		return "Block{" + address + ", " + contentString + '}';
+	}
+
+    public int getVersionId() {
+		return versionId;
+    }
+
+	public void setVersionId(int versionId) {
+		this.versionId = versionId;
 	}
 }
