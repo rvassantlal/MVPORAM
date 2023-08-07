@@ -24,6 +24,10 @@ public class ORAMUtils {
 		return nNodes;
 	}
 
+	public static int computeTreeSize(int treeHeight, int bucketSize) {
+		return computeNumberOfNodes(treeHeight) * bucketSize;
+	}
+
 	public static int[] computePathLocations(int pathId, int treeHeight) {
 		int offset = pathId;
 		int[] locations = new int[treeHeight + 1];

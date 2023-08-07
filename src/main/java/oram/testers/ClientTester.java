@@ -23,7 +23,7 @@ public class ClientTester {
 		int oramHeight = 3;
 		int bucketSize = 4;
 		int blockSize = 32;
-		int maxAddress = ORAMUtils.computeNumberOfNodes(oramHeight);
+		int maxAddress = ORAMUtils.computeNumberOfNodes(oramHeight) * bucketSize;
 		ORAMManager oramManager = new ORAMManager(clientId);
 
 		ORAMObject oram = oramManager.getORAM(oramId);

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Arrays;
+import java.util.Objects;
 
 public class EncryptedBucket implements Externalizable {
 	private final byte[][] blocks;
@@ -49,6 +50,21 @@ public class EncryptedBucket implements Externalizable {
 			blocks[i] = new byte[in.readInt()];
 			in.readFully(blocks[i]);
 		}
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		EncryptedBucket that = (EncryptedBucket) o;
+		return tainted == that.tainted && Arrays.equals(blocks, that.blocks);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = Objects.hash(tainted);
+		result = 31 * result + Arrays.hashCode(blocks);
+		return result;
 	}
 
 	@Override

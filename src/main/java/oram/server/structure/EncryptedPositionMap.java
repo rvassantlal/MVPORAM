@@ -4,6 +4,7 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Arrays;
 
 public class EncryptedPositionMap implements Externalizable {
 	private byte[] encryptedPositionMap;
@@ -32,5 +33,10 @@ public class EncryptedPositionMap implements Externalizable {
 			encryptedPositionMap = new byte[len];
 			in.readFully(encryptedPositionMap);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return String.valueOf(Arrays.hashCode(encryptedPositionMap));
 	}
 }

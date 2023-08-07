@@ -97,7 +97,7 @@ public class MultiCaseTester {
 									 int treeHeight, int nBlocksPerBucket, int blockSize, String identifier)
 			throws InterruptedException {
 
-		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
+		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight) * nBlocksPerBucket;
 
 		oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 		Queue<Integer> times = new ConcurrentLinkedQueue<>();

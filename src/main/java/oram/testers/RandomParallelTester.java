@@ -34,7 +34,7 @@ public class RandomParallelTester {
 		int treeHeight = 3;
 		int nBlocksPerBucket = 4;
 		int blockSize = 512;
-		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
+		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight) * nBlocksPerBucket;
 
 		oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 

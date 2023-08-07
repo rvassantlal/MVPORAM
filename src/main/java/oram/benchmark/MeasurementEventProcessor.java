@@ -33,6 +33,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 
 	@Override
 	public void process(String line) {
+		logger.debug(line);
 		if (!isReady) {
 			if (line.contains(SERVER_READY_PATTERN)) {
 				isReady = true;

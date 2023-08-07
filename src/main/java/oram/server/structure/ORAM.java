@@ -20,7 +20,7 @@ public class ORAM {
 				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.allTrees = new ArrayList<>();
-		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
+		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 		this.oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 		logger.debug("Total number of blocks: {}", treeSize);
 		this.outstandingTrees = new LinkedList<>();
@@ -236,6 +236,14 @@ public class ORAM {
 			if (i % 7 == 0 && i != 0)
 				sb.append("\n");
 		}
+		return sb.toString();
+	}
+
+	public String printInfo() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("version #: ").append(sequenceNumber).append(" | ");
+		sb.append("#outstanding trees: ").append(outstandingTrees.size()).append(" | ");
+		sb.append("#all trees: ").append(allTrees.size());
 		return sb.toString();
 	}
 }

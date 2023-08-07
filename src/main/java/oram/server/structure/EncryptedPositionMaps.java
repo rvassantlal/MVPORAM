@@ -4,6 +4,7 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Arrays;
 
 public class EncryptedPositionMaps implements Externalizable {
 
@@ -58,5 +59,14 @@ public class EncryptedPositionMaps implements Externalizable {
 
 	public int getNewVersionId() {
 		return newVersionId;
+	}
+
+	@Override
+	public String toString() {
+		return "EncryptedPositionMaps{" +
+				"newVersionId=" + newVersionId +
+				", outstandingVersionIds=" + Arrays.hashCode(outstandingVersionIds) +
+				", encryptedPositionMaps=" + Arrays.toString(encryptedPositionMaps) +
+				'}';
 	}
 }

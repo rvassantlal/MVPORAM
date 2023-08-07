@@ -45,24 +45,50 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		out.writeInt(encryptedStashes.size());
-		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
-			out.writeInt(entry.getKey());
-			entry.getValue().writeExternal(out);
+		int[] keys = new int[encryptedStashes.size()];
+		int i = 0;
+		for (int key : encryptedStashes.keySet()) {
+			keys[i++] = key;
+		}
+		Arrays.sort(keys);
+		for (int key : keys) {
+			out.writeInt(key);
+			encryptedStashes.get(key).writeExternal(out);
 		}
 		out.writeInt(paths.size());
-		for (Map.Entry<Integer, EncryptedBucket[]> entry : paths.entrySet()) {
-			out.writeInt(entry.getKey());
-			out.writeInt(entry.getValue().length);
-			for (EncryptedBucket encryptedBucket : entry.getValue()) {
+		keys = new int[paths.size()];
+		i = 0;
+		for (int key : paths.keySet()) {
+			keys[i++] = key;
+		}
+		Arrays.sort(keys);
+		for (int key : keys) {
+			out.writeInt(key);
+			EncryptedBucket[] encryptedBuckets = paths.get(key);
+			out.writeInt(encryptedBuckets.length);
+			for (EncryptedBucket encryptedBucket : encryptedBuckets) {
 				encryptedBucket.writeExternal(out);
 			}
 		}
+
 		out.writeInt(versionPaths.size());
-		for (Map.Entry<Integer, Set<Integer>> entry : versionPaths.entrySet()) {
-			out.writeInt(entry.getKey());
-			Set<Integer> versionIds = entry.getValue();
+		keys = new int[versionPaths.size()];
+		i = 0;
+		for (int key : versionPaths.keySet()) {
+			keys[i++] = key;
+		}
+		Arrays.sort(keys);
+		for (int key : keys) {
+			out.writeInt(key);
+			Set<Integer> versionIds = versionPaths.get(key);
 			out.writeInt(versionIds.size());
-			for (int versionId : versionIds) {
+			int[] orderedVersionIds = new int[versionIds.size()];
+			int j = 0;
+			for (int value : versionIds) {
+				orderedVersionIds[j++] = value;
+			}
+			Arrays.sort(orderedVersionIds);
+			for (int versionId : orderedVersionIds) {
 				out.writeInt(versionId);
 			}
 		}

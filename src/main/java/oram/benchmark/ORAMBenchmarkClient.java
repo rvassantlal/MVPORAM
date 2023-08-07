@@ -65,17 +65,14 @@ public class ORAMBenchmarkClient {
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
-			System.err.println("[Client {" + clientId + "}] Before getting oram (" + measurementLeader + ")");
 			this.oram = oramManager.createORAM(oramId, treeHeight, bucketSize, blockSize);
-			System.err.println("[Client {" + clientId + "}] After creating oram (" + measurementLeader + ")");
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}
-			System.err.println("[Client {" + clientId + "}] After getting oram (" + measurementLeader + ")");
 
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
 			this.address = clientId % treeSize;
 		}
 

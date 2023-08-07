@@ -46,7 +46,7 @@ public class ORAMManager {
 			if (status == Status.FAILED) {
 				return null;
 			}
-			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
 			ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
@@ -74,7 +74,7 @@ public class ORAMManager {
 				}
 				int bucketSize = in.readInt();
 				int blockSize = in.readInt();
-				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
 				ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
