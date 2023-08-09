@@ -99,7 +99,10 @@ public class EncryptionManager {
 	}
 
 	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
-		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
+		byte[] encryptedPositionMapContent = encryptedPositionMap.getEncryptedPositionMap();
+		if(encryptedPositionMapContent == null)
+			return new PositionMap();
+		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMapContent);
 		PositionMap deserializedPositionMap = new PositionMap();
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
@@ -192,7 +195,7 @@ public class EncryptionManager {
 		Block[] blocks = bucket.readBucket();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
-				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_BLOCK);
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_BLOCK);
 			}
 		}
 	}

@@ -8,24 +8,18 @@ import java.util.*;
 public class OramSnapshot implements Serializable, Comparable {
 	private final Integer versionId;
 	private final List<OramSnapshot> previous;
-	private EncryptedPositionMap positionMap;
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
 
-	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
-						EncryptedStash encryptedStash) {
+	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedStash encryptedStash) {
 		this.versionId = versionId;
 		this.difTree = new TreeMap<>();
-		positionMap = encryptedPositionMap;
 		stash = encryptedStash;
 		previous = new LinkedList<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
-	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions, TreeSet<OramSnapshot> versions) {
-		if(!versions.contains(this)){
-			this.positionMap = null;
-		}
+	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions) {
 		if (!visitedVersions.contains(versionId)) {
 			visitedVersions.add(versionId);
 			for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
@@ -38,15 +32,12 @@ public class OramSnapshot implements Serializable, Comparable {
 			}
 			if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
 				for (OramSnapshot oramSnapshot : previous) {
-					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions, versions);
+					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions);
 				}
 			}
 		}
 	}
 
-	public EncryptedPositionMap getPositionMap() {
-		return positionMap;
-	}
 
 	public List<OramSnapshot> getPrevious() {
 		return previous;

@@ -5,10 +5,7 @@ import confidential.ConfidentialMessage;
 import confidential.facade.server.ConfidentialServerFacade;
 import confidential.facade.server.ConfidentialSingleExecutable;
 import confidential.statemanagement.ConfidentialSnapshot;
-import oram.messages.CreateORAMMessage;
-import oram.messages.EvictionORAMMessage;
-import oram.messages.ORAMMessage;
-import oram.messages.StashPathORAMMessage;
+import oram.messages.*;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ServerOperationType;
@@ -60,9 +57,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return getORAM(request);
 				case GET_POSITION_MAP:
-					request = new ORAMMessage();
+					request = new GetPositionMapMessage();
 					request.readExternal(in);
-					return getPositionMap(request, msgCtx);
+					return getPositionMap((GetPositionMapMessage) request, msgCtx);
 				case GET_STASH_AND_PATH:
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
@@ -174,13 +171,13 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(ORAMMessage request, MessageContext msgCtx) {
+	private ConfidentialMessage getPositionMap(GetPositionMapMessage request, MessageContext msgCtx) {
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender());
+		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender(), request.getLastVersion());
 
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
