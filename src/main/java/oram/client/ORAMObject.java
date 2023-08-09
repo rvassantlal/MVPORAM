@@ -285,7 +285,7 @@ public class ORAMObject {
 	private void mergePositionMaps(PositionMap[] positionMaps) {
 		for (PositionMap map:positionMaps) {
 			int address = map.getAddress();
-			if(map.getVersionId() > mergedPositionMap.getVersionIdAt(address)) {
+			if(address != ORAMUtils.DUMMY_ADDRESS && map.getVersionId() > mergedPositionMap.getVersionIdAt(address)) {
 				mergedPositionMap.setPathAt(address, map.getPathId());
 				mergedPositionMap.setVersionIdAt(address, map.getVersionId());
 			}
