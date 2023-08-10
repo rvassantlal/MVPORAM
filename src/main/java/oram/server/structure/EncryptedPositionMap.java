@@ -32,8 +32,6 @@ public class EncryptedPositionMap implements Externalizable {
 		if (len != -1) {
 			encryptedPositionMap = new byte[len];
 			in.readFully(encryptedPositionMap);
-		}else {
-			encryptedPositionMap = null;
 		}
 	}
 

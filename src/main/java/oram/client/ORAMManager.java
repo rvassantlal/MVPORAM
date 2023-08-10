@@ -89,10 +89,9 @@ public class ORAMManager {
 	}
 
 	private EncryptedPositionMap initializeEmptyPositionMap() {
-		int pathId = ORAMUtils.DUMMY_PATH;
-		int versionId = ORAMUtils.DUMMY_VERSION;
-		int address = ORAMUtils.DUMMY_ADDRESS;
-		PositionMap pm = new PositionMap(versionId, pathId, address);
+		int[] positionMap = new int[0];
+		int[] versionIds = new int[0];
+		PositionMap pm = new PositionMap(versionIds, positionMap);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 
