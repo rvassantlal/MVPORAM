@@ -334,7 +334,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		} else {
 			logger.debug("Received server measurement results");
 			processServerMeasurementResults(measurements[0], measurements[1], measurements[2], measurements[3],
-					measurements[4], measurements[5], measurements[6], measurements[7]);
+					measurements[4], measurements[5], measurements[6], measurements[7], measurements[8], measurements[9]);
 		}
 
 		measurementDeliveredCounter.countDown();
@@ -343,8 +343,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private void processClientMeasurementResults(long[] latencies) {
 		saveClientMeasurements(round, latencies);
 		Storage st = new Storage(latencies);
-		logger.info("Client Measurement[ms] - avg:{} dev:{} max:{}", st.getAverage(true) / 1000000,
-				st.getDP(true) / 1000000, st.getMax(true) / 1000000);
+		logger.info("Client Measurement[ms] - avg:{} dev:{} max:{} [{} samples]", st.getAverage(true) / 1000000,
+				st.getDP(true) / 1000000, st.getMax(true) / 1000000, latencies.length);
 		avgLatency[round - 1] = st.getAverage(true);
 		latencyDev[round - 1] = st.getDP(true);
 		maxLatency[round - 1] = st.getMax(true);
@@ -352,21 +352,31 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	private void processServerMeasurementResults(long[] clients, long[] delta, long[] nGetPMRequests,
 												 long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
-												 long[] getPSLatency, long[] evictionLatency) {
+												 long[] getPSLatency, long[] evictionLatency,
+												 long[] outstanding, long[] totalTrees) {
 		saveServerMeasurements(round, clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests,
-				getPMLatency, getPSLatency, evictionLatency);
+				getPMLatency, getPSLatency, evictionLatency, outstanding, totalTrees);
 		long[] evictionThroughput = new long[clients.length];
 		long minClients = Long.MAX_VALUE;
 		long maxClients = Long.MIN_VALUE;
+		long minOutstanding = Long.MAX_VALUE;
+		long maxOutstanding = Long.MIN_VALUE;
+		long minTotalTrees = Long.MAX_VALUE;
+		long maxTotalTrees = Long.MIN_VALUE;
 		int size = clients.length;
 		for (int i = 0; i < size; i++) {
 			minClients = Long.min(minClients, clients[i]);
 			maxClients = Long.max(maxClients, clients[i]);
+			minOutstanding = Long.min(minOutstanding, outstanding[i]);
+			maxOutstanding = Long.max(maxOutstanding, outstanding[i]);
+			minTotalTrees = Long.min(minTotalTrees, totalTrees[i]);
+			maxTotalTrees = Long.max(maxTotalTrees, totalTrees[i]);
 			evictionThroughput[i] = (long) (nEvictionRequests[i] / (delta[i] / 1_000_000_000.0));
 		}
 		Storage st = new Storage(evictionThroughput);
-		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{}",
-				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients);
+		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{} | minOutstanding:{} maxOutstanding:{} | minTotalTrees:{} maxTotalTrees:{} [{} samples]",
+				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients,
+				minOutstanding, maxOutstanding, minTotalTrees, maxTotalTrees, evictionThroughput.length);
 		numMaxRealClients[round - 1] = (int) maxClients;
 		avgThroughput[round - 1] = st.getAverage(true);
 		throughputDev[round - 1] = st.getDP(true);
@@ -375,16 +385,16 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	public void saveServerMeasurements(int round, long[] clients, long[] delta, long[] nGetPMRequests,
 									   long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
-									   long[] getPSLatency, long[] evictionLatency) {
+									   long[] getPSLatency, long[] evictionLatency, long[] outstanding, long[] totalTrees) {
 		String fileName = String.format("server-global-height-%d-bucket-%d-block-%d-round-%d.csv",
 				treeHeight, bucketSize, blockSize, round);
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
 			int size = clients.length;
-			resultFile.write("clients(#),delta(ns),getPMRequests(#),getPSRequests(#),evictionRequests(#)\n");
+			resultFile.write("clients(#),delta(ns),getPMRequests(#),getPSRequests(#),evictionRequests(#),outstanding(#),totalTrees(#)\n");
 			for (int i = 0; i < size; i++) {
-				resultFile.write(String.format("%d,%d,%d,%d,%d\n", clients[i], delta[i], nGetPMRequests[i],
-						nGetPSRequests[i], nEvictionRequests[i]));
+				resultFile.write(String.format("%d,%d,%d,%d,%d,%d,%d\n", clients[i], delta[i], nGetPMRequests[i],
+						nGetPSRequests[i], nEvictionRequests[i], outstanding[i], totalTrees[i]));
 			}
 			resultFile.flush();
 		} catch (IOException e) {

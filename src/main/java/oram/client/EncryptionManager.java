@@ -60,8 +60,7 @@ public class EncryptionManager {
 		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 				encryptedStashesAndPaths.getEncryptedStashes());
 		Map<Integer, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-		Map<Integer, Set<Integer>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
-		return new StashesAndPaths(stashes, paths , versionPaths);
+		return new StashesAndPaths(stashes, paths);
 	}
 
 	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
@@ -101,7 +100,7 @@ public class EncryptionManager {
 	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
 		byte[] encryptedPositionMapContent = encryptedPositionMap.getEncryptedPositionMap();
 		if(encryptedPositionMapContent == null)
-			return new PositionMap();
+			return null;
 		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMapContent);
 		PositionMap deserializedPositionMap = new PositionMap();
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);

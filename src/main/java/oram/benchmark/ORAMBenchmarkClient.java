@@ -71,7 +71,7 @@ public class ORAMBenchmarkClient {
 			}
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
 			this.address = clientId % treeSize;
 		}
 

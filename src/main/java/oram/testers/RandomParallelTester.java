@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RandomParallelTester {
-	private static final Logger logger = LoggerFactory.getLogger("benchmark");
+	private static final Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	private static final String[] expressions10 = {"Lively", "Tranquil", "Rhythm", "Candid", "Glimpse", "Dazzle", "Effervescent", "Mirth", "Delicate", "Whimsy"};
 	private static final String[] expressions55 = {"test1", "test2", "Parallel", "content", "oram", "benchmark", "Pineapple", "Cascade", "Whimsical", "Zephyr", "Serendipity", "Quixotic", "Bubble", "Enigma", "Luminous", "Jubilant", "Mellifluous", "Saffron", "Euphoria", "Quirk", "Galaxy", "Breeze", "Aurora", "Mystic", "Ethereal", "Bountiful", "Velvet", "Meadow", "Whiskers", "Harmonious", "Citrus", "Gossamer", "Tranquil", "Ponder", "Frolic", "Blissful", "Mystify", "Blossom", "Wanderlust", "Enchant", "Luminary", "Ripple", "Enthrall", "Symphony", "Labyrinth", "Sizzle", "Jubilee", "Driftwood", "Quench", "Twilight", "Spellbound", "Tranquility", "Mirage", "Elixir", "Glimmer", "Enchanted"};
 	static int testSize = -1;
@@ -33,8 +33,8 @@ public class RandomParallelTester {
 		}
 		int treeHeight = 3;
 		int nBlocksPerBucket = 4;
-		int blockSize = 512;
-		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
+		int blockSize = 64;
+		maxAddress = ORAMUtils.computeTreeSize(treeHeight,nBlocksPerBucket);
 
 		oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 

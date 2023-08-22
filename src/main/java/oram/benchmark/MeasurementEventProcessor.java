@@ -33,6 +33,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 
 	@Override
 	public void process(String line) {
+		logger.debug(line);
 		if (!isReady) {
 			if (line.contains(SERVER_READY_PATTERN)) {
 				isReady = true;
@@ -90,6 +91,8 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 		long[] nGetPMRequests = new long[rawGlobalMeasurements.size()];
 		long[] nGetPSRequests = new long[rawGlobalMeasurements.size()];
 		long[] nEvictionRequests = new long[rawGlobalMeasurements.size()];
+		long[] outstanding = new long[rawGlobalMeasurements.size()];
+		long[] totalVersions = new long[rawGlobalMeasurements.size()];
 		int i = 0;
 		for (String rawMeasurement : rawGlobalMeasurements) {
 			String token = rawMeasurement.split(">")[1];
@@ -100,6 +103,8 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 			nGetPMRequests[i] = Long.parseLong(strValues[2]);
 			nGetPSRequests[i] = Long.parseLong(strValues[3]);
 			nEvictionRequests[i] = Long.parseLong(strValues[4]);
+			outstanding[i] = Long.parseLong(strValues[5]);
+			totalVersions[i] = Long.parseLong(strValues[6]);
 			i++;
 		}
 
@@ -108,7 +113,7 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 		long[] evictionLatency = parseLatency(rawEvictionMeasurements);
 
 		return new Measurement(clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests, getPMLatency,
-				getPSLatency, evictionLatency);
+				getPSLatency, evictionLatency, outstanding, totalVersions);
 	}
 
 	private long[] parseLatency(LinkedList<String> rawMeasurements) {

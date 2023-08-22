@@ -17,30 +17,25 @@ public class MergedPositionMap implements Externalizable {
 	public MergedPositionMap() {
 	}
 
-	public MergedPositionMap(int[] versionIds, int[] pathIds) {
-		this.versionIds = versionIds;
-		this.pathIds = pathIds;
+	public MergedPositionMap(int size) {
+		this.versionIds = new int[size];
+		this.pathIds = new int[size];
+		for (int i = 0; i < pathIds.length; i++) {
+			this.pathIds[i] = ORAMUtils.DUMMY_PATH;
+		}
 		this.latestSequenceNumber = ORAMUtils.DUMMY_VERSION;
 	}
 
 	public int getPathAt(int address) {
-		return pathIds == null || pathIds.length < address ? ORAMUtils.DUMMY_PATH : pathIds[address];
+		return pathIds[address];
 	}
 
 	public void setPathAt(int address, int pathId) {
 		pathIds[address] = pathId;
 	}
 
-	public int[] getPathIds() {
-		return pathIds;
-	}
-
 	public int getVersionIdAt(int address) {
-		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
-	}
-
-	public int[] getVersionIds() {
-		return versionIds;
+		return versionIds[address];
 	}
 
 	public void setVersionIdAt(int address, int newVersionId) {

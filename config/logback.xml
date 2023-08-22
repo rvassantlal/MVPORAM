@@ -13,7 +13,15 @@
 			<pattern> -- %msg%n</pattern>
 		</encoder>
 	</appender>
-
+	<!--
+	<appender name="MIN-STDOUT-FILE" class="ch.qos.logback.core.FileAppender">
+		<param name="file" value="log.log"/>
+		<param name="append" value="false"/>
+		<encoder>
+			<pattern> - %msg%n</pattern>
+		</encoder>
+	</appender>
+	-->
 	<!-- https://logback.qos.ch/manual/appenders.html#AsyncAppender http://blog.takipi.com/how-to-instantly-improve-your-java-logging-with-7-logback-tweaks/ -->
 	<appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
 		<appender-ref ref="STDOUT" />
@@ -26,22 +34,18 @@
 
 	<logger name="io.netty" level="OFF">
 		<appender-ref ref="MIN-STDOUT" />
-		<!--  <appender-ref ref="STDOUT" /> -->
 	</logger>
 
 	<logger name="bftsmart" level="INFO">
 		<appender-ref ref="MIN-STDOUT" />
-		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
 	<logger name="oram" level="INFO">
 		<appender-ref ref="MIN-STDOUT" />
-		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
-	<logger name="benchmark.oram" level="INFO">
+	<logger name="benchmark.oram" level="DEBUG">
 		<appender-ref ref="MIN-STDOUT" />
-		<!-- <appender-ref ref="STDOUT" /> -->
 	</logger>
 
 	<logger name="bftsmart.reconfiguration.util.RSAKeyLoader" level="TRACE"></logger>
@@ -50,7 +54,7 @@
 		<appender-ref ref="MIN-STDOUT" />
 	</logger>
 
-	<logger name="benchmark.worker" level="INFO">
+	<logger name="benchmark.worker" level="DEBUG">
 		<appender-ref ref="MIN-STDOUT" />
 	</logger>
 

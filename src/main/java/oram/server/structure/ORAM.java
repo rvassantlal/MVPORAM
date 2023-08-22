@@ -22,7 +22,7 @@ public class ORAM {
 				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.allTrees = new ArrayList<>();
-		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
+		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 		this.oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 		logger.debug("Total number of blocks: {}", treeSize);
 		this.outstandingTrees = new LinkedList<>();
@@ -43,17 +43,20 @@ public class ORAM {
 	}
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, int lastVersion) {
-		EncryptedPositionMap[] encryptedPositionMaps = new EncryptedPositionMap[sequenceNumber-lastVersion];
 		int[] outstandingVersionIds = new int[outstandingTrees.size()];
 		OramSnapshot[] currentOutstandingVersions = new OramSnapshot[outstandingTrees.size()];
 		int i = 0;
+		int maxOutstanding = ORAMUtils.DUMMY_VERSION;
 		for (OramSnapshot snapshot : outstandingTrees) {
 			currentOutstandingVersions[i] = snapshot;
 			outstandingVersionIds[i] = snapshot.getVersionId();
+			if(snapshot.getVersionId() > maxOutstanding)
+				maxOutstanding = snapshot.getVersionId();
 			i++;
 		}
+		EncryptedPositionMap[] encryptedPositionMaps = new EncryptedPositionMap[maxOutstanding-lastVersion];
 		i = 0;
-		for (int j = lastVersion; j < sequenceNumber; j++) {
+		for (int j = lastVersion; j < maxOutstanding; j++) {
 			EncryptedPositionMap p = positionMaps.get(j);
 			if(p == null){
 				p = new EncryptedPositionMap();
@@ -74,20 +77,13 @@ public class ORAM {
 			return null;
 		}
 		OramSnapshot[] outstandingTrees = oramClientContext.getOutstandingVersions();
-		Map<Integer, Set<Integer>> versionPaths = new HashMap<>(allTrees.size());// Map<Version id, Set<OutStanding id>>
 
 		List<Integer> pathLocations = ORAMUtils.computePathLocationsList(pathId, oramContext.getTreeHeight());
 		Map<Integer, EncryptedStash> encryptedStashes = new HashMap<>(allTrees.size());
 		Map<Integer, Map<Integer, EncryptedBucket>> pathContents = new TreeMap<>();
 		Set<Integer> visitedVersions = new HashSet<>(allTrees.size());
 		for (OramSnapshot outstandingTree : outstandingTrees) {
-			Set<Integer> traversedVersions = traverseVersions(outstandingTree, pathLocations, encryptedStashes,
-					pathContents, visitedVersions);
-			for (int traversedVersion : traversedVersions) {
-				Set<Integer> outstandingTreeIds = versionPaths.computeIfAbsent(traversedVersion,
-						k -> new HashSet<>(outstandingTrees.length));
-				outstandingTreeIds.add(outstandingTree.getVersionId());
-			}
+			traverseVersions(outstandingTree, pathLocations, encryptedStashes, pathContents, visitedVersions);
 		}
 
 		Map<Integer, EncryptedBucket[]> compactedPaths = new HashMap<>(pathContents.size());
@@ -100,7 +96,7 @@ public class ORAM {
 			compactedPaths.put(entry.getKey(), buckets);
 		}
 
-		return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths, versionPaths);
+		return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths);
 	}
 
 	private Set<Integer> traverseVersions(OramSnapshot outstanding, List<Integer> pathLocations,
@@ -157,18 +153,17 @@ public class ORAM {
 		}
 		outstandingTrees.add(newVersion);
 		allTrees.add(newVersion);
-		garbageCollect(newVersion);
+		garbageCollect();
 		return true;
 	}
 
 
-	private void garbageCollect(OramSnapshot newVersion) {
+	private void garbageCollect() {
 		TreeSet<OramSnapshot> versions = new TreeSet<>();
+		versions.addAll(outstandingTrees);
 		for (ORAMClientContext oramClientContext : oramClientContexts.values()) {
 			Collections.addAll(versions, oramClientContext.getOutstandingVersions());
 		}
-		versions.add(newVersion);
-		//TODO: CLEAN POSITION MAP
 		for (OramSnapshot version : versions) {
 			BitSet locationsMarker = new BitSet(oramContext.getTreeSize());
 			HashSet<Integer> visitedVersions = new HashSet<>(allTrees.size());
@@ -181,6 +176,7 @@ public class ORAM {
 				treesToRemove.add(tree);
 			}
 		}
+
 		allTrees.removeAll(treesToRemove);
 		removeOldVersions();
 	}

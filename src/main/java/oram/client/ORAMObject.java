@@ -27,8 +27,8 @@ public class ORAMObject {
 	private final SecureRandom rndGenerator;
 	byte[] oldContent = null;
 	private boolean isRealAccess;
+	private MergedPositionMap mergedPositionMap;
 
-	MergedPositionMap mergedPositionMap;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) throws SecretSharingException {
@@ -37,8 +37,7 @@ public class ORAMObject {
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
 		this.rndGenerator = new SecureRandom("oram".getBytes());
-		this.mergedPositionMap = new MergedPositionMap(new int[oramContext.getTreeSize()],
-														new int[oramContext.getTreeSize()]);
+		this.mergedPositionMap = new MergedPositionMap(oramContext.getTreeSize());
 	}
 
 	/**
@@ -78,8 +77,7 @@ public class ORAMObject {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
-		mergedPositionMap.setLatestSequenceNumber(oldPositionMaps.getNewVersionId());
-		mergePositionMaps(oldPositionMaps.getPositionMaps());
+		mergePositionMaps(oldPositionMaps.getPositionMaps(), oldPositionMaps.getNewVersionId()-1);
 		int pathId = getPathId(mergedPositionMap, address);
 		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps);
 
@@ -108,17 +106,18 @@ public class ORAMObject {
 			logger.error("States and paths of oram {} are null", oramId);
 			return null;
 		}
-		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths());
+		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(), pathId);
 
 		Block block = mergedStash.getBlock(address);
 
 		if (this.isRealAccess && op == Operation.READ) {
 			if (block == null) {
-				logger.error("Reading address {} from pathId {}", address, pathId);
-				logger.error(positionMaps.toString());
+				logger.error("Reading address {} from pathId {}, with version {}", address, pathId,
+						mergedPositionMap.getVersionIdAt(address));
 				logger.error(stashesAndPaths.toString());
 				logger.error(mergedPositionMap.toString());
 				logger.error(mergedStash.toString());
+
 			}else {
 				oldContent = block.getContent();
 			}
@@ -138,12 +137,14 @@ public class ORAMObject {
 	public boolean evict(Stash stash, int oldPathId,
 						 Operation op, int changedAddress, int newVersionId) {
 		byte newPathId = generateRandomPathId();
-		PositionMap positionMap = new PositionMap(mergedPositionMap.getVersionIdAt(changedAddress), oldPathId, changedAddress);
+		PositionMap positionMap = isRealAccess ? new PositionMap(mergedPositionMap.getVersionIdAt(changedAddress),
+				oldPathId, changedAddress) : new PositionMap(mergedPositionMap.getVersionIdAt(changedAddress),
+				ORAMUtils.DUMMY_PATH, changedAddress);
 		if (op == Operation.WRITE) {
 			positionMap.setVersionIdAt(changedAddress, newVersionId);
 			mergedPositionMap.setVersionIdAt(changedAddress, newVersionId);
 		}
-		if (op == Operation.WRITE || (op == Operation.READ && oldPathId != ORAMUtils.DUMMY_PATH)) {
+		if (op == Operation.WRITE || (op == Operation.READ && isRealAccess)) {
 			positionMap.setPathAt(changedAddress, newPathId);
 			mergedPositionMap.setPathAt(changedAddress, newPathId);
 		}
@@ -212,12 +213,11 @@ public class ORAMObject {
 		return (byte) rndGenerator.nextInt(1 << oramContext.getTreeHeight()); //2^height
 	}
 
-	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Map<Integer, Bucket[]> paths) {
+	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Map<Integer, Bucket[]> paths, int pathId) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
-		Map<Integer, Integer> recentVersionIds = new HashMap<>();
 
-		mergeStashes(recentBlocks, recentVersionIds, stashes);
-		mergePaths(recentBlocks, recentVersionIds, paths);
+		mergeStashes(recentBlocks, stashes, pathId);
+		mergePaths(recentBlocks, paths, pathId);
 
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 		for (Block recentBlock : recentBlocks.values()) {
@@ -226,8 +226,7 @@ public class ORAMObject {
 		return mergedStash;
 	}
 
-	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
-							Map<Integer, Bucket[]> paths) {
+	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Bucket[]> paths, int pathId) {
 		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
 		for (Map.Entry<Integer, Bucket[]> entry : paths.entrySet()) {
 			List<Block> blocks = new LinkedList<>();
@@ -240,29 +239,30 @@ public class ORAMObject {
 			}
 			blocksToMerge.put(entry.getKey(), blocks);
 		}
-		selectRecentBlocks(recentBlocks, recentVersionIds, blocksToMerge);
+		selectRecentBlocks(recentBlocks, blocksToMerge, pathId);
 	}
 
-	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
-							  Map<Integer, Stash> stashes) {
+	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Stash> stashes, int pathId) {
 		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
 		for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
 			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
 		}
-		selectRecentBlocks(recentBlocks, recentVersionIds, blocksToMerge);
+		selectRecentBlocks(recentBlocks, blocksToMerge, pathId);
 	}
 
-	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, Integer> recentVersionIds,
-									 Map<Integer, List<Block>> blocksToMerge) {
+	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, Map<Integer, List<Block>> blocksToMerge, int pathId) {
 		for (Map.Entry<Integer, List<Block>> entry : blocksToMerge.entrySet()) {
 			for (Block block : entry.getValue()) {
 					int blockAddress = block.getAddress();
 					int blockVersionId = block.getVersionId();
 					if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
 						recentBlocks.put(blockAddress, block);
-						recentVersionIds.put(blockAddress, blockVersionId);
 					}
-				}
+					else if (blockVersionId < mergedPositionMap.getVersionIdAt(blockAddress) &&
+							recentBlocks.get(blockAddress)==null) {
+						recentBlocks.put(blockAddress, block);
+					}
+			}
 		}
 	}
 	private StashesAndPaths getStashesAndPaths(int pathId) {
@@ -282,13 +282,24 @@ public class ORAMObject {
 		}
 	}
 
-	private void mergePositionMaps(PositionMap[] positionMaps) {
-		for (PositionMap map:positionMaps) {
-			int address = map.getAddress();
-			if(map.getVersionId() > mergedPositionMap.getVersionIdAt(address)) {
-				mergedPositionMap.setPathAt(address, map.getPathId());
-				mergedPositionMap.setVersionIdAt(address, map.getVersionId());
+	private void mergePositionMaps(PositionMap[] positionMaps, int latestSequenceNumber) {
+		int firstSequenceNumber = mergedPositionMap.getLatestSequenceNumber();
+		int oldSequenceNumber = mergedPositionMap.getLatestSequenceNumber();
+		for (int i = 0; i < positionMaps.length; i++) {
+			if (positionMaps[i] == null && oldSequenceNumber == firstSequenceNumber){
+				oldSequenceNumber += i;
+				mergedPositionMap.setLatestSequenceNumber(oldSequenceNumber);
+			} else if (positionMaps[i] != null) {
+				PositionMap map = positionMaps[i];
+				int address = map.getAddress();
+				if(address != ORAMUtils.DUMMY_ADDRESS && map.getVersionId() >= mergedPositionMap.getVersionIdAt(address)) {
+					mergedPositionMap.setPathAt(address, map.getPathId());
+					mergedPositionMap.setVersionIdAt(address, map.getVersionId());
+				}
 			}
+		}
+		if(firstSequenceNumber == mergedPositionMap.getLatestSequenceNumber()){
+			mergedPositionMap.setLatestSequenceNumber(latestSequenceNumber);
 		}
 	}
 

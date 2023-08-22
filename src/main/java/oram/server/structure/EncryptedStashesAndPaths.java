@@ -12,7 +12,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	private ORAMContext oramContext;
 	private Map<Integer, EncryptedStash> encryptedStashes;
 	private Map<Integer, EncryptedBucket[]> paths;
-	private Map<Integer, Set<Integer>> versionPaths;
 	private int ints = 0;
 	private int buckets = 0;
 
@@ -23,11 +22,9 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths,
-									Map<Integer, Set<Integer>> versionPaths) {
+	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
-		this.versionPaths = versionPaths;
 	}
 
 	public Map<Integer, EncryptedStash> getEncryptedStashes() {
@@ -36,10 +33,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 
 	public Map<Integer, EncryptedBucket[]> getPaths() {
 		return paths;
-	}
-
-	public Map<Integer, Set<Integer>> getVersionPaths() {
-		return versionPaths;
 	}
 
 	@Override
@@ -55,15 +48,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 			out.writeInt(entry.getValue().length);
 			for (EncryptedBucket encryptedBucket : entry.getValue()) {
 				encryptedBucket.writeExternal(out);
-			}
-		}
-		out.writeInt(versionPaths.size());
-		for (Map.Entry<Integer, Set<Integer>> entry : versionPaths.entrySet()) {
-			out.writeInt(entry.getKey());
-			Set<Integer> versionIds = entry.getValue();
-			out.writeInt(versionIds.size());
-			for (int versionId : versionIds) {
-				out.writeInt(versionId);
 			}
 		}
 	}
@@ -93,18 +77,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 				encryptedBuckets[i] = bucket;
 			}
 			paths.put(versionId, encryptedBuckets);
-		}
-		size = in.readInt();
-		versionPaths = new HashMap<>(size);
-		while (size-- > 0) {
-			int outstandingId = in.readInt();
-			int nValues = in.readInt();
-			ints += (nValues+1);
-			Set<Integer> versionIds = new HashSet<>(nValues);
-			while (nValues-- > 0){
-				versionIds.add(in.readInt());
-			}
-			versionPaths.put(outstandingId, versionIds);
 		}
 	}
 

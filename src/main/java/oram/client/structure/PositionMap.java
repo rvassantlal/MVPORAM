@@ -11,7 +11,6 @@ public class PositionMap implements Externalizable {
 	// This array maps a memory address to a pathId (max 256 paths).
 	private int pathId;
 	private int versionId;
-
 	private int address;
 
 	public PositionMap() {
