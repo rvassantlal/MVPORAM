@@ -25,8 +25,8 @@ public class StashesAndPaths {
 	@Override
 	public String toString() {
 		return "StashesAndPaths{" +
-				"stashes=" + stashes.entrySet().stream().map(k -> k.getKey().toString() + " , " +
-				k.getValue().toString()).reduce(String::concat) +
+				"stashes=" + stashes.entrySet().stream().map(k -> k.getValue() == null ? k.getKey().toString()+ ", null"
+				: k.getKey().toString() + " , " + k.getValue().toString()).reduce(String::concat) +
 				", paths=" + paths.entrySet().stream().map(j -> j.getKey().toString() + " , " +
 				Arrays.deepToString(j.getValue())).reduce(String::concat) +	'}';
 	}

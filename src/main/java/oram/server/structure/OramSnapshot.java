@@ -1,6 +1,8 @@
 package oram.server.structure;
 
 
+import org.apache.commons.lang3.SerializationUtils;
+
 import java.io.Serializable;
 import java.util.*;
 
@@ -8,8 +10,9 @@ import java.util.*;
 public class OramSnapshot implements Serializable, Comparable {
 	private final Integer versionId;
 	private final List<OramSnapshot> previous;
-	private final EncryptedStash stash;
+	private EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
+	private boolean currentlyOutstanding;
 
 	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedStash encryptedStash) {
 		this.versionId = versionId;
@@ -19,20 +22,22 @@ public class OramSnapshot implements Serializable, Comparable {
 		Collections.addAll(previous, previousTrees);
 	}
 
-	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions) {
+	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions,
+							   boolean isOutstanding) {
+		if(isOutstanding){
+			currentlyOutstanding = true;
+		}
 		if (!visitedVersions.contains(versionId)) {
 			visitedVersions.add(versionId);
 			for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
 				if (!locationsMarker.get(location.getKey())) {
 					locationsMarker.set(location.getKey(), true);
 					location.getValue().taintBucket();
-				} else {
-					location.getValue().untaintBucket();
 				}
 			}
 			if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
 				for (OramSnapshot oramSnapshot : previous) {
-					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions);
+					oramSnapshot.garbageCollect(SerializationUtils.clone(locationsMarker), tree_size, visitedVersions, false);
 				}
 			}
 		}
@@ -84,12 +89,15 @@ public class OramSnapshot implements Serializable, Comparable {
 
 	public boolean removeNonTainted() {
 		boolean allNonTainted = true;
-		for (Map.Entry<Integer, EncryptedBucket> entry : difTree.entrySet()) {
-			if (entry.getValue().isTainted()) {
+		for (EncryptedBucket value : difTree.values()) {
+			if (value.isTainted()) {
 				allNonTainted = false;
-				break;
+				value.untaintBucket();
 			}
 		}
+		if (!currentlyOutstanding)
+			stash = new EncryptedStash();
+		currentlyOutstanding = false;
 		return allNonTainted;
 	}
 

@@ -15,7 +15,7 @@
 	</appender>
 	<!--
 	<appender name="MIN-STDOUT-FILE" class="ch.qos.logback.core.FileAppender">
-		<param name="file" value="log.log"/>
+		<param name="file" value="log.txt"/>
 		<param name="append" value="false"/>
 		<encoder>
 			<pattern> - %msg%n</pattern>

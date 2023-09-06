@@ -42,7 +42,8 @@ public class RandomParallelTester {
 			ORAMObject oram = oramManager.getORAM(oramId);
 			threads.add(new Thread(() -> {
 				for (int i = 0; i < testSize; i++) {
-					randomAccess(oram);
+					logger.error("op: {} of {}",i,maxAddress);
+					randomAccess(oram, i);
 				}
 			}));
 		}
@@ -63,9 +64,9 @@ public class RandomParallelTester {
 		}
 	}
 
-	private static void randomAccess(ORAMObject oram) {
+	private static void randomAccess(ORAMObject oram, int i) {
 		Operation op = rnd.nextBoolean() ? Operation.WRITE : Operation.READ;
-		int address = rnd.nextInt(maxAddress);
+		int address = rnd.nextInt(maxAddress/2);
 		if (op == Operation.WRITE) {
 			String randomWord;
 			if (testSize > 55)
@@ -80,6 +81,9 @@ public class RandomParallelTester {
 			String responseString = response == null ? "null" : new String(response);
 			logger.debug("read from address" + address + ". Response: " + responseString);
 		}
+		/*if(address % 100 == 0 && address != 0){
+			oram.accessAllPaths();
+		}*/
 
 	}
 

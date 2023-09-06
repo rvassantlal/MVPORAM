@@ -127,7 +127,11 @@ public class EncryptionManager {
 	}
 
 	public Stash decryptStash(int blockSize, EncryptedStash encryptedStash) {
-		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStash.getEncryptedStash());
+		byte[] encryptedStashBytes = encryptedStash.getEncryptedStash();
+		if(encryptedStashBytes == null){
+			return null;
+		}
+		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStashBytes);
 		Stash deserializedStash = new Stash(blockSize);
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
