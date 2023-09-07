@@ -28,6 +28,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		for (int outstandingVersionId : outstandingVersionIds) {
 			out.writeInt(outstandingVersionId);
 		}
+		out.writeInt(encryptedPositionMaps.length);
 		for (EncryptedPositionMap encryptedPositionMap : encryptedPositionMaps) {
 			encryptedPositionMap.writeExternal(out);
 		}
@@ -38,10 +39,11 @@ public class EncryptedPositionMaps implements Externalizable {
 		newVersionId = in.readInt();
 		int size = in.readInt();
 		outstandingVersionIds = new int[size];
-		encryptedPositionMaps = new EncryptedPositionMap[size];
 		for (int i = 0; i < size; i++) {
 			outstandingVersionIds[i] = in.readInt();
 		}
+		size = in.readInt();
+		encryptedPositionMaps = new EncryptedPositionMap[size];
 		for (int i = 0; i < size; i++) {
 			EncryptedPositionMap e = new EncryptedPositionMap();
 			e.readExternal(in);
