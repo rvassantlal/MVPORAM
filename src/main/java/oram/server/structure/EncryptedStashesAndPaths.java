@@ -12,7 +12,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 	private ORAMContext oramContext;
 	private Map<Integer, EncryptedStash> encryptedStashes;
 	private Map<Integer, EncryptedBucket[]> paths;
-	private Map<Integer, Set<Integer>> versionPaths;
 	private int ints = 0;
 	private int buckets = 0;
 
@@ -23,11 +22,9 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths,
-									Map<Integer, Set<Integer>> versionPaths) {
+	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
-		this.versionPaths = versionPaths;
 	}
 
 	public Map<Integer, EncryptedStash> getEncryptedStashes() {
@@ -38,58 +35,19 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		return paths;
 	}
 
-	public Map<Integer, Set<Integer>> getVersionPaths() {
-		return versionPaths;
-	}
-
 	@Override
 	public void writeExternal(ObjectOutput out) throws IOException {
 		out.writeInt(encryptedStashes.size());
-		int[] keys = new int[encryptedStashes.size()];
-		int i = 0;
-		for (int key : encryptedStashes.keySet()) {
-			keys[i++] = key;
-		}
-		Arrays.sort(keys);
-		for (int key : keys) {
-			out.writeInt(key);
-			encryptedStashes.get(key).writeExternal(out);
+		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
+			out.writeInt(entry.getKey());
+			entry.getValue().writeExternal(out);
 		}
 		out.writeInt(paths.size());
-		keys = new int[paths.size()];
-		i = 0;
-		for (int key : paths.keySet()) {
-			keys[i++] = key;
-		}
-		Arrays.sort(keys);
-		for (int key : keys) {
-			out.writeInt(key);
-			EncryptedBucket[] encryptedBuckets = paths.get(key);
-			out.writeInt(encryptedBuckets.length);
-			for (EncryptedBucket encryptedBucket : encryptedBuckets) {
+		for (Map.Entry<Integer, EncryptedBucket[]> entry : paths.entrySet()) {
+			out.writeInt(entry.getKey());
+			out.writeInt(entry.getValue().length);
+			for (EncryptedBucket encryptedBucket : entry.getValue()) {
 				encryptedBucket.writeExternal(out);
-			}
-		}
-
-		out.writeInt(versionPaths.size());
-		keys = new int[versionPaths.size()];
-		i = 0;
-		for (int key : versionPaths.keySet()) {
-			keys[i++] = key;
-		}
-		Arrays.sort(keys);
-		for (int key : keys) {
-			out.writeInt(key);
-			Set<Integer> versionIds = versionPaths.get(key);
-			out.writeInt(versionIds.size());
-			int[] orderedVersionIds = new int[versionIds.size()];
-			int j = 0;
-			for (int value : versionIds) {
-				orderedVersionIds[j++] = value;
-			}
-			Arrays.sort(orderedVersionIds);
-			for (int versionId : orderedVersionIds) {
-				out.writeInt(versionId);
 			}
 		}
 	}
@@ -119,18 +77,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 				encryptedBuckets[i] = bucket;
 			}
 			paths.put(versionId, encryptedBuckets);
-		}
-		size = in.readInt();
-		versionPaths = new HashMap<>(size);
-		while (size-- > 0) {
-			int outstandingId = in.readInt();
-			int nValues = in.readInt();
-			ints += (nValues+1);
-			Set<Integer> versionIds = new HashSet<>(nValues);
-			while (nValues-- > 0){
-				versionIds.add(in.readInt());
-			}
-			versionPaths.put(outstandingId, versionIds);
 		}
 	}
 

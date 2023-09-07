@@ -60,8 +60,7 @@ public class EncryptionManager {
 		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 				encryptedStashesAndPaths.getEncryptedStashes());
 		Map<Integer, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-		Map<Integer, Set<Integer>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
-		return new StashesAndPaths(stashes, paths , versionPaths);
+		return new StashesAndPaths(stashes, paths);
 	}
 
 	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
@@ -99,7 +98,10 @@ public class EncryptionManager {
 	}
 
 	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
-		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
+		byte[] encryptedPositionMapContent = encryptedPositionMap.getEncryptedPositionMap();
+		if(encryptedPositionMapContent == null)
+			return null;
+		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMapContent);
 		PositionMap deserializedPositionMap = new PositionMap();
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
@@ -125,7 +127,11 @@ public class EncryptionManager {
 	}
 
 	public Stash decryptStash(int blockSize, EncryptedStash encryptedStash) {
-		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStash.getEncryptedStash());
+		byte[] encryptedStashBytes = encryptedStash.getEncryptedStash();
+		if(encryptedStashBytes == null){
+			return null;
+		}
+		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStashBytes);
 		Stash deserializedStash = new Stash(blockSize);
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
 			 ObjectInputStream in = new ObjectInputStream(bis)) {
@@ -192,7 +198,8 @@ public class EncryptionManager {
 		Block[] blocks = bucket.readBucket();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
-				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_BLOCK);
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION,
+                        ORAMUtils.DUMMY_BLOCK);
 			}
 		}
 	}

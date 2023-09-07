@@ -75,6 +75,6 @@ public class Block implements Externalizable {
 	@Override
 	public String toString() {
 		String contentString = content == null ? "null" : new String(content);
-		return "Block{" + address + ", " + contentString + '}';
+		return "Block{" + address + ", " + contentString + ", " + versionId+'}';
 	}
 }

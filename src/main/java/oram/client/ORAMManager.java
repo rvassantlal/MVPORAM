@@ -46,7 +46,7 @@ public class ORAMManager {
 			if (status == Status.FAILED) {
 				return null;
 			}
-			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
+			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 			ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
@@ -74,7 +74,7 @@ public class ORAMManager {
 				}
 				int bucketSize = in.readInt();
 				int blockSize = in.readInt();
-				int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight) * bucketSize;
+				int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 				ORAMContext oramContext = new ORAMContext(treeHeight, treeSize, bucketSize, blockSize);
 				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
@@ -89,9 +89,10 @@ public class ORAMManager {
 	}
 
 	private EncryptedPositionMap initializeEmptyPositionMap() {
-		int[] positionMap = new int[0];
-		int[] versionIds = new int[0];
-		PositionMap pm = new PositionMap(versionIds, positionMap);
+		int pathId = ORAMUtils.DUMMY_PATH;
+		int versionId = ORAMUtils.DUMMY_VERSION;
+		int address = ORAMUtils.DUMMY_ADDRESS;
+		PositionMap pm = new PositionMap(versionId, pathId, address);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 
