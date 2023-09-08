@@ -1,5 +1,7 @@
 package oram.server.structure;
 
+import vss.secretsharing.VerifiableShare;
+
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -11,14 +13,20 @@ public class EncryptedPositionMaps implements Externalizable {
 	private int newVersionId;
 	private int[] outstandingVersionIds;
 	private EncryptedPositionMap[] encryptedPositionMaps;
+	private VerifiableShare[] encryptionKeyShares;
 
 	public EncryptedPositionMaps(){}
 
 	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
-								 EncryptedPositionMap[] encryptedPositionMaps) {
+								 EncryptedPositionMap[] encryptedPositionMaps, VerifiableShare[] encryptionKeyShares) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
 		this.encryptedPositionMaps = encryptedPositionMaps;
+		this.encryptionKeyShares = encryptionKeyShares;
+	}
+
+	public VerifiableShare[] getEncryptionKeyShares() {
+		return encryptionKeyShares;
 	}
 
 	@Override

@@ -2,6 +2,7 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
+import oram.security.EncryptionManager;
 import oram.utils.ORAMUtils;
 import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
@@ -12,33 +13,41 @@ import oram.server.structure.EncryptedStash;
 import oram.utils.ORAMContext;
 import oram.utils.ServerOperationType;
 import oram.utils.Status;
+import vss.facade.Mode;
 import vss.facade.SecretSharingException;
 
+import javax.crypto.SecretKey;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.security.SecureRandom;
 
 public class ORAMManager {
 	private final ConfidentialServiceProxy serviceProxy;
 	private final EncryptionManager encryptionManager;
+	private final SecureRandom rndGenerator;
 
 	public ORAMManager(int clientId) throws SecretSharingException {
 		//Connecting to servers
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
 		this.encryptionManager = new EncryptionManager();
+		this.rndGenerator = new SecureRandom("oram".getBytes());
 	}
 
 	public ORAMObject createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) {
 		try {
-			EncryptedPositionMap encryptedPositionMap = initializeEmptyPositionMap();
-			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
+			String password = ORAMUtils.generateRandomPassword(rndGenerator);
+			SecretKey newEncryptionKey = encryptionManager.createSecretKey(password.toCharArray());
+
+			EncryptedPositionMap encryptedPositionMap = initializeEmptyPositionMap(newEncryptionKey);
+			EncryptedStash encryptedStash = initializeEmptyStash(newEncryptionKey, blockSize);
 			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
 					encryptedPositionMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest, Mode.SMALL_SECRET, password.getBytes());
 			if (response == null || response.getPainData() == null) {
 				return null;
 			}
@@ -83,17 +92,17 @@ public class ORAMManager {
 		}
 	}
 
-	private EncryptedStash initializeEmptyStash(int blockSize) {
+	private EncryptedStash initializeEmptyStash(SecretKey encryptionKey, int blockSize) {
 		Stash stash = new Stash(blockSize);
-		return encryptionManager.encryptStash(stash);
+		return encryptionManager.encryptStash(encryptionKey, stash);
 	}
 
-	private EncryptedPositionMap initializeEmptyPositionMap() {
+	private EncryptedPositionMap initializeEmptyPositionMap(SecretKey encryptionKey) {
 		int pathId = ORAMUtils.DUMMY_PATH;
 		int versionId = ORAMUtils.DUMMY_VERSION;
 		int address = ORAMUtils.DUMMY_ADDRESS;
 		PositionMap pm = new PositionMap(versionId, pathId, address);
-		return encryptionManager.encryptPositionMap(pm);
+		return encryptionManager.encryptPositionMap(encryptionKey, pm);
 	}
 
 	public void close() {

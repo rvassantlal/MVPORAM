@@ -2,6 +2,7 @@ package oram.server.structure;
 
 
 import org.apache.commons.lang3.SerializationUtils;
+import vss.secretsharing.VerifiableShare;
 
 import java.io.Serializable;
 import java.util.*;
@@ -9,13 +10,15 @@ import java.util.*;
 
 public class OramSnapshot implements Serializable, Comparable {
 	private final Integer versionId;
+	private final VerifiableShare encryptionKeyShare;
 	private final List<OramSnapshot> previous;
 	private EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
 	private boolean currentlyOutstanding;
 
-	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedStash encryptedStash) {
+	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedStash encryptedStash, VerifiableShare encryptionKeyShare) {
 		this.versionId = versionId;
+		this.encryptionKeyShare = encryptionKeyShare;
 		this.difTree = new TreeMap<>();
 		stash = encryptedStash;
 		previous = new LinkedList<>();
@@ -50,6 +53,10 @@ public class OramSnapshot implements Serializable, Comparable {
 
 	public EncryptedStash getStash() {
 		return stash;
+	}
+
+	public VerifiableShare getEncryptionKeyShare() {
+		return encryptionKeyShare;
 	}
 
 	public EncryptedBucket getFromLocation(Integer location) {

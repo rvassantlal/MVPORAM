@@ -4,6 +4,7 @@ import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import vss.secretsharing.VerifiableShare;
 
 import java.util.*;
 
@@ -17,9 +18,11 @@ public class ORAM {
 	private int sequenceNumber = 0;
 
 	private final TreeMap<Integer, EncryptedPositionMap> positionMaps;
+	private final TreeMap<Integer, VerifiableShare> encryptionKeyShares;
 
 	public ORAM(int oramId, int treeHeight, int bucketSize, int blockSize,
-				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash,
+				VerifiableShare encryptionKeyShare) {
 		this.oramId = oramId;
 		this.allTrees = new ArrayList<>();
 		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
@@ -27,11 +30,13 @@ public class ORAM {
 		logger.debug("Total number of blocks: {}", treeSize);
 		this.outstandingTrees = new LinkedList<>();
 		this.positionMaps = new TreeMap<>();
+		this.encryptionKeyShares = new TreeMap<>();
 		sequenceNumber++;
 		int versionId = sequenceNumber;
 		positionMaps.put(sequenceNumber, encryptedPositionMap);
+		encryptionKeyShares.put(sequenceNumber, encryptionKeyShare);
 		OramSnapshot[] previous = new OramSnapshot[0];
-		OramSnapshot snap = new OramSnapshot(versionId, previous, encryptedStash);
+		OramSnapshot snap = new OramSnapshot(versionId, previous, encryptedStash, encryptionKeyShare);
 
 		outstandingTrees.add(snap);
 		allTrees.add(snap);
@@ -43,8 +48,9 @@ public class ORAM {
 	}
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, int lastVersion) {
-		int[] outstandingVersionIds = new int[outstandingTrees.size()];
-		OramSnapshot[] currentOutstandingVersions = new OramSnapshot[outstandingTrees.size()];
+		int nOutstandingTrees = outstandingTrees.size();
+		int[] outstandingVersionIds = new int[nOutstandingTrees];
+		OramSnapshot[] currentOutstandingVersions = new OramSnapshot[nOutstandingTrees];
 		int i = 0;
 		for (OramSnapshot snapshot : outstandingTrees) {
 			currentOutstandingVersions[i] = snapshot;
@@ -52,6 +58,7 @@ public class ORAM {
 			i++;
 		}
 		EncryptedPositionMap[] encryptedPositionMaps = new EncryptedPositionMap[sequenceNumber-lastVersion];
+		VerifiableShare[] encryptionKeyShares = new VerifiableShare[encryptedPositionMaps.length];
 		i = 0;
 		for (int j = lastVersion; j < sequenceNumber; j++) {
 			EncryptedPositionMap p = positionMaps.get(j);
@@ -59,13 +66,14 @@ public class ORAM {
 				p = new EncryptedPositionMap();
 			}
 			encryptedPositionMaps[i] = p;
+			encryptionKeyShares[i] = this.encryptionKeyShares.get(j);
 			i++;
 		}
 		int newVersionId = sequenceNumber++;
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);
 
 		oramClientContexts.put(clientId, oramClientContext);
-		return new EncryptedPositionMaps(newVersionId, outstandingVersionIds, encryptedPositionMaps);
+		return new EncryptedPositionMaps(newVersionId, outstandingVersionIds, encryptedPositionMaps, encryptionKeyShares);
 	}
 
 	public EncryptedStashesAndPaths getStashesAndPaths(int pathId, int clientId) {
@@ -78,9 +86,11 @@ public class ORAM {
 		List<Integer> pathLocations = ORAMUtils.computePathLocationsList(pathId, oramContext.getTreeHeight());
 		Map<Integer, EncryptedStash> encryptedStashes = new HashMap<>(allTrees.size());
 		Map<Integer, Map<Integer, EncryptedBucket>> pathContents = new TreeMap<>();
+		Map<Integer, VerifiableShare> encryptionKeysShares = new HashMap<>();
 		Set<Integer> visitedVersions = new HashSet<>(allTrees.size());
 		for (OramSnapshot outstandingTree : outstandingTrees) {
-			traverseVersions(outstandingTree, pathLocations, encryptedStashes, pathContents, visitedVersions);
+			traverseVersions(outstandingTree, pathLocations, encryptedStashes, pathContents, visitedVersions,
+					encryptionKeysShares);
 		}
 
 		Map<Integer, EncryptedBucket[]> compactedPaths = new HashMap<>(pathContents.size());
@@ -93,13 +103,14 @@ public class ORAM {
 			compactedPaths.put(entry.getKey(), buckets);
 		}
 
-		return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths);
+		return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths, encryptionKeysShares);
 	}
 
 	private Set<Integer> traverseVersions(OramSnapshot outstanding, List<Integer> pathLocations,
-										 Map<Integer, EncryptedStash> encryptedStashes,
-										 Map<Integer, Map<Integer, EncryptedBucket>> pathContents,
-										 Set<Integer> visitedVersions) {
+										  Map<Integer, EncryptedStash> encryptedStashes,
+										  Map<Integer, Map<Integer, EncryptedBucket>> pathContents,
+										  Set<Integer> visitedVersions,
+										  Map<Integer, VerifiableShare> encryptionKeysShares) {
 		Queue<OramSnapshot> queue = new ArrayDeque<>();
 		queue.add(outstanding);
 		Set<Integer> visitedVersionsPerSnapshot = new HashSet<>(allTrees.size());
@@ -109,6 +120,7 @@ public class ORAM {
 			OramSnapshot version = queue.poll();
 			if (!visitedVersions.contains(version.getVersionId())) {
 				encryptedStashes.put(version.getVersionId(), version.getStash());
+				encryptionKeysShares.put(version.getVersionId(), version.getEncryptionKeyShare());
 				for (Integer pathLocation : pathLocations) {
 					EncryptedBucket bucket = version.getFromLocation(pathLocation);
 					if (bucket != null) {
@@ -133,7 +145,8 @@ public class ORAM {
 	}
 
 	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-								   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
+								   Map<Integer, EncryptedBucket> encryptedPath, int clientId,
+								   VerifiableShare encryptionKeyShare) {
 		ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
 		if (oramClientContext == null) {
 			return false;
@@ -143,8 +156,9 @@ public class ORAM {
 		int newVersionId = oramClientContext.getNewVersionId();
 
 		positionMaps.put(newVersionId,encryptedPositionMap);
+		encryptionKeyShares.put(newVersionId, encryptionKeyShare);
 		OramSnapshot newVersion = new OramSnapshot(newVersionId,
-				outstandingVersions, encryptedStash);
+				outstandingVersions, encryptedStash, encryptionKeyShare);
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
 			newVersion.setToLocation(entry.getKey(), entry.getValue());
 		}
