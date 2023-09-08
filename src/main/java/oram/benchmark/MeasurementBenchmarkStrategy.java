@@ -102,7 +102,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String setupInformation = String.format("%d\t%d", nServerWorkers, f);
 		Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
 
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; i < treeHeights.length; i++) {
 			logger.info("============ Strategy Parameters ============");
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];

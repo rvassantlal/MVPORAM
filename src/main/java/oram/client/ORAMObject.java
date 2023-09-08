@@ -6,14 +6,20 @@ import oram.client.structure.*;
 import oram.messages.EvictionORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.messages.StashPathORAMMessage;
+import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import vss.facade.Mode;
 import vss.facade.SecretSharingException;
 
+import javax.crypto.SecretKey;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.security.SecureRandom;
 import java.util.*;
 
@@ -141,10 +147,13 @@ public class ORAMObject {
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
 		Stash remainingBlocks = populatePath(positionMap, stash, oldPathId, path);
 
-		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
-		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(positionMap);
-		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
-		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
+		String password = ORAMUtils.generateRandomPassword(rndGenerator);
+		SecretKey newEncryptionKey = encryptionManager.createSecretKey(password.toCharArray());
+
+		EncryptedStash encryptedStash = encryptionManager.encryptStash(newEncryptionKey, remainingBlocks);
+		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(newEncryptionKey, positionMap);
+		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(newEncryptionKey, oramContext, path);
+		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath, password);
 	}
 
 	private Stash populatePath(PositionMap positionMap, Stash stash, int oldPathId,
@@ -181,7 +190,7 @@ public class ORAMObject {
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-										Map<Integer, EncryptedBucket> encryptedPath) {
+										Map<Integer, EncryptedBucket> encryptedPath, String password) {
 		try {
 			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
@@ -189,7 +198,7 @@ public class ORAMObject {
 				return false;
 			}
 
-			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest, Mode.SMALL_SECRET, password.getBytes());
 			if (response == null || response.getPainData() == null) {
 				return false;
 			}
@@ -279,12 +288,30 @@ public class ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPainData() == null)
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			if (response == null)
+				return null;
+			byte[][] confidentialData = response.getConfidentialData();
+			if (response.getPainData() == null || confidentialData == null || confidentialData.length == 0)
 				return null;
 
-			return encryptionManager.decryptStashesAndPaths(oramContext, response.getPainData());
-		} catch (SecretSharingException e) {
+			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPainData());
+				 ObjectInputStream in = new ObjectInputStream(bis)) {
+				byte[] serializedEncryptedStashesAndPaths = new byte[in.readInt()];
+				in.readFully(serializedEncryptedStashesAndPaths);
+				int nVersions = in.readInt();
+				Map<Integer, SecretKey> decryptionKeys = new HashMap<>(nVersions);
+				for (int i = 0; i < nVersions; i++) {
+					int version = in.readInt();
+					String password = new String(confidentialData[i]);
+					SecretKey secretKey = encryptionManager.createSecretKey(password.toCharArray());
+					decryptionKeys.put(version, secretKey);
+				}
+
+				return encryptionManager.decryptStashesAndPaths(decryptionKeys, oramContext,
+						serializedEncryptedStashesAndPaths);
+			}
+		} catch (SecretSharingException | IOException e) {
 			return null;
 		}
 	}
@@ -320,10 +347,18 @@ public class ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPainData() == null)
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			if (response == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPainData());
+			byte[][] confidentialData = response.getConfidentialData();
+			if (response.getPainData() == null || confidentialData == null || confidentialData.length == 0)
+				return null;
+			SecretKey[] decryptionKeys = new SecretKey[confidentialData.length];
+			for (int i = 0; i < confidentialData.length; i++) {
+				String password = new String(confidentialData[i]);
+				decryptionKeys[i] = encryptionManager.createSecretKey(password.toCharArray());
+			}
+			return encryptionManager.decryptPositionMaps(decryptionKeys, response.getPainData());
 		} catch (SecretSharingException e) {
 			return null;
 		}

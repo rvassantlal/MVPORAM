@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -54,7 +56,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case CREATE_ORAM:
 					request = new CreateORAMMessage();
 					request.readExternal(in);
-					return createORAM((CreateORAMMessage) request);
+					return createORAM((CreateORAMMessage) request, shares[0]);
 				case GET_ORAM:
 					request = new ORAMMessage();
 					request.readExternal(in);
@@ -62,7 +64,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case GET_POSITION_MAP:
 					request = new ORAMMessage();
 					request.readExternal(in);
-					return getPositionMap(request, msgCtx);
+					return getPositionMap(request, msgCtx.getSender());
 				case GET_STASH_AND_PATH:
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
@@ -70,7 +72,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case EVICTION:
 					request = new EvictionORAMMessage();
 					request.readExternal(in);
-					return performEviction((EvictionORAMMessage) request, msgCtx);
+					return performEviction((EvictionORAMMessage) request, shares[0], msgCtx.getSender());
 			}
 		} catch (IOException | ClassNotFoundException e) {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
@@ -103,14 +105,15 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		return null;
 	}
 
-	private ConfidentialMessage performEviction(EvictionORAMMessage request, MessageContext msgCtx) {
+	private ConfidentialMessage performEviction(EvictionORAMMessage request, VerifiableShare encryptionKeyShare,
+												int clientId) {
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
 		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), msgCtx.getSender());
+				request.getEncryptedPath(), clientId, encryptionKeyShare);
 		long end = System.nanoTime();
 		long delay = end - start;
 		logger.info("eviction[ns]: {}", delay);
@@ -134,11 +137,34 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			size = encryptedStashesAndPaths.getSize(oram.getOramContext());
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(size);
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
-			if (encryptedStashesAndPaths != null)
-				encryptedStashesAndPaths.writeExternal(out);
-			out.flush();
-			bos.flush();
-			return new ConfidentialMessage(bos.toByteArray());
+			try (ByteArrayOutputStream bos2 = new ByteArrayOutputStream(size);
+				 ObjectOutputStream out2 = new ObjectOutputStream(bos2)) {
+				if (encryptedStashesAndPaths != null)
+					encryptedStashesAndPaths.writeExternal(out2);
+				out2.flush();
+				bos.flush();
+				byte[] serializedEncryptedStashesAndPaths = bos2.toByteArray();
+				out.writeInt(serializedEncryptedStashesAndPaths.length);
+				out.write(serializedEncryptedStashesAndPaths);
+
+				Map<Integer, VerifiableShare> encryptionKeysShares = encryptedStashesAndPaths.getEncryptionKeysShares();
+				int nEncryptionKeysShares = encryptionKeysShares.size();
+				int[] keySharesVersions = new int[nEncryptionKeysShares];
+				int k = 0;
+				for (int key : encryptionKeysShares.keySet()) {
+					keySharesVersions[k++] = key;
+				}
+				Arrays.sort(keySharesVersions);
+				out.writeInt(nEncryptionKeysShares);
+				VerifiableShare[] orderedKeyShares = new VerifiableShare[nEncryptionKeysShares];
+				for (int i = 0; i < keySharesVersions.length; i++) {
+					out.writeInt(keySharesVersions[i]);
+					orderedKeyShares[i] = encryptionKeysShares.get(keySharesVersions[i]);
+				}
+				out.flush();
+				bos.flush();
+				return new ConfidentialMessage(bos.toByteArray(), orderedKeyShares);
+			}
 		} catch (IOException e) {
 			logger.error("Failed to serialize encrypted stashes and paths: {}", e.getMessage());
 			return new ConfidentialMessage();
@@ -174,20 +200,20 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(ORAMMessage request, MessageContext msgCtx) {
+	private ConfidentialMessage getPositionMap(ORAMMessage request, int clientId) {
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender());
+		EncryptedPositionMaps positionMaps = oram.getPositionMaps(clientId);
 
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
 			positionMaps.writeExternal(out);
 			out.flush();
 			bos.flush();
-			return new ConfidentialMessage(bos.toByteArray());
+			return new ConfidentialMessage(bos.toByteArray(), positionMaps.getEncryptionKeyShares());
 		} catch (IOException e) {
 			logger.error("Failed to serialize position maps: {}", e.getMessage());
 			return new ConfidentialMessage();
@@ -199,7 +225,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage createORAM(CreateORAMMessage request) {
+	private ConfidentialMessage createORAM(CreateORAMMessage request, VerifiableShare encryptionKeyShare) {
 		int oramId = request.getOramId();
 		int treeHeight = request.getTreeHeight();
 		int nBlocksPerBucket = request.getNBlocksPerBucket();
@@ -212,7 +238,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} else {
 			logger.debug("Created an ORAM with id {} of {} levels", oramId, treeHeight + 1);
 			ORAM oram = new ORAM(oramId, treeHeight, nBlocksPerBucket, blockSize,
-					encryptedPositionMap, encryptedStash);
+					encryptedPositionMap, encryptedStash, encryptionKeyShare);
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}
