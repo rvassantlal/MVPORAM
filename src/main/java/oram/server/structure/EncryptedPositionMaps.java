@@ -21,7 +21,8 @@ public class EncryptedPositionMaps implements Externalizable {
 	public EncryptedPositionMaps(){}
 
 	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
-								 EncryptedPositionMap[] encryptedPositionMaps) {
+								Map<Integer,EncryptedPositionMap> encryptedPositionMaps,
+								 Map<Integer,VerifiableShare> encryptionKeyShares) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
 		this.encryptedPositionMaps = encryptedPositionMaps;
