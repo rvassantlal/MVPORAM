@@ -50,6 +50,7 @@ public class EncryptionManager {
 		}
 	}
 
+
 	public PositionMaps decryptPositionMaps(SecretKey[] decryptionKeys, EncryptedPositionMaps encryptedPositionMaps) {
 		Map<Integer,EncryptedPositionMap> encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
 		Map<Integer,PositionMap> positionMaps = new HashMap<>(encryptedPMs.size());
