@@ -6,19 +6,23 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.Arrays;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EncryptedPositionMaps implements Externalizable {
 
 	private int newVersionId;
 	private int[] outstandingVersionIds;
-	private EncryptedPositionMap[] encryptedPositionMaps;
-	private VerifiableShare[] encryptionKeyShares;
+	private Map<Integer,EncryptedPositionMap> encryptedPositionMaps;
+	private Map<Integer,VerifiableShare> encryptionKeyShares;
+
+	private VerifiableShare[] encryptionKeySharesArray;
 
 	public EncryptedPositionMaps(){}
 
 	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
-								 EncryptedPositionMap[] encryptedPositionMaps, VerifiableShare[] encryptionKeyShares) {
+								 Map<Integer,EncryptedPositionMap> encryptedPositionMaps,
+								 Map<Integer,VerifiableShare> encryptionKeyShares) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
 		this.encryptedPositionMaps = encryptedPositionMaps;
@@ -26,7 +30,7 @@ public class EncryptedPositionMaps implements Externalizable {
 	}
 
 	public VerifiableShare[] getEncryptionKeyShares() {
-		return encryptionKeyShares;
+		return encryptionKeySharesArray;
 	}
 
 	@Override
@@ -36,10 +40,20 @@ public class EncryptedPositionMaps implements Externalizable {
 		for (int outstandingVersionId : outstandingVersionIds) {
 			out.writeInt(outstandingVersionId);
 		}
-		out.writeInt(encryptedPositionMaps.length);
-		for (EncryptedPositionMap encryptedPositionMap : encryptedPositionMaps) {
-			encryptedPositionMap.writeExternal(out);
-		}
+		int positionMapsSize = encryptedPositionMaps.size();
+		out.writeInt(positionMapsSize);
+		encryptionKeySharesArray = new VerifiableShare[positionMapsSize];
+		AtomicInteger i = new AtomicInteger();
+		encryptedPositionMaps.keySet().stream().sorted().forEach(position ->{
+			try {
+				out.writeInt(position);
+				encryptedPositionMaps.get(position).writeExternal(out);
+				encryptionKeySharesArray[i.getAndIncrement()] = encryptionKeyShares.get(position);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+
+		});
 	}
 
 	@Override
@@ -51,11 +65,12 @@ public class EncryptedPositionMaps implements Externalizable {
 			outstandingVersionIds[i] = in.readInt();
 		}
 		size = in.readInt();
-		encryptedPositionMaps = new EncryptedPositionMap[size];
+		encryptedPositionMaps = new HashMap<>(size);
 		for (int i = 0; i < size; i++) {
+			int position = in.readInt();
 			EncryptedPositionMap e = new EncryptedPositionMap();
 			e.readExternal(in);
-			encryptedPositionMaps[i] = e;
+			encryptedPositionMaps.put(position,e);
 		}
 	}
 
@@ -63,7 +78,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		return outstandingVersionIds;
 	}
 
-	public EncryptedPositionMap[] getEncryptedPositionMaps() {
+	public Map<Integer,EncryptedPositionMap> getEncryptedPositionMaps() {
 		return encryptedPositionMaps;
 	}
 
@@ -76,7 +91,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		return "EncryptedPositionMaps{" +
 				"newVersionId=" + newVersionId +
 				", outstandingVersionIds=" + Arrays.hashCode(outstandingVersionIds) +
-				", encryptedPositionMaps=" + Arrays.toString(encryptedPositionMaps) +
+				", encryptedPositionMaps=" + encryptedPositionMaps.toString() +
 				'}';
 	}
 }

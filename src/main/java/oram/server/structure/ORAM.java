@@ -57,17 +57,14 @@ public class ORAM {
 			outstandingVersionIds[i] = snapshot.getVersionId();
 			i++;
 		}
-		EncryptedPositionMap[] encryptedPositionMaps = new EncryptedPositionMap[sequenceNumber-lastVersion];
-		VerifiableShare[] encryptionKeyShares = new VerifiableShare[encryptedPositionMaps.length];
-		i = 0;
+		Map<Integer,EncryptedPositionMap> encryptedPositionMaps = new HashMap<>(sequenceNumber);
+		Map<Integer,VerifiableShare> encryptionKeyShares = new HashMap<>(sequenceNumber);
 		for (int j = lastVersion; j < sequenceNumber; j++) {
 			EncryptedPositionMap p = positionMaps.get(j);
-			if(p == null){
-				p = new EncryptedPositionMap();
+			if(p != null) {
+				encryptedPositionMaps.put(j, p);
+				encryptionKeyShares.put(j, this.encryptionKeyShares.get(j));
 			}
-			encryptedPositionMaps[i] = p;
-			encryptionKeyShares[i] = this.encryptionKeyShares.get(j);
-			i++;
 		}
 		int newVersionId = sequenceNumber++;
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);

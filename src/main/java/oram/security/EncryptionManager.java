@@ -12,9 +12,8 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -52,11 +51,12 @@ public class EncryptionManager {
 	}
 
 	public PositionMaps decryptPositionMaps(SecretKey[] decryptionKeys, EncryptedPositionMaps encryptedPositionMaps) {
-		EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
-		PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
-		for (int i = 0; i < encryptedPMs.length; i++) {
-			positionMaps[i] = decryptPositionMap(decryptionKeys[i], encryptedPMs[i]);
-		}
+		Map<Integer,EncryptedPositionMap> encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+		Map<Integer,PositionMap> positionMaps = new HashMap<>(encryptedPMs.size());
+		AtomicInteger i = new AtomicInteger();
+		encryptedPMs.keySet().stream().sorted().forEach(index ->
+			positionMaps.put(index,decryptPositionMap(decryptionKeys[i.getAndIncrement()], encryptedPMs.get(index)))
+		);
 		return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
 				encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
 
