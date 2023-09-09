@@ -5,17 +5,19 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class EncryptedPositionMaps implements Externalizable {
 
 	private int newVersionId;
 	private int[] outstandingVersionIds;
-	private EncryptedPositionMap[] encryptedPositionMaps;
+	private Map<Integer,EncryptedPositionMap> encryptedPositionMaps;
 
 	public EncryptedPositionMaps(){}
 
 	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
-								 EncryptedPositionMap[] encryptedPositionMaps) {
+								 Map<Integer,EncryptedPositionMap> encryptedPositionMaps) {
 		this.newVersionId = newVersionId;
 		this.outstandingVersionIds = outstandingVersionIds;
 		this.encryptedPositionMaps = encryptedPositionMaps;
@@ -28,10 +30,16 @@ public class EncryptedPositionMaps implements Externalizable {
 		for (int outstandingVersionId : outstandingVersionIds) {
 			out.writeInt(outstandingVersionId);
 		}
-		out.writeInt(encryptedPositionMaps.length);
-		for (EncryptedPositionMap encryptedPositionMap : encryptedPositionMaps) {
-			encryptedPositionMap.writeExternal(out);
-		}
+		out.writeInt(encryptedPositionMaps.size());
+		encryptedPositionMaps.keySet().stream().sorted().forEach(position ->{
+			try {
+				out.writeInt(position);
+				encryptedPositionMaps.get(position).writeExternal(out);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+
+		});
 	}
 
 	@Override
@@ -43,11 +51,12 @@ public class EncryptedPositionMaps implements Externalizable {
 			outstandingVersionIds[i] = in.readInt();
 		}
 		size = in.readInt();
-		encryptedPositionMaps = new EncryptedPositionMap[size];
+		encryptedPositionMaps = new HashMap<>(size);
 		for (int i = 0; i < size; i++) {
+			int position = in.readInt();
 			EncryptedPositionMap e = new EncryptedPositionMap();
 			e.readExternal(in);
-			encryptedPositionMaps[i] = e;
+			encryptedPositionMaps.put(position,e);
 		}
 	}
 
@@ -55,7 +64,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		return outstandingVersionIds;
 	}
 
-	public EncryptedPositionMap[] getEncryptedPositionMaps() {
+	public Map<Integer,EncryptedPositionMap> getEncryptedPositionMaps() {
 		return encryptedPositionMaps;
 	}
 
@@ -68,7 +77,7 @@ public class EncryptedPositionMaps implements Externalizable {
 		return "EncryptedPositionMaps{" +
 				"newVersionId=" + newVersionId +
 				", outstandingVersionIds=" + Arrays.hashCode(outstandingVersionIds) +
-				", encryptedPositionMaps=" + Arrays.toString(encryptedPositionMaps) +
+				", encryptedPositionMaps=" + encryptedPositionMaps.toString() +
 				'}';
 	}
 }

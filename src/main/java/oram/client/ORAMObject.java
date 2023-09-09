@@ -340,21 +340,24 @@ public class ORAMObject {
 		}
 	}
 
-	private void mergePositionMaps(PositionMap[] positionMaps, int latestSequenceNumber) {
+	private void mergePositionMaps(Map<Integer,PositionMap> positionMaps, int latestSequenceNumber) {
 		int firstSequenceNumber = mergedPositionMap.getLatestSequenceNumber();
 		int oldSequenceNumber = mergedPositionMap.getLatestSequenceNumber();
-		for (int i = 0; i < positionMaps.length; i++) {
-			if (positionMaps[i] == null && oldSequenceNumber == firstSequenceNumber){
-				oldSequenceNumber += i;
+		int j = 0;
+		for (int i = firstSequenceNumber; i < latestSequenceNumber; i++) {
+			PositionMap currentPM = positionMaps.get(i);
+			if (currentPM == null && oldSequenceNumber == firstSequenceNumber){
+				oldSequenceNumber += j;
 				mergedPositionMap.setLatestSequenceNumber(oldSequenceNumber);
-			} else if (positionMaps[i] != null) {
-				PositionMap map = positionMaps[i];
-				int address = map.getAddress();
-				if(address != ORAMUtils.DUMMY_ADDRESS && map.getVersionId() >= mergedPositionMap.getVersionIdAt(address)) {
-					mergedPositionMap.setPathAt(address, map.getPathId());
-					mergedPositionMap.setVersionIdAt(address, map.getVersionId());
+			} else if (currentPM != null) {
+				int address = currentPM.getAddress();
+				if(address != ORAMUtils.DUMMY_ADDRESS && currentPM.getVersionId() >=
+						mergedPositionMap.getVersionIdAt(address)) {
+					mergedPositionMap.setPathAt(address, currentPM.getPathId());
+					mergedPositionMap.setVersionIdAt(address, currentPM.getVersionId());
 				}
 			}
+			j++;
 		}
 		if(firstSequenceNumber == mergedPositionMap.getLatestSequenceNumber()){
 			mergedPositionMap.setLatestSequenceNumber(latestSequenceNumber);

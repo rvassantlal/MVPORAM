@@ -9,7 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -32,11 +35,12 @@ public class EncryptionManager {
 	}
 
 	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
-		EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
-		PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
-		for (int i = 0; i < encryptedPMs.length; i++) {
-			positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
-		}
+		Map<Integer,EncryptedPositionMap> encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+		Map<Integer,PositionMap> positionMaps = new HashMap<>(encryptedPMs.size());
+		AtomicInteger i = new AtomicInteger();
+		encryptedPMs.keySet().stream().sorted().forEach(index ->
+				positionMaps.put(index,decryptPositionMap(encryptedPMs.get(index)))
+		);
 		return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
 				encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
 
