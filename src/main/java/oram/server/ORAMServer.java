@@ -28,6 +28,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private int getPMCounter = 0;
 	private int getPSCounter = 0;
 	private int evictCounter = 0;
+	private int outstandingNumber = 0;
+	private int totalNumber = 0;
 	private long lastPrint;
 
 
@@ -115,6 +117,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long delay = end - start;
 		logger.info("eviction[ns]: {}", delay);
 		evictCounter++;
+		outstandingNumber = oram.getOutstandingNumber();
+		totalNumber = oram.getAllVersionNumber();
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -223,9 +227,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - lastPrint;
 		if (delay >= 2_000_000_000) {
-			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]" +
-							")>({}|{}|{}|{}|{})",
-					senders.size(), delay, getPMCounter, getPSCounter, evictCounter);
+			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|allTrees[#]" +
+							")>({}|{}|{}|{}|{}|{}|{})",
+					senders.size(), delay, getPMCounter, getPSCounter, evictCounter,outstandingNumber,totalNumber);
 			getPMCounter = 0;
 			getPSCounter = 0;
 			evictCounter = 0;
