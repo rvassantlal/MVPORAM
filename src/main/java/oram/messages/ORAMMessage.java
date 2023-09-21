@@ -1,11 +1,10 @@
 package oram.messages;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import oram.utils.CustomExternalizable;
 
-public class ORAMMessage implements Externalizable {
+import java.io.*;
+
+public class ORAMMessage implements CustomExternalizable {
 	private int oramId;
 
 	public ORAMMessage() {}
@@ -19,12 +18,12 @@ public class ORAMMessage implements Externalizable {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(oramId);
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		oramId = in.readInt();
 	}
 }

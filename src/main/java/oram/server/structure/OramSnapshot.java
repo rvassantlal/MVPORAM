@@ -5,50 +5,26 @@ import java.io.Serializable;
 import java.util.*;
 
 
-public class OramSnapshot implements Serializable, Comparable {
+public class OramSnapshot implements Serializable {
 	private final Integer versionId;
-	private final List<OramSnapshot> previous;
-	private EncryptedPositionMap positionMap;
+	private final Set<OramSnapshot> previous;
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
 
-	public OramSnapshot(int versionId, OramSnapshot[] previousTrees, EncryptedPositionMap encryptedPositionMap,
+	public OramSnapshot(int versionId, OramSnapshot[] previousTrees,
 						EncryptedStash encryptedStash) {
 		this.versionId = versionId;
 		this.difTree = new TreeMap<>();
-		positionMap = encryptedPositionMap;
-		stash = encryptedStash;
-		previous = new LinkedList<>();
+		this.stash = encryptedStash;
+		this.previous = new HashSet<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
-	public void garbageCollect(BitSet locationsMarker, int tree_size, HashSet<Integer> visitedVersions, TreeSet<OramSnapshot> versions) {
-		if(!versions.contains(this)){
-			this.positionMap = null;
-		}
-		if (!visitedVersions.contains(versionId)) {
-			visitedVersions.add(versionId);
-			for (Map.Entry<Integer, EncryptedBucket> location : difTree.entrySet()) {
-				if (!locationsMarker.get(location.getKey())) {
-					locationsMarker.set(location.getKey(), true);
-					location.getValue().taintBucket();
-				} else {
-					location.getValue().untaintBucket();
-				}
-			}
-			if (locationsMarker.previousClearBit(tree_size - 1) != -1) {
-				for (OramSnapshot oramSnapshot : previous) {
-					oramSnapshot.garbageCollect((BitSet) locationsMarker.clone(), tree_size, visitedVersions, versions);
-				}
-			}
-		}
+	public TreeMap<Integer, EncryptedBucket> getDifTree() {
+		return difTree;
 	}
 
-	public EncryptedPositionMap getPositionMap() {
-		return positionMap;
-	}
-
-	public List<OramSnapshot> getPrevious() {
+	public Set<OramSnapshot> getPrevious() {
 		return previous;
 	}
 
@@ -80,36 +56,14 @@ public class OramSnapshot implements Serializable, Comparable {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(versionId);
-	}
-
-	@Override
-	public int compareTo(Object o) {
-		if (o instanceof OramSnapshot) {
-			return Integer.compare(this.versionId, ((OramSnapshot) o).getVersionId());
-		}
-		throw new IllegalArgumentException();
-	}
-
-	public boolean removeNonTainted() {
-		boolean allNonTainted = true;
-		for (Map.Entry<Integer, EncryptedBucket> entry : difTree.entrySet()) {
-			if (entry.getValue().isTainted()) {
-				allNonTainted = false;
-				break;
-			}
-		}
-		return allNonTainted;
+		return versionId;
 	}
 
 	public void addPrevious(List<OramSnapshot> previousFromPrevious) {
-		for (OramSnapshot fromPrevious : previousFromPrevious) {
-			if (!previous.contains(fromPrevious))
-				previous.add(fromPrevious);
-		}
+		previous.addAll(previousFromPrevious);
 	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
-		previous.removeAll(previousVersion);
+		previousVersion.forEach(previous::remove);
 	}
 }

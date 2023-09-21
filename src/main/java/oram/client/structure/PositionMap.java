@@ -1,31 +1,56 @@
 package oram.client.structure;
 
+import oram.utils.CustomExternalizable;
 import oram.utils.ORAMUtils;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.*;
+import java.util.Arrays;
 
-public class PositionMap implements Externalizable {
-	// This array maps a memory address to a pathId (max 256 paths).
+public class PositionMap implements CustomExternalizable {
 	private int[] pathIds;
 	private int[] versionIds;
+	private int address; //Used only with triple position map
 
 	public PositionMap() {
 	}
 
+	public PositionMap(int size) {
+		this.versionIds = new int[size];
+		this.pathIds = new int[size];
+		Arrays.fill(pathIds, ORAMUtils.DUMMY_PATH);
+	}
+
 	public PositionMap(int[] versionIds, int[] pathIds) {
-		this.versionIds = versionIds;
-		this.pathIds = pathIds;
+		this.versionIds = versionIds == null ? new int[0] : versionIds;
+		this.pathIds = pathIds == null ? new int[0] : pathIds;
+		this.address = -1;
+	}
+
+	public PositionMap(int versionId, int pathId, int address) {
+		this.versionIds = new int[] {versionId};
+		this.pathIds = new int[] {pathId};
+		this.address = address;
+	}
+
+	public int getAddress() {
+		return address;
 	}
 
 	public int getPathAt(int address) {
-		return pathIds == null || pathIds.length < address ? ORAMUtils.DUMMY_PATH : pathIds[address];
+		if (pathIds.length == 1 && this.address == address) {
+			return pathIds[0];
+		} else if (pathIds.length < address) {
+			return ORAMUtils.DUMMY_PATH;
+		}
+		return pathIds[address];
 	}
 
 	public void setPathAt(int address, int pathId) {
-		pathIds[address] = pathId;
+		if (pathIds.length == 1 && this.address == address) {
+			pathIds[0] = pathId;
+		} else if (pathIds.length >= address) {
+			pathIds[address] = pathId;
+		}
 	}
 
 	public int[] getPathIds() {
@@ -33,36 +58,45 @@ public class PositionMap implements Externalizable {
 	}
 
 	public int getVersionIdAt(int address) {
-		return versionIds == null || versionIds.length < address ? ORAMUtils.DUMMY_VERSION : versionIds[address];
-	}
-
-	public int[] getVersionIds() {
-		return versionIds;
+		if (versionIds.length == 1 && this.address == address) {
+			return versionIds[0];
+		} else if (versionIds.length < address) {
+			return ORAMUtils.DUMMY_VERSION;
+		}
+		return versionIds[address];
 	}
 
 	public void setVersionIdAt(int address, int newVersionId) {
-		versionIds[address] = newVersionId;
-	}
-
-	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
-		out.writeInt(pathIds == null ? -1 : pathIds.length);
-		for (int i = 0; i < pathIds.length; i++) {
-			out.writeInt(pathIds[i]);
-			out.writeInt(versionIds[i]);
+		if (versionIds.length == 1 && this.address == address) {
+			versionIds[0] = newVersionId;
+		} else if (versionIds.length >= address) {
+			versionIds[address] = newVersionId;
 		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
+		out.writeInt(pathIds.length);
+		for (int i = 0; i < pathIds.length; i++) {
+			out.writeInt(pathIds[i]);
+			out.writeInt(versionIds[i]);
+		}
+		if (pathIds.length == 1) {
+			out.writeInt(address);
+		}
+	}
+
+	@Override
+	public void readExternal(DataInput in) throws IOException {
 		int size = in.readInt();
-		if (size != -1) {
-			pathIds = new int[size];
-			versionIds = new int[size];
-			for (int i = 0; i < size; i++) {
-				pathIds[i] = in.readInt();
-				versionIds[i] = in.readInt();
-			}
+		pathIds = new int[size];
+		versionIds = new int[size];
+		for (int i = 0; i < size; i++) {
+			pathIds[i] = in.readInt();
+			versionIds[i] = in.readInt();
+		}
+		if (size == 1) {
+			address = in.readInt();
 		}
 	}
 

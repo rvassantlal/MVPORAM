@@ -1,13 +1,12 @@
 package oram.client.structure;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import oram.utils.CustomExternalizable;
+
+import java.io.*;
 import java.util.LinkedList;
 import java.util.List;
 
-public class Stash implements Externalizable {
+public class Stash implements CustomExternalizable {
 	private final List<Block> blocks;
 	private final int blockSize;
 
@@ -37,7 +36,7 @@ public class Stash implements Externalizable {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(blocks.size());
 		for (Block block : blocks){
 			block.writeExternal(out);
@@ -45,7 +44,7 @@ public class Stash implements Externalizable {
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		int size = in.readInt();
 		while (size-- > 0) {
 			Block block = new Block(blockSize);

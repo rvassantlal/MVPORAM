@@ -1,5 +1,6 @@
 package oram.benchmark;
 
+import bftsmart.benchmark.Measurement;
 import controller.IBenchmarkStrategy;
 import controller.IWorkerStatusListener;
 import controller.WorkerHandler;
@@ -52,6 +53,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private double[] maxThroughput;
 	private boolean measureResources;
 	private String storageFileNamePrefix;
+	private String positionMapType;
 
 
 	public MeasurementBenchmarkStrategy() {
@@ -81,6 +83,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		for (int i = 0; i < tokens.length; i++) {
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
+		positionMapType = benchmarkParameters.getProperty("experiment.position_map_type");
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
@@ -95,7 +98,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		}
 
 		//Separate workers
-
 		serverWorkers = new WorkerHandler[nServerWorkers];
 		clientWorkers = new WorkerHandler[nClientWorkers];
 		System.arraycopy(workers, 0, serverWorkers, 0, nServerWorkers);
@@ -133,8 +135,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					logger.info("============ Round: {} ============", round);
 					int nClients = clientsPerRound[round - 1];
 					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_round_%d_", f, treeHeight,
-							bucketSize, blockSize, round);
+					storageFileNamePrefix = String.format("f_%d_pm_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
+							positionMapType, treeHeight, bucketSize, blockSize, round);
 					//Distribute clients per workers
 					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients, maxClientsPerProcess);
 					String vector = Arrays.toString(clientsPerWorker);
@@ -218,8 +220,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + treeHeight + " " + bucketSize + " " + blockSize
-						+ " " + isMeasurementWorker;
+						+ " " + nRequests + " " + positionMapType + " " + treeHeight + " " + bucketSize
+						+ " " + blockSize + " " + isMeasurementWorker;
 				commands[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
@@ -462,7 +464,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 												 long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
 												 long[] getPSLatency, long[] evictionLatency,
 												 long[] outstanding, long[] totalTrees) {
-		saveServerMeasurements(round, clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests,
+		saveServerMeasurements(clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests,
 				getPMLatency, getPSLatency, evictionLatency, outstanding, totalTrees);
 		long[] evictionThroughput = new long[clients.length];
 		long minClients = Long.MAX_VALUE;
@@ -491,7 +493,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		maxThroughput[round - 1] = st.getMax(true);
 	}
 
-	public void saveServerMeasurements(int round, long[] clients, long[] delta, long[] nGetPMRequests,
+	public void saveServerMeasurements(long[] clients, long[] delta, long[] nGetPMRequests,
 									   long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
 									   long[] getPSLatency, long[] evictionLatency, long[] outstanding, long[] totalTrees) {
 		String fileName = storageFileNamePrefix + "server_global.csv";

@@ -1,58 +1,55 @@
 package oram.server.structure;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import oram.utils.CustomExternalizable;
 
-public class EncryptedPositionMaps implements Externalizable {
+import java.io.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+public class EncryptedPositionMaps implements CustomExternalizable {
 
 	private int newVersionId;
-	private int[] outstandingVersionIds;
-	private EncryptedPositionMap[] encryptedPositionMaps;
+	private Map<Integer, EncryptedPositionMap> encryptedPositionMaps;
 
 	public EncryptedPositionMaps(){}
 
-	public EncryptedPositionMaps(int newVersionId, int[] outstandingVersionIds,
-								 EncryptedPositionMap[] encryptedPositionMaps) {
+	public EncryptedPositionMaps(int newVersionId, Map<Integer, EncryptedPositionMap> encryptedPositionMaps) {
 		this.newVersionId = newVersionId;
-		this.outstandingVersionIds = outstandingVersionIds;
 		this.encryptedPositionMaps = encryptedPositionMaps;
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(newVersionId);
-		out.writeInt(outstandingVersionIds.length);
-		for (int outstandingVersionId : outstandingVersionIds) {
-			out.writeInt(outstandingVersionId);
+		int[] keys = new int[encryptedPositionMaps.size()];
+		int k = 0;
+		for (Integer i : encryptedPositionMaps.keySet()) {
+			keys[k++] = i;
 		}
-		for (EncryptedPositionMap encryptedPositionMap : encryptedPositionMaps) {
-			encryptedPositionMap.writeExternal(out);
+		Arrays.sort(keys);
+
+		out.writeInt(encryptedPositionMaps.size());
+		for (int key : keys) {
+			out.writeInt(key);
+			encryptedPositionMaps.get(key).writeExternal(out);
 		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		newVersionId = in.readInt();
 		int size = in.readInt();
-		outstandingVersionIds = new int[size];
-		encryptedPositionMaps = new EncryptedPositionMap[size];
-		for (int i = 0; i < size; i++) {
-			outstandingVersionIds[i] = in.readInt();
-		}
-		for (int i = 0; i < size; i++) {
-			EncryptedPositionMap e = new EncryptedPositionMap();
-			e.readExternal(in);
-			encryptedPositionMaps[i] = e;
+		encryptedPositionMaps = new HashMap<>(size);
+		while (size-- > 0) {
+			int key = in.readInt();
+			EncryptedPositionMap pm = new EncryptedPositionMap();
+			pm.readExternal(in);
+			encryptedPositionMaps.put(key, pm);
 		}
 	}
 
-	public int[] getOutstandingVersionIds() {
-		return outstandingVersionIds;
-	}
-
-	public EncryptedPositionMap[] getEncryptedPositionMaps() {
+	public Map<Integer, EncryptedPositionMap> getEncryptedPositionMaps() {
 		return encryptedPositionMaps;
 	}
 

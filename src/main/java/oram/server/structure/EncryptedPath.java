@@ -1,11 +1,10 @@
 package oram.server.structure;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import oram.utils.CustomExternalizable;
 
-public class EncryptedPath implements Externalizable {
+import java.io.*;
+
+public class EncryptedPath implements CustomExternalizable {
 	private final EncryptedBucket[] encryptedBuckets;
 	private final int bucketSize;
 	private final int blockSize;
@@ -23,14 +22,14 @@ public class EncryptedPath implements Externalizable {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		for (EncryptedBucket encryptedBucket : encryptedBuckets) {
 			encryptedBucket.writeExternal(out);
 		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		for (int i = 0; i < encryptedBuckets.length; i++) {
 			EncryptedBucket encryptedBucket = new EncryptedBucket(bucketSize);
 			encryptedBucket.readExternal(in);

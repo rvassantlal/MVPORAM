@@ -2,12 +2,12 @@ package oram.messages;
 
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
+import oram.utils.PositionMapType;
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.*;
 
 public class CreateORAMMessage extends ORAMMessage {
+	private PositionMapType positionMapType;
 	private int treeHeight;
 	private int nBlocksPerBucket;
 	private int blockSize;
@@ -16,14 +16,19 @@ public class CreateORAMMessage extends ORAMMessage {
 
 	public CreateORAMMessage() {}
 
-	public CreateORAMMessage(int oramId, int treeHeight, int nBlocksPerBucket, int blockSize,
-							 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+	public CreateORAMMessage(int oramId, PositionMapType positionMapType, int treeHeight, int nBlocksPerBucket,
+							 int blockSize, EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		super(oramId);
+		this.positionMapType = positionMapType;
 		this.treeHeight = treeHeight;
 		this.nBlocksPerBucket = nBlocksPerBucket;
 		this.blockSize = blockSize;
 		this.encryptedPositionMap = encryptedPositionMap;
 		this.encryptedStash = encryptedStash;
+	}
+
+	public PositionMapType getPositionMapType() {
+		return positionMapType;
 	}
 
 	public int getTreeHeight() {
@@ -47,8 +52,9 @@ public class CreateORAMMessage extends ORAMMessage {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		super.writeExternal(out);
+		out.writeByte(positionMapType.ordinal());
 		out.writeInt(treeHeight);
 		out.writeInt(nBlocksPerBucket);
 		out.writeInt(blockSize);
@@ -57,8 +63,9 @@ public class CreateORAMMessage extends ORAMMessage {
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		super.readExternal(in);
+		positionMapType = PositionMapType.getPositionMapType(in.readByte());
 		treeHeight = in.readInt();
 		nBlocksPerBucket = in.readInt();
 		blockSize = in.readInt();

@@ -5,12 +5,10 @@ import confidential.ConfidentialMessage;
 import confidential.facade.server.ConfidentialServerFacade;
 import confidential.facade.server.ConfidentialSingleExecutable;
 import confidential.statemanagement.ConfidentialSnapshot;
-import oram.messages.CreateORAMMessage;
-import oram.messages.EvictionORAMMessage;
-import oram.messages.ORAMMessage;
-import oram.messages.StashPathORAMMessage;
+import oram.messages.*;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
+import oram.utils.PositionMapType;
 import oram.utils.ServerOperationType;
 import oram.utils.Status;
 import org.slf4j.Logger;
@@ -48,7 +46,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	@Override
 	public ConfidentialMessage appExecuteOrdered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			ServerOperationType op = ServerOperationType.getOperation(in.read());
 			ORAMMessage request;
 			senders.add(msgCtx.getSender());
@@ -62,9 +60,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return getORAM(request);
 				case GET_POSITION_MAP:
-					request = new ORAMMessage();
+					request = new GetPositionMap();
 					request.readExternal(in);
-					return getPositionMap(request, msgCtx);
+					return getPositionMap((GetPositionMap) request, msgCtx);
 				case GET_STASH_AND_PATH:
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
@@ -74,7 +72,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return performEviction((EvictionORAMMessage) request, msgCtx);
 			}
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
 		} finally {
 			printReport();
@@ -85,7 +83,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	@Override
 	public ConfidentialMessage appExecuteUnordered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			ServerOperationType op = ServerOperationType.getOperation(in.read());
 			ORAMMessage request;
 			senders.add(msgCtx.getSender());
@@ -99,7 +97,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
 			}
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			logger.error("Failed to attend unordered request from {}", msgCtx.getSender(), e);
 		}
 		return null;
@@ -137,7 +135,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (encryptedStashesAndPaths != null)
 			size = encryptedStashesAndPaths.getSize(oram.getOramContext());
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(size);
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+			 DataOutputStream out = new DataOutputStream(bos)) {
 			if (encryptedStashesAndPaths != null)
 				encryptedStashesAndPaths.writeExternal(out);
 			out.flush();
@@ -160,11 +158,13 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{-1});
 		} else {
 			ORAMContext oramContext = oram.getOramContext();
+			PositionMapType positionMapType = oramContext.getPositionMapType();
 			int treeHeight = oramContext.getTreeHeight();
 			int nBlocksPerBucket = oramContext.getBucketSize();
 			int blockSize = oramContext.getBlockSize();
 			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-				 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+				 DataOutputStream out = new DataOutputStream(bos)) {
+				out.writeByte(positionMapType.ordinal());
 				out.writeInt(treeHeight);
 				out.writeInt(nBlocksPerBucket);
 				out.writeInt(blockSize);
@@ -178,16 +178,16 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(ORAMMessage request, MessageContext msgCtx) {
+	private ConfidentialMessage getPositionMap(GetPositionMap request, MessageContext msgCtx) {
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender());
+		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender(), request);
 
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+			 DataOutputStream out = new DataOutputStream(bos)) {
 			positionMaps.writeExternal(out);
 			out.flush();
 			bos.flush();
@@ -205,6 +205,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 	private ConfidentialMessage createORAM(CreateORAMMessage request) {
 		int oramId = request.getOramId();
+		PositionMapType positionMapType = request.getPositionMapType();
 		int treeHeight = request.getTreeHeight();
 		int nBlocksPerBucket = request.getNBlocksPerBucket();
 		int blockSize = request.getBlockSize();
@@ -215,8 +216,19 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 		} else {
 			logger.debug("Created an ORAM with id {} of {} levels", oramId, treeHeight + 1);
-			ORAM oram = new ORAM(oramId, treeHeight, nBlocksPerBucket, blockSize,
-					encryptedPositionMap, encryptedStash);
+			ORAM oram;
+			if (positionMapType == PositionMapType.FULL_POSITION_MAP) {
+				logger.debug("Using full position map");
+				oram = new FullPositionMapORAM(oramId, positionMapType, treeHeight, nBlocksPerBucket, blockSize,
+						encryptedPositionMap, encryptedStash);
+			} else if (positionMapType == PositionMapType.TRIPLE_POSITION_MAP) {
+				logger.debug("Using triple position map");
+				oram = new TriplePositionMapORAM(oramId, positionMapType, treeHeight, nBlocksPerBucket, blockSize,
+						encryptedPositionMap, encryptedStash);
+			} else {
+				logger.error("Unknown position map type");
+				return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
+			}
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}

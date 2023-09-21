@@ -1,5 +1,6 @@
 package oram.benchmark;
 
+import bftsmart.benchmark.Measurement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import worker.IProcessingResult;

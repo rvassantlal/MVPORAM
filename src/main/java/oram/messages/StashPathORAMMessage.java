@@ -1,8 +1,6 @@
 package oram.messages;
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.*;
 
 public class StashPathORAMMessage extends ORAMMessage {
 
@@ -20,13 +18,13 @@ public class StashPathORAMMessage extends ORAMMessage {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		super.writeExternal(out);
 		out.writeInt(pathId);
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		super.readExternal(in);
 		pathId = in.readInt();
 	}

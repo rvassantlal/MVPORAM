@@ -1,18 +1,15 @@
 package oram.server.structure;
 
+import oram.utils.CustomExternalizable;
 import oram.utils.ORAMContext;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.*;
 import java.util.*;
 
-public class EncryptedStashesAndPaths implements Externalizable {
+public class EncryptedStashesAndPaths implements CustomExternalizable {
 	private ORAMContext oramContext;
 	private Map<Integer, EncryptedStash> encryptedStashes;
 	private Map<Integer, EncryptedBucket[]> paths;
-	private Map<Integer, Set<Integer>> versionPaths;
 	private int ints = 0;
 	private int buckets = 0;
 
@@ -23,11 +20,10 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes, Map<Integer, EncryptedBucket[]> paths,
-									Map<Integer, Set<Integer>> versionPaths) {
+	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes,
+									Map<Integer, EncryptedBucket[]> paths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
-		this.versionPaths = versionPaths;
 	}
 
 	public Map<Integer, EncryptedStash> getEncryptedStashes() {
@@ -38,12 +34,8 @@ public class EncryptedStashesAndPaths implements Externalizable {
 		return paths;
 	}
 
-	public Map<Integer, Set<Integer>> getVersionPaths() {
-		return versionPaths;
-	}
-
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(encryptedStashes.size());
 		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
 			out.writeInt(entry.getKey());
@@ -57,19 +49,10 @@ public class EncryptedStashesAndPaths implements Externalizable {
 				encryptedBucket.writeExternal(out);
 			}
 		}
-		out.writeInt(versionPaths.size());
-		for (Map.Entry<Integer, Set<Integer>> entry : versionPaths.entrySet()) {
-			out.writeInt(entry.getKey());
-			Set<Integer> versionIds = entry.getValue();
-			out.writeInt(versionIds.size());
-			for (int versionId : versionIds) {
-				out.writeInt(versionId);
-			}
-		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+	public void readExternal(DataInput in) throws IOException {
 		int size = in.readInt();
 		ints += size;
 		encryptedStashes = new HashMap<>(size);
@@ -93,18 +76,6 @@ public class EncryptedStashesAndPaths implements Externalizable {
 				encryptedBuckets[i] = bucket;
 			}
 			paths.put(versionId, encryptedBuckets);
-		}
-		size = in.readInt();
-		versionPaths = new HashMap<>(size);
-		while (size-- > 0) {
-			int outstandingId = in.readInt();
-			int nValues = in.readInt();
-			ints += (nValues+1);
-			Set<Integer> versionIds = new HashSet<>(nValues);
-			while (nValues-- > 0){
-				versionIds.add(in.readInt());
-			}
-			versionPaths.put(outstandingId, versionIds);
 		}
 	}
 

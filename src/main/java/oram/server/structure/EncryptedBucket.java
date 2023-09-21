@@ -1,12 +1,11 @@
 package oram.server.structure;
 
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import oram.utils.CustomExternalizable;
+
+import java.io.*;
 import java.util.Arrays;
 
-public class EncryptedBucket implements Externalizable {
+public class EncryptedBucket implements CustomExternalizable {
 	private final byte[][] blocks;
 
 	private boolean tainted;
@@ -36,7 +35,7 @@ public class EncryptedBucket implements Externalizable {
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		for (byte[] block : blocks) {
 			out.writeInt(block.length);
 			out.write(block);
@@ -44,7 +43,7 @@ public class EncryptedBucket implements Externalizable {
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException {
+	public void readExternal(DataInput in) throws IOException {
 		for (int i = 0; i < blocks.length; i++) {
 			blocks[i] = new byte[in.readInt()];
 			in.readFully(blocks[i]);

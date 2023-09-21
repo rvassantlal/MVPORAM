@@ -1,74 +1,60 @@
 package oram.client.structure;
 
-import java.io.Externalizable;
+import oram.utils.CustomExternalizable;
+
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-public class PositionMaps implements Externalizable {
+public class PositionMaps implements CustomExternalizable {
 	private int newVersionId;
-	private int[] outstandingVersionIds;
-	private PositionMap[] positionMaps;
+	private Map<Integer, PositionMap> positionMaps;
 
-	public PositionMaps() {
-	}
+	public PositionMaps() {}
 
-	public PositionMaps(int newVersionId, int[] outstandingVersionIds,
-						PositionMap[] positionMaps) {
+	public PositionMaps(int newVersionId, Map<Integer, PositionMap> positionMaps) {
 		this.newVersionId = newVersionId;
-		this.outstandingVersionIds = outstandingVersionIds;
 		this.positionMaps = positionMaps;
 	}
 
 	@Override
-	public void writeExternal(ObjectOutput out) throws IOException {
+	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(newVersionId);
-		out.writeInt(outstandingVersionIds.length);
-		for (int outstandingVersionId : outstandingVersionIds) {
-			out.writeInt(outstandingVersionId);
+		int[] keys = new int[positionMaps.size()];
+		int k = 0;
+		for (Integer i : positionMaps.keySet()) {
+			keys[k++] = i;
 		}
-		for (PositionMap positionMap : positionMaps) {
-			positionMap.writeExternal(out);
+		Arrays.sort(keys);
+
+		out.writeInt(positionMaps.size());
+		for (int key : keys) {
+			out.writeInt(key);
+			positionMaps.get(key).writeExternal(out);
 		}
 	}
 
 	@Override
-	public void readExternal(ObjectInput in) throws IOException {
+	public void readExternal(DataInput in) throws IOException {
 		newVersionId = in.readInt();
 		int size = in.readInt();
-		outstandingVersionIds = new int[size];
-		positionMaps = new PositionMap[size];
-		for (int i = 0; i < size; i++) {
-			outstandingVersionIds[i] = in.readInt();
-		}
-		for (int i = 0; i < size; i++) {
-			PositionMap e = new PositionMap();
-			e.readExternal(in);
-			positionMaps[i] = e;
+		positionMaps = new HashMap<>(size);
+		while (size-- > 0) {
+			int key = in.readInt();
+			PositionMap pm = new PositionMap();
+			pm.readExternal(in);
+			positionMaps.put(key, pm);
 		}
 	}
 
-	public int[] getOutstandingVersionIds() {
-		return outstandingVersionIds;
-	}
-
-	public PositionMap[] getPositionMaps() {
+	public Map<Integer, PositionMap> getPositionMaps() {
 		return positionMaps;
 	}
 
 	public int getNewVersionId() {
 		return newVersionId;
-	}
-
-	@Override
-	public String toString() {
-		StringBuilder sb = new StringBuilder();
-		sb.append("PositionMaps{ ");
-		for (int i = 0; i < positionMaps.length; i++) {
-			sb.append(outstandingVersionIds[i]).append(" : [").append(positionMaps[i].toString()).append("] ");
-		}
-		sb.append("} ");
-		return sb.toString();
-
 	}
 }

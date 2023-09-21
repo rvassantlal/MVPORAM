@@ -1,4 +1,4 @@
-package oram.client;
+package oram.security;
 
 import oram.client.structure.*;
 import oram.security.EncryptionAbstraction;
@@ -21,35 +21,34 @@ public class EncryptionManager {
 
 	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedPositionMaps);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
 			encryptedPositionMaps.readExternal(in);
 			return decryptPositionMaps(encryptedPositionMaps);
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			logger.error("Failed to decrypt position map", e);
 			return null;
 		}
 	}
 
 	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
-		EncryptedPositionMap[] encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
-		PositionMap[] positionMaps = new PositionMap[encryptedPMs.length];
-		for (int i = 0; i < encryptedPMs.length; i++) {
-			positionMaps[i] = decryptPositionMap(encryptedPMs[i]);
+		Map<Integer, EncryptedPositionMap> encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
+		Map<Integer, PositionMap> positionMaps = new HashMap<>(encryptedPMs.size());
+		for (Map.Entry<Integer, EncryptedPositionMap> entry : encryptedPMs.entrySet()) {
+			positionMaps.put(entry.getKey(), decryptPositionMap(entry.getValue()));
 		}
-		return new PositionMaps(encryptedPositionMaps.getNewVersionId(),
-				encryptedPositionMaps.getOutstandingVersionIds(), positionMaps);
+		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), positionMaps);
 
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedStashesAndPaths);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
 			encryptedStashesAndPaths.readExternal(in);
 
 			return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			logger.error("Failed to decrypt stashes and paths", e);
 			return null;
 		}
@@ -60,8 +59,7 @@ public class EncryptionManager {
 		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
 				encryptedStashesAndPaths.getEncryptedStashes());
 		Map<Integer, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
-		Map<Integer, Set<Integer>> versionPaths = encryptedStashesAndPaths.getVersionPaths();
-		return new StashesAndPaths(stashes, paths , versionPaths);
+		return new StashesAndPaths(stashes, paths);
 	}
 
 	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
@@ -87,7 +85,7 @@ public class EncryptionManager {
 
 	public EncryptedPositionMap encryptPositionMap(PositionMap positionMap) {
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+			 DataOutputStream out = new DataOutputStream(bos)) {
 			positionMap.writeExternal(out);
 			out.flush();
 			bos.flush();
@@ -102,7 +100,7 @@ public class EncryptionManager {
 		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
 		PositionMap deserializedPositionMap = new PositionMap();
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			deserializedPositionMap.readExternal(in);
 		} catch (IOException e) {
 			logger.error("Failed to decrypt position map", e);
@@ -113,7 +111,7 @@ public class EncryptionManager {
 
 	public EncryptedStash encryptStash(Stash stash) {
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+			 DataOutputStream out = new DataOutputStream(bos)) {
 			stash.writeExternal(out);
 			out.flush();
 			bos.flush();
@@ -128,9 +126,9 @@ public class EncryptionManager {
 		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStash.getEncryptedStash());
 		Stash deserializedStash = new Stash(blockSize);
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
-			 ObjectInputStream in = new ObjectInputStream(bis)) {
+			 DataInputStream in = new DataInputStream(bis)) {
 			deserializedStash.readExternal(in);
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			logger.error("Failed to decrypt stash", e);
 			return null;
 		}
@@ -143,7 +141,7 @@ public class EncryptionManager {
 		byte[][] encryptedBlocks = new byte[bucketContents.length][];
 		for (int i = 0; i < bucketContents.length; i++) {
 			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-				 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+				 DataOutputStream out = new DataOutputStream(bos)) {
 				bucketContents[i].writeExternal(out);
 				out.flush();
 				bos.flush();
@@ -164,7 +162,7 @@ public class EncryptionManager {
 			byte[] serializedBlock = encryptionAbstraction.decrypt(block);
 			Block deserializedBlock = new Block(oramContext.getBlockSize());
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedBlock);
-				 ObjectInputStream in = new ObjectInputStream(bis)) {
+				 DataInputStream in = new DataInputStream(bis)) {
 				deserializedBlock.readExternal(in);
 			} catch (IOException e) {
 				logger.error("Failed to decrypt block", e);
@@ -192,7 +190,8 @@ public class EncryptionManager {
 		Block[] blocks = bucket.readBucket();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
-				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_BLOCK);
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION, 
+						ORAMUtils.DUMMY_BLOCK);
 			}
 		}
 	}

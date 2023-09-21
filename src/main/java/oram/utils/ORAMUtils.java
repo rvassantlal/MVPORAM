@@ -4,8 +4,8 @@ import oram.messages.ORAMMessage;
 import org.apache.commons.lang3.tuple.Triple;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -15,6 +15,10 @@ public class ORAMUtils {
 	public static final int DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
 	public static final byte[] DUMMY_BLOCK = new byte[0];
+
+	public static int computeTreeSize(int treeHeight, int bucketSize) {
+		return computeNumberOfNodes(treeHeight) * bucketSize;
+	}
 
 	public static int computeNumberOfNodes(int treeHeight) {
 		int nNodes = 0;
@@ -81,7 +85,7 @@ public class ORAMUtils {
 
 	public static byte[] serializeRequest(ServerOperationType operation, ORAMMessage request) {
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 ObjectOutputStream out = new ObjectOutputStream(bos)) {
+			 DataOutputStream out = new DataOutputStream(bos)) {
 			out.write(operation.ordinal());
 			request.writeExternal(out);
 
