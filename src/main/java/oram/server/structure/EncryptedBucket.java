@@ -2,13 +2,13 @@ package oram.server.structure;
 
 import oram.utils.CustomExternalizable;
 
-import java.io.*;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class EncryptedBucket implements CustomExternalizable {
 	private final byte[][] blocks;
-
-	private boolean tainted;
 
 	public EncryptedBucket(int bucketSize) {
 		this.blocks = new byte[bucketSize][];
@@ -20,18 +20,6 @@ public class EncryptedBucket implements CustomExternalizable {
 
 	public byte[][] getBlocks() {
 		return blocks;
-	}
-
-	public void taintBucket() {
-		tainted = true;
-	}
-
-	public void untaintBucket() {
-		tainted = false;
-	}
-
-	public boolean isTainted() {
-		return tainted;
 	}
 
 	@Override
@@ -52,8 +40,6 @@ public class EncryptedBucket implements CustomExternalizable {
 
 	@Override
 	public String toString() {
-		return "EncryptedBucket{" +
-				Arrays.toString(blocks) +
-				'}';
+		return String.valueOf(Arrays.deepHashCode(blocks));
 	}
 }

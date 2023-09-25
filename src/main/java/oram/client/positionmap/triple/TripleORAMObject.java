@@ -8,6 +8,7 @@ import oram.client.structure.PositionMap;
 import oram.client.structure.PositionMaps;
 import oram.messages.GetPositionMap;
 import oram.messages.ORAMMessage;
+import oram.server.structure.EncryptedPositionMap;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
@@ -57,10 +58,10 @@ public class TripleORAMObject extends ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPainData() == null)
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			if (response == null || response.getPlainData() == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPainData());
+			return encryptionManager.decryptPositionMaps(response.getPlainData());
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;
@@ -95,5 +96,4 @@ public class TripleORAMObject extends ORAMObject {
 		}
 		return mergedPositionMap;
 	}
-
 }

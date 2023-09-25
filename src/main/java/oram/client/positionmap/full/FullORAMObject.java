@@ -40,9 +40,9 @@ public class FullORAMObject extends ORAMObject {
 				return null;
 			}
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPainData() == null)
+			if (response == null || response.getPlainData() == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPainData());
+			return encryptionManager.decryptPositionMaps(response.getPlainData());
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;

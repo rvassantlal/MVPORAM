@@ -17,7 +17,6 @@ import vss.facade.SecretSharingException;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 public class ORAMManager {
 	private final ConfidentialServiceProxy serviceProxy;
@@ -32,7 +31,11 @@ public class ORAMManager {
 	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize,
 								 int blockSize) {
 		try {
-			EncryptedPositionMap encryptedPositionMap = initializeEmptyPositionMap();
+			EncryptedPositionMap encryptedPositionMap;
+			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
+				encryptedPositionMap = initializeEmptyFullPositionMap();
+			else
+				encryptedPositionMap = initializeEmptyTriplePositionMap();
 			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
 			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType, treeHeight, bucketSize,
 					blockSize, encryptedPositionMap, encryptedStash);
@@ -41,11 +44,11 @@ public class ORAMManager {
 				return null;
 			}
 			Response response = serviceProxy.invokeOrdered(serializedRequest);
-			if (response == null || response.getPainData() == null) {
+			if (response == null || response.getPlainData() == null) {
 				return null;
 			}
-			System.out.println("Response: " + Arrays.toString(response.getPainData()));
-			Status status = Status.getStatus(response.getPainData()[0]);
+
+			Status status = Status.getStatus(response.getPlainData()[0]);
 			if (status == Status.FAILED) {
 				return null;
 			}
@@ -68,11 +71,11 @@ public class ORAMManager {
 				return null;
 			}
 			Response response = serviceProxy.invokeUnordered(serializedRequest);
-			if (response == null || response.getPainData() == null) {
+			if (response == null || response.getPlainData() == null) {
 				return null;
 			}
 
-			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPainData());
+			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPlainData());
 				 DataInputStream in = new DataInputStream(bis)) {
 				PositionMapType positionMapType = PositionMapType.getPositionMapType(in.readByte());
 				int treeHeight = in.readInt();
@@ -98,10 +101,18 @@ public class ORAMManager {
 		return encryptionManager.encryptStash(stash);
 	}
 
-	private EncryptedPositionMap initializeEmptyPositionMap() {
+	private EncryptedPositionMap initializeEmptyFullPositionMap() {
 		int[] positionMap = new int[0];
 		int[] versionIds = new int[0];
 		PositionMap pm = new PositionMap(versionIds, positionMap);
+		return encryptionManager.encryptPositionMap(pm);
+	}
+
+	private EncryptedPositionMap initializeEmptyTriplePositionMap() {
+		int pathId = ORAMUtils.DUMMY_PATH;
+		int versionId = ORAMUtils.DUMMY_VERSION;
+		int address = ORAMUtils.DUMMY_ADDRESS;
+		PositionMap pm = new PositionMap(versionId, pathId, address);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 

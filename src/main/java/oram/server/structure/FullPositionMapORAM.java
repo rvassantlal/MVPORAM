@@ -24,7 +24,7 @@ public class FullPositionMapORAM extends ORAM {
 			resultedPositionMap.put(versionId, positionMaps.get(versionId));
 			i++;
 		}
-		int newVersionId = sequenceNumber++;
+		int newVersionId = ++sequenceNumber;
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);
 
 		oramClientContexts.put(clientId, oramClientContext);

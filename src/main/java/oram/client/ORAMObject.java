@@ -197,10 +197,10 @@ public abstract class ORAMObject {
 			}
 
 			Response response = serviceProxy.invokeOrdered(serializedRequest);
-			if (response == null || response.getPainData() == null) {
+			if (response == null || response.getPlainData() == null) {
 				return false;
 			}
-			Status status = Status.getStatus(response.getPainData()[0]);
+			Status status = Status.getStatus(response.getPlainData()[0]);
 			return status != Status.FAILED;
 		} catch (SecretSharingException e) {
 			return false;
@@ -294,10 +294,10 @@ public abstract class ORAMObject {
 				return null;
 			}
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPainData() == null)
+			if (response == null || response.getPlainData() == null)
 				return null;
 
-			return encryptionManager.decryptStashesAndPaths(oramContext, response.getPainData());
+			return encryptionManager.decryptStashesAndPaths(oramContext, response.getPlainData());
 		} catch (SecretSharingException e) {
 			return null;
 		}

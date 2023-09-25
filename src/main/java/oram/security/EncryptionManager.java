@@ -1,7 +1,6 @@
 package oram.security;
 
 import oram.client.structure.*;
-import oram.security.EncryptionAbstraction;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
@@ -9,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -24,6 +25,8 @@ public class EncryptionManager {
 			 DataInputStream in = new DataInputStream(bis)) {
 			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
 			encryptedPositionMaps.readExternal(in);
+			logger.info("{} Encrypted position maps size: {} bytes", encryptedPositionMaps.getEncryptedPositionMaps().size(),
+					serializedEncryptedPositionMaps.length);
 			return decryptPositionMaps(encryptedPositionMaps);
 		} catch (IOException e) {
 			logger.error("Failed to decrypt position map", e);
@@ -44,6 +47,7 @@ public class EncryptionManager {
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedStashesAndPaths);
 			 DataInputStream in = new DataInputStream(bis)) {
+			logger.info("Encrypted paths and stashes size: {} bytes", serializedEncryptedStashesAndPaths.length);
 			EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
 			encryptedStashesAndPaths.readExternal(in);
 
@@ -89,7 +93,11 @@ public class EncryptionManager {
 			positionMap.writeExternal(out);
 			out.flush();
 			bos.flush();
-			return new EncryptedPositionMap(encryptionAbstraction.encrypt(bos.toByteArray()));
+			byte[] serializedPositionMap = bos.toByteArray();
+			byte[] encryptedPositionMap = encryptionAbstraction.encrypt(serializedPositionMap);
+			logger.info("Position map size: {} bytes", serializedPositionMap.length);
+			logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
+			return new EncryptedPositionMap(encryptedPositionMap);
 		} catch (IOException e) {
 			logger.error("Failed to encrypt position map", e);
 			return null;

@@ -54,6 +54,7 @@ public class RandomParallelTester {
 			ORAMObject oram = oramManager.getORAM(oramId);
 			threads.add(new Thread(() -> {
 				for (int i = 0; i < testSize; i++) {
+					System.out.println(i);
 					randomAccess(oram);
 				}
 			}));

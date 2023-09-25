@@ -45,9 +45,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 	@Override
 	public ConfidentialMessage appExecuteOrdered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
+		ServerOperationType op = null;
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
 			 DataInputStream in = new DataInputStream(bis)) {
-			ServerOperationType op = ServerOperationType.getOperation(in.read());
+			op = ServerOperationType.getOperation(in.readByte());
 			ORAMMessage request;
 			senders.add(msgCtx.getSender());
 			switch (op) {
@@ -84,7 +85,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	public ConfidentialMessage appExecuteUnordered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
 			 DataInputStream in = new DataInputStream(bis)) {
-			ServerOperationType op = ServerOperationType.getOperation(in.read());
+			ServerOperationType op = ServerOperationType.getOperation(in.readByte());
 			ORAMMessage request;
 			senders.add(msgCtx.getSender());
 			switch (op) {
@@ -131,10 +132,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 		long start = System.nanoTime();
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
-		int size = 0;
-		if (encryptedStashesAndPaths != null)
-			size = encryptedStashesAndPaths.getSize(oram.getOramContext());
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(size);
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 DataOutputStream out = new DataOutputStream(bos)) {
 			if (encryptedStashesAndPaths != null)
 				encryptedStashesAndPaths.writeExternal(out);
