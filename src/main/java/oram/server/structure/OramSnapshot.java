@@ -7,7 +7,8 @@ import java.util.*;
 
 public class OramSnapshot implements Serializable {
 	private final Integer versionId;
-	private final Set<OramSnapshot> previous;
+	private final Set<OramSnapshot> previous;// older versions
+	private final Set<OramSnapshot> childSnapshots; // newer versions
 	private final EncryptedStash stash;
 	private final TreeMap<Integer, EncryptedBucket> difTree;
 
@@ -17,6 +18,7 @@ public class OramSnapshot implements Serializable {
 		this.difTree = new TreeMap<>();
 		this.stash = encryptedStash;
 		this.previous = new HashSet<>();
+		this.childSnapshots = new HashSet<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
@@ -24,8 +26,16 @@ public class OramSnapshot implements Serializable {
 		return difTree;
 	}
 
+	public void addChild(OramSnapshot child) {
+		childSnapshots.add(child);
+	}
+
 	public Set<OramSnapshot> getPrevious() {
 		return previous;
+	}
+
+	public Set<OramSnapshot> getChildSnapshots() {
+		return childSnapshots;
 	}
 
 	public EncryptedStash getStash() {
@@ -59,11 +69,15 @@ public class OramSnapshot implements Serializable {
 		return versionId;
 	}
 
-	public void addPrevious(List<OramSnapshot> previousFromPrevious) {
-		previous.addAll(previousFromPrevious);
+	public void addPrevious(OramSnapshot previousVersion) {
+		this.previous.add(previousVersion);
 	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
 		previousVersion.forEach(previous::remove);
+	}
+
+	public void removePrevious(OramSnapshot previousVersion) {
+		previous.remove(previousVersion);
 	}
 }

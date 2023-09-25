@@ -35,10 +35,10 @@ public class ORAMBenchmarkClient {
 			System.exit(-1);
 			return;
 		}
-		int treeHeight = Integer.parseInt(args[3]);
-		int bucketSize = Integer.parseInt(args[4]);
-		int blockSize = Integer.parseInt(args[5]);
-		boolean measurementLeader = Boolean.parseBoolean(args[6]);
+		int treeHeight = Integer.parseInt(args[4]);
+		int bucketSize = Integer.parseInt(args[5]);
+		int blockSize = Integer.parseInt(args[6]);
+		boolean measurementLeader = Boolean.parseBoolean(args[7]);
 
 		CountDownLatch latch = new CountDownLatch(nClients);
 		Client[] clients = new Client[nClients];

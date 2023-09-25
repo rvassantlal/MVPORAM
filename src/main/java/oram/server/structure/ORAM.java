@@ -21,6 +21,7 @@ public abstract class ORAM {
 	private final int numberOfBuckets;
 	private final Set<Integer> visitedOutstandingVersions;
 	private final Set<Integer> taintedVersions;
+	private final Set<Integer> usedVersions;
 	private final List<OramSnapshot> taintedSnapshots;
 
 	public ORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize, int blockSize,
@@ -34,6 +35,7 @@ public abstract class ORAM {
 		this.numberOfBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
 		this.visitedOutstandingVersions = new HashSet<>();
 		this.taintedVersions = new HashSet<>();
+		this.usedVersions = new HashSet<>();
 		this.taintedSnapshots = new LinkedList<>();
 		int versionId = ++sequenceNumber;
 		this.positionMaps.put(versionId, encryptedPositionMap);
@@ -124,6 +126,9 @@ public abstract class ORAM {
 		positionMaps.put(newVersionId, encryptedPositionMap);
 		OramSnapshot newVersion = new OramSnapshot(newVersionId,
 				outstandingVersions, encryptedStash);
+		for (OramSnapshot outstandingVersion : outstandingVersions) {
+			outstandingVersion.addChild(newVersion);
+		}
 
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
 			newVersion.setToLocation(entry.getKey(), entry.getValue());
@@ -155,8 +160,8 @@ public abstract class ORAM {
 	private void garbageCollectSnapshot() {
 		visitedOutstandingVersions.clear();
 		taintedVersions.clear();
+		usedVersions.clear();
 		taintedSnapshots.clear();
-
 
 		//New and old outstanding snapshots
 		List<OramSnapshot> outstandingVersions = new ArrayList<>(outstandingTrees);
@@ -173,13 +178,15 @@ public abstract class ORAM {
 			visitedOutstandingVersions.add(outstandingVersion.getVersionId());
 			BitSet locationsMarker = new BitSet(numberOfBuckets);
 			visitedVersions.clear();
-			taintVersions(outstandingVersion, locationsMarker, visitedVersions, taintedSnapshots, taintedVersions);
+			taintVersions2(outstandingVersion, locationsMarker, visitedVersions);
 			taintedVersions.addAll(visitedVersions);
 		}
 
 		//Remove not tainted versions
 		logger.info("Number of tainted snapshots: {}", taintedSnapshots.size());
 		logger.info("Number of distinct tainted snapshots: {}", taintedVersions.size());
+		logger.info("============>>>>>>>>>>>>>>  Number of used versions: {}", usedVersions.size());
+
 		List<OramSnapshot> previousRemove = new ArrayList<>();
 		for (OramSnapshot taintedSnapshot : taintedSnapshots) {
 			previousRemove.clear();
@@ -188,12 +195,61 @@ public abstract class ORAM {
 					previousRemove.add(previous);
 				}
 			}
-			if (!previousRemove.isEmpty()) {
-				logger.info("\n\n\n============>>>>  Number of previous to remove: {}\n\n\n", previousRemove.size());
-			}
+
 			taintedSnapshot.removePrevious(previousRemove);
 		}
-		currentNumberOfSnapshots = taintedSnapshots.size();
+		currentNumberOfSnapshots = usedVersions.size();
+
+		//Remove not used versions
+		for (OramSnapshot taintedSnapshot : taintedSnapshots) {
+			if (!usedVersions.contains(taintedSnapshot.getVersionId())) {
+				removeUsedVersion(taintedSnapshot);
+			}
+		}
+	}
+
+	private void removeUsedVersion(OramSnapshot unusedSnapshot) {
+		Set<OramSnapshot> previous = unusedSnapshot.getPrevious();
+		for (OramSnapshot childSnapshot : unusedSnapshot.getChildSnapshots()) {
+			childSnapshot.removePrevious(unusedSnapshot);
+			for (OramSnapshot previousSnapshot : previous) {
+				childSnapshot.addPrevious(previousSnapshot);
+			}
+		}
+	}
+
+	private void taintVersions2(OramSnapshot currentSnapshot, BitSet locationsMarker, Set<Integer> visitedVersions) {
+		BitSet currentLocationMarker = null;
+		if (!visitedVersions.contains(currentSnapshot.getVersionId())) {
+			//Check is this snapshot has needed path
+			for (Map.Entry<Integer, EncryptedBucket> entry : currentSnapshot.getDifTree().entrySet()) {
+				if (!locationsMarker.get(entry.getKey())) {
+					if (currentLocationMarker == null) {
+						long[] longArray = locationsMarker.toLongArray();
+						currentLocationMarker = BitSet.valueOf(longArray);
+					}
+					currentLocationMarker.set(entry.getKey(), true); // Mark the location as tainted
+				}
+			}
+
+			if (currentLocationMarker != null) {
+				usedVersions.add(currentSnapshot.getVersionId());
+			}
+			visitedVersions.add(currentSnapshot.getVersionId());
+			if (!taintedVersions.contains(currentSnapshot.getVersionId())) {
+				taintedSnapshots.add(currentSnapshot);
+			}
+		}
+		if (currentLocationMarker == null) {// If I didn't modify the locationsMarker
+			currentLocationMarker = locationsMarker;
+		}
+		if (currentLocationMarker.previousClearBit(numberOfBuckets - 1) == -1) { // If all locations are tainted
+			return;
+		}
+		for (OramSnapshot previous : currentSnapshot.getPrevious()) {
+			if (!visitedVersions.contains(previous.getVersionId()))
+				taintVersions2(previous, currentLocationMarker, visitedVersions);
+		}
 	}
 
 	private void taintVersions(OramSnapshot currentSnapshot, BitSet locationsMarker, Set<Integer> visitedVersions,
@@ -210,7 +266,6 @@ public abstract class ORAM {
 					currentLocationMarker.set(entry.getKey(), true); // Mark the location as tainted
 				}
 			}
-
 			visitedVersions.add(currentSnapshot.getVersionId());
 			if (!taintedVersions.contains(currentSnapshot.getVersionId())) {
 				taintedSnapshots.add(currentSnapshot);
