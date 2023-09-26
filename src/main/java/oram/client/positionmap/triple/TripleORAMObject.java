@@ -57,7 +57,7 @@ public class TripleORAMObject extends ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
 			if (response == null || response.getPlainData() == null)
 				return null;
 			return encryptionManager.decryptPositionMaps(response.getPlainData());
