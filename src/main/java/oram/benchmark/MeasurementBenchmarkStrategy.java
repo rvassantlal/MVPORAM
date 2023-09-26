@@ -118,6 +118,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Tree height: {}", treeHeight);
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
+			logger.info("Position map type: {}", positionMapType);
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
@@ -138,7 +139,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					storageFileNamePrefix = String.format("f_%d_pm_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
 							positionMapType, treeHeight, bucketSize, blockSize, round);
 					//Distribute clients per workers
-					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients, maxClientsPerProcess);
+					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
 					String vector = Arrays.toString(clientsPerWorker);
 					int total = Arrays.stream(clientsPerWorker).sum();
 					logger.info("Clients per worker: {} -> Total: {}", vector, total);
@@ -284,23 +285,23 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		measurementDeliveredCounter.await();
 	}
 
-	private int[] distributeClientsPerWorkers(int nClientWorkers, int nClients, int maxClientsPerProcess) {
+	private static int[] distributeClientsPerWorkers(int nWorkers, int nClients) {
 		if (nClients == 1) {
 			return new int[]{1};
 		}
-		if (nClientWorkers < 2) {
+		if (nWorkers < 2) {
 			return new int[]{nClients};
 		}
 		nClients--;//remove measurement client
-		if (nClients <= maxClientsPerProcess) {
-			return new int[]{1, nClients};
-		}
-		nClientWorkers--; //for measurement client
-		int nWorkersToUse = Math.min(nClientWorkers - 1, nClients / maxClientsPerProcess);
-		int[] distribution = new int[nWorkersToUse + 1];//one for measurement worker
-		Arrays.fill(distribution, nClients / nWorkersToUse);
+
+		int nClientsPerWorkers = nClients / (nWorkers - 1);// -1 for measurement worker
+
+		int nWorkersToUse = Math.min(nWorkers, nClients + 1);
+
+		int[] distribution = new int[nWorkersToUse];//one for measurement worker
+		Arrays.fill(distribution, nClientsPerWorkers);
 		distribution[0] = 1;
-		nClients -= nWorkersToUse * (nClients / nWorkersToUse);
+		nClients -= nClientsPerWorkers * (nWorkers - 1);
 		int i = 1;
 		while (nClients > 0) {
 			nClients--;
@@ -415,16 +416,16 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			netReceived[i] = data[2 + 2 * i];
 			netTransmitted[i] = data[2 + 2 * i + 1];
 		}
-		String fileName = storageFileNamePrefix + "cpu" + tag + ".csv";
+		String fileName = storageFileNamePrefix + "cpu_" + tag + ".csv";
 		saveResourcesMeasurements(fileName, cpu);
 
-		fileName = storageFileNamePrefix + "mem" + tag + ".csv";
+		fileName = storageFileNamePrefix + "mem_" + tag + ".csv";
 		saveResourcesMeasurements(fileName, mem);
 
-		fileName = storageFileNamePrefix + "netreceived" + tag + ".csv";
+		fileName = storageFileNamePrefix + "net_received_" + tag + ".csv";
 		saveResourcesMeasurements(fileName, netReceived);
 
-		fileName = storageFileNamePrefix + "nettransmitted" + tag + ".csv";
+		fileName = storageFileNamePrefix + "net_transmitted_" + tag + ".csv";
 		saveResourcesMeasurements(fileName, netTransmitted);
 	}
 
