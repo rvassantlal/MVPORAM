@@ -2,13 +2,12 @@ package oram.client.positionmap.triple;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.security.EncryptionManager;
 import oram.client.ORAMObject;
 import oram.client.structure.PositionMap;
 import oram.client.structure.PositionMaps;
 import oram.messages.GetPositionMap;
 import oram.messages.ORAMMessage;
-import oram.server.structure.EncryptedPositionMap;
+import oram.security.EncryptionManager;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
@@ -33,7 +32,7 @@ public class TripleORAMObject extends ORAMObject {
 											int address, int newPathId, int newVersionId) {
 		int versionId;
 		int pathId;
-		if (isRealAccess) {
+		if (isRealAccess || op == Operation.WRITE) {
 			pathId = newPathId;
 			mergedPositionMap.setPathAt(address, newPathId);
 		} else {

@@ -3,7 +3,7 @@ package oram.client.structure;
 import oram.utils.CustomExternalizable;
 
 import java.io.*;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Stash implements CustomExternalizable {
@@ -12,7 +12,7 @@ public class Stash implements CustomExternalizable {
 
 	public Stash(int blockSize){
 		this.blockSize = blockSize;
-		this.blocks = new LinkedList<>();
+		this.blocks = new ArrayList<>();
 	}
 
 	public void putBlock(Block b) {

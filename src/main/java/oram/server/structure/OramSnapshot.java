@@ -9,20 +9,20 @@ public class OramSnapshot implements Serializable {
 	private final Integer versionId;
 	private final Set<OramSnapshot> previous;// older versions
 	private final Set<OramSnapshot> childSnapshots; // newer versions
-	private final EncryptedStash stash;
-	private final TreeMap<Integer, EncryptedBucket> difTree;
+	private EncryptedStash stash;
+	private final HashMap<Integer, EncryptedBucket> difTree;
 
 	public OramSnapshot(int versionId, OramSnapshot[] previousTrees,
 						EncryptedStash encryptedStash) {
 		this.versionId = versionId;
-		this.difTree = new TreeMap<>();
+		this.difTree = new HashMap<>();
 		this.stash = encryptedStash;
-		this.previous = new HashSet<>();
+		this.previous = new LinkedHashSet<>();
 		this.childSnapshots = new HashSet<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
-	public TreeMap<Integer, EncryptedBucket> getDifTree() {
+	public HashMap<Integer, EncryptedBucket> getDifTree() {
 		return difTree;
 	}
 
@@ -43,16 +43,14 @@ public class OramSnapshot implements Serializable {
 	}
 
 	public EncryptedBucket getFromLocation(Integer location) {
-		if (difTree.containsKey(location))
-			return difTree.get(location);
-		return null;
+		return difTree.get(location);
 	}
 
 	public void setToLocation(int location, EncryptedBucket encryptedBucket) {
 		difTree.put(location, encryptedBucket);
 	}
 
-	public int getVersionId() {
+	public Integer getVersionId() {
 		return versionId;
 	}
 
@@ -61,7 +59,7 @@ public class OramSnapshot implements Serializable {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		OramSnapshot that = (OramSnapshot) o;
-		return (int) that.versionId == versionId;
+		return that.versionId.equals(versionId);
 	}
 
 	@Override
@@ -72,6 +70,9 @@ public class OramSnapshot implements Serializable {
 	public void addPrevious(OramSnapshot previousVersion) {
 		this.previous.add(previousVersion);
 	}
+	public void addPrevious(Set<OramSnapshot> previous) {
+		this.previous.addAll(previous);
+	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
 		previousVersion.forEach(previous::remove);
@@ -79,5 +80,9 @@ public class OramSnapshot implements Serializable {
 
 	public void removePrevious(OramSnapshot previousVersion) {
 		previous.remove(previousVersion);
+	}
+
+	public void removeStash() {
+		stash.clearStash();
 	}
 }

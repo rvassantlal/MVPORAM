@@ -39,4 +39,8 @@ public class EncryptedStash implements CustomExternalizable {
 	public String toString() {
 		return String.valueOf(Arrays.hashCode(encryptedStash));
 	}
+
+	public void clearStash() {
+		this.encryptedStash = null;
+	}
 }

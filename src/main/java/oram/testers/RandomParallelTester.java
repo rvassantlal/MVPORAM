@@ -45,7 +45,7 @@ public class RandomParallelTester {
 		}
 		int treeHeight = 3;
 		int nBlocksPerBucket = 4;
-		int blockSize = 512;
+		int blockSize = 256;
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
 
 		oramManagerList.get(0).createORAM(oramId, oramType, treeHeight, nBlocksPerBucket, blockSize);
@@ -87,11 +87,11 @@ public class RandomParallelTester {
 				randomWord = expressions10[rnd.nextInt(expressions10.length)];
 			byte[] response = oram.writeMemory(address, randomWord.getBytes());
 			String responseString = response == null ? "null" : new String(response);
-			logger.debug("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): " + responseString);
+			logger.info("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): " + responseString);
 		} else {
 			byte[] response = oram.readMemory(address);
 			String responseString = response == null ? "null" : new String(response);
-			logger.debug("read from address" + address + ". Response: " + responseString);
+			logger.info("read from address" + address + ". Response: " + responseString);
 		}
 
 	}

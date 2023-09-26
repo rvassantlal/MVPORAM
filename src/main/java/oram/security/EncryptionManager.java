@@ -25,8 +25,7 @@ public class EncryptionManager {
 			 DataInputStream in = new DataInputStream(bis)) {
 			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
 			encryptedPositionMaps.readExternal(in);
-			logger.info("{} Encrypted position maps size: {} bytes", encryptedPositionMaps.getEncryptedPositionMaps().size(),
-					serializedEncryptedPositionMaps.length);
+			// logger.info("{} Encrypted position maps size: {} bytes", encryptedPositionMaps.getEncryptedPositionMaps().size(),serializedEncryptedPositionMaps.length);
 			return decryptPositionMaps(encryptedPositionMaps);
 		} catch (IOException e) {
 			logger.error("Failed to decrypt position map", e);
@@ -47,7 +46,7 @@ public class EncryptionManager {
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedStashesAndPaths);
 			 DataInputStream in = new DataInputStream(bis)) {
-			logger.info("Encrypted paths and stashes size: {} bytes", serializedEncryptedStashesAndPaths.length);
+			//logger.info("Encrypted paths and stashes size: {} bytes", serializedEncryptedStashesAndPaths.length);
 			EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
 			encryptedStashesAndPaths.readExternal(in);
 
@@ -95,8 +94,8 @@ public class EncryptionManager {
 			bos.flush();
 			byte[] serializedPositionMap = bos.toByteArray();
 			byte[] encryptedPositionMap = encryptionAbstraction.encrypt(serializedPositionMap);
-			logger.info("Position map size: {} bytes", serializedPositionMap.length);
-			logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
+			//logger.info("Position map size: {} bytes", serializedPositionMap.length);
+			//logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
 			return new EncryptedPositionMap(encryptedPositionMap);
 		} catch (IOException e) {
 			logger.error("Failed to encrypt position map", e);
@@ -133,12 +132,14 @@ public class EncryptionManager {
 	public Stash decryptStash(int blockSize, EncryptedStash encryptedStash) {
 		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStash.getEncryptedStash());
 		Stash deserializedStash = new Stash(blockSize);
-		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
-			 DataInputStream in = new DataInputStream(bis)) {
-			deserializedStash.readExternal(in);
-		} catch (IOException e) {
-			logger.error("Failed to decrypt stash", e);
-			return null;
+		if(serializedStash != null) {
+			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
+				 DataInputStream in = new DataInputStream(bis)) {
+				deserializedStash.readExternal(in);
+			} catch (IOException e) {
+				logger.error("Failed to decrypt stash", e);
+				return null;
+			}
 		}
 		return deserializedStash;
 	}

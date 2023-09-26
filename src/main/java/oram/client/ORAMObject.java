@@ -124,7 +124,7 @@ public abstract class ORAMObject {
 				logger.error(stashesAndPaths.toString());
 				logger.error(mergedPositionMap.toString());
 				logger.error(mergedStash.toString());
-			}else {
+			} else {
 				oldContent = block.getContent();
 			}
 		} else if (op == Operation.WRITE) {

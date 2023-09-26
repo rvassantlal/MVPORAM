@@ -102,7 +102,7 @@ public class ORAMBenchmarkClient {
 					delay = t2 - t1;
 					if (!Arrays.equals(blockContent, oldContent)) {
 						logger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
-						break;
+						//break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
 						logger.info("M: " + delay);
