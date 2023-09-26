@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class ORAM {
 	private final Logger logger = LoggerFactory.getLogger("oram");
