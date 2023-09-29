@@ -2,13 +2,16 @@ package oram.utils;
 
 public class ORAMContext {
 	private final PositionMapType positionMapType;
+	private final int garbageCollectionFrequency;
 	private final int TREE_HEIGHT; // number of levels is equal to tree height + 1
 	private final int TREE_SIZE; // Number of buckets in the tree
 	private final int BUCKET_SIZE;
 	private final int BLOCK_SIZE;
 
-	public ORAMContext(PositionMapType positionMapType, int treeHeight, int treeSize, int bucketSize, int blockSize) {
+	public ORAMContext(PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight, int treeSize,
+					   int bucketSize, int blockSize) {
 		this.positionMapType = positionMapType;
+		this.garbageCollectionFrequency = garbageCollectionFrequency;
 		this.TREE_HEIGHT = treeHeight;
 		this.TREE_SIZE = treeSize;
 		this.BUCKET_SIZE = bucketSize;
@@ -17,6 +20,10 @@ public class ORAMContext {
 
 	public PositionMapType getPositionMapType() {
 		return positionMapType;
+	}
+
+	public int getGarbageCollectionFrequency() {
+		return garbageCollectionFrequency;
 	}
 
 	public int getTreeHeight() {

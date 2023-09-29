@@ -27,12 +27,19 @@ public abstract class ORAM {
 	private final Map<Integer, EncryptedStash> encryptedStashes;
 	private final Map<Integer, Map<Integer, EncryptedBucket>> pathContents;
 	private final Set<Integer> visitedVersions;
+	private final Set<Integer> visitedVersionsPerSnapshot;
+	private Queue<OramSnapshot> currentLevelSnapshotsQueue;
+	private Queue<OramSnapshot> nextLevelSnapshotsQueue;
+	private final BitSet previousLevelLocationsMarker;
+	private final BitSet currentLevelLocationsMarker;
 
-	public ORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize, int blockSize,
-				EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
+				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
+				EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-		this.oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
+		this.oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight, treeSize,
+				bucketSize, blockSize);
 		logger.debug("Total number of blocks: {}", treeSize);
 		this.outstandingTrees = new LinkedList<>();
 		this.positionMaps = new HashMap<>();
@@ -44,12 +51,17 @@ public abstract class ORAM {
 		this.encryptedStashes = new HashMap<>();
 		this.pathContents = new HashMap<>();
 		this.visitedVersions = new HashSet<>();
+		this.visitedVersionsPerSnapshot = new HashSet<>();
+		this.currentLevelSnapshotsQueue = new ArrayDeque<>();
+		this.nextLevelSnapshotsQueue = new ArrayDeque<>();
+		this.previousLevelLocationsMarker = new BitSet(oramContext.getTreeLevels());
+		this.currentLevelLocationsMarker = new BitSet(oramContext.getTreeLevels());
 		int versionId = ++sequenceNumber;
 		this.positionMaps.put(versionId, encryptedPositionMap);
 
 		OramSnapshot[] previous = new OramSnapshot[0];
-		OramSnapshot snap = new OramSnapshot(versionId, previous, encryptedStash);
-
+		OramSnapshot snap = new OramSnapshot(versionId, previous, encryptedStash, oramContext.getTreeLevels());
+		currentNumberOfSnapshots++;
 		outstandingTrees.add(snap);
 		oramClientContexts = new HashMap<>();
 	}
@@ -66,14 +78,12 @@ public abstract class ORAM {
 			return null;
 		}
 		encryptedStashes.clear();//This is global and reused - make sure that returning this object doesn't cause any issues
-		pathContents.clear();
-		visitedVersions.clear();
 		OramSnapshot[] outstandingTrees = oramClientContext.getOutstandingVersions();
 
-		List<Integer> pathLocations = ORAMUtils.computePathLocationsList(pathId, oramContext.getTreeHeight());
+		int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
 		for (OramSnapshot outstandingTree : outstandingTrees) {
 			encryptedStashes.put(outstandingTree.getVersionId(),outstandingTree.getStash());
-			traverseVersions(outstandingTree, pathLocations);
+			traverseVersionsBit(outstandingTree, pathLocations);
 		}
 
 		Map<Integer, EncryptedBucket[]> compactedPaths = new HashMap<>(pathContents.size());
@@ -86,13 +96,73 @@ public abstract class ORAM {
 			compactedPaths.put(entry.getKey(), buckets);
 		}
 
+		//Clear the global variables to reduce memory usage and garbage collect while waiting for the next request
+		pathContents.clear();
+		visitedVersions.clear();
+
 		return new EncryptedStashesAndPaths(encryptedStashes, compactedPaths);
+	}
+
+	private void traverseVersionsBit(OramSnapshot outstanding, int[] pathLocations) {
+
+		currentLevelSnapshotsQueue.clear();
+		nextLevelSnapshotsQueue.clear();
+		currentLevelSnapshotsQueue.add(outstanding);
+
+		visitedVersionsPerSnapshot.clear();
+		visitedVersionsPerSnapshot.add(outstanding.getVersionId());
+
+		previousLevelLocationsMarker.clear();
+		currentLevelLocationsMarker.clear();
+
+		while (!currentLevelSnapshotsQueue.isEmpty()) {
+			OramSnapshot version = currentLevelSnapshotsQueue.poll();
+			Integer versionId = version.getVersionId();
+			//if (visitedVersions.contains(versionId)) {//This could be a problem when reading from different outstanding
+			//	continue;
+			//}
+			for (int i = pathLocations.length - 1; i >= 0; i--) {
+				int bucketPosition = pathLocations[i];
+				if (previousLevelLocationsMarker.get(i)) { //Bucket from this location was already read
+					continue;
+				}
+				EncryptedBucket bucket = version.getFromLocation(bucketPosition);
+				if (bucket == null) {//If the bucket is null, there are no buckets in this snapshot for the rest of the path
+					break;
+				}
+				//Save the bucket
+				Map<Integer, EncryptedBucket> encryptedBuckets = pathContents.computeIfAbsent(
+						versionId, k -> new HashMap<>(oramContext.getTreeLevels()));
+				encryptedBuckets.put(bucketPosition, bucket);
+				currentLevelLocationsMarker.set(i);
+			}
+
+			Set<OramSnapshot> previous = version.getPrevious();
+			for (OramSnapshot oramSnapshot : previous) {
+				if (!visitedVersionsPerSnapshot.contains(oramSnapshot.getVersionId())) {
+					visitedVersionsPerSnapshot.add(oramSnapshot.getVersionId());
+					nextLevelSnapshotsQueue.add(oramSnapshot);
+				}
+			}
+
+			if (currentLevelSnapshotsQueue.isEmpty()) {
+				//I have completed the path
+				if (currentLevelLocationsMarker.previousClearBit(oramContext.getTreeLevels() - 1) == -1) {
+					break;
+				}
+				previousLevelLocationsMarker.or(currentLevelLocationsMarker);
+				Queue<OramSnapshot> temp = currentLevelSnapshotsQueue;
+				currentLevelSnapshotsQueue = nextLevelSnapshotsQueue;
+				nextLevelSnapshotsQueue = temp;
+			}
+		}
+		//visitedVersions.addAll(visitedVersionsPerSnapshot);
 	}
 
 	private void traverseVersions(OramSnapshot outstanding, List<Integer> pathLocations) {
 		Queue<OramSnapshot> queue = new ArrayDeque<>();
 		queue.add(outstanding);
-		Set<Integer> visitedVersionsPerSnapshot = new HashSet<>();
+		visitedVersionsPerSnapshot.clear();
 		visitedVersionsPerSnapshot.add(outstanding.getVersionId());
 		Integer leaf = pathLocations.get(0);
 		while (!queue.isEmpty()) {
@@ -119,6 +189,7 @@ public abstract class ORAM {
 				}
 			}
 		}
+		visitedVersions.addAll(visitedVersionsPerSnapshot);
 	}
 	private void traverseVersions2(OramSnapshot outstanding, List<Integer> pathLocations,
 										  Map<Integer, EncryptedStash> encryptedStashes,
@@ -129,7 +200,6 @@ public abstract class ORAM {
 		Set<Integer> visitedVersionsPerSnapshot = new HashSet<>(numberOfBuckets);
 		visitedVersionsPerSnapshot.add(outstanding.getVersionId());
 		Map<Integer, Set<Integer>> myEncryptedPath = new HashMap<>(oramContext.getTreeLevels());
-		Integer leaf = pathLocations.get(0);
 		while (!queue.isEmpty()) {
 			Pair<Integer, OramSnapshot> pair = queue.poll();
 			Integer level = pair.getLeft();
@@ -176,7 +246,7 @@ public abstract class ORAM {
 
 		positionMaps.put(newVersionId, encryptedPositionMap);
 		OramSnapshot newVersion = new OramSnapshot(newVersionId,
-				outstandingVersions, encryptedStash);
+				outstandingVersions, encryptedStash, oramContext.getTreeLevels());
 		for (OramSnapshot outstandingVersion : outstandingVersions) {
 			outstandingVersion.addChild(newVersion);
 		}
@@ -186,9 +256,9 @@ public abstract class ORAM {
 		}
 
 		cleanOutstandingTrees(outstandingVersions);
-
+		currentNumberOfSnapshots++;
 		outstandingTrees.add(newVersion);
-		if(sequenceNumber % 500 == 0){
+		if(sequenceNumber % oramContext.getGarbageCollectionFrequency() == 0){
 			garbageCollect();
 		}
 		return true;
@@ -204,6 +274,7 @@ public abstract class ORAM {
 		//long start, end;
 		//start = System.nanoTime();
 		garbageCollectSnapshot();
+		visitedVersions.clear();
 		//long delta = end - start;
 		//logger.info("garbageCollection[ns]: {}", delta);
 	}
@@ -219,8 +290,8 @@ public abstract class ORAM {
 		for (ORAMClientContext clientContext : oramClientContexts.values()) {
 			Collections.addAll(outstandingVersions, clientContext.getOutstandingVersions());
 		}
+
 		//Taint versions
-		Set<Integer> visitedVersions = new LinkedHashSet<>();
 		for (OramSnapshot outstandingVersion : outstandingVersions) {
 			if (visitedOutstandingVersions.contains(outstandingVersion.getVersionId())) {
 				continue;
@@ -228,7 +299,7 @@ public abstract class ORAM {
 			visitedOutstandingVersions.add(outstandingVersion.getVersionId());
 			BitSet locationsMarker = new BitSet(numberOfBuckets);
 			visitedVersions.clear();
-			taintVersions(outstandingVersion, locationsMarker, visitedVersions);
+			taintVersions(outstandingVersion, locationsMarker);
 			taintedVersions.addAll(visitedVersions);
 		}
 
@@ -265,7 +336,7 @@ public abstract class ORAM {
 		}
 	}
 
-	private void taintVersions(OramSnapshot currentSnapshot, BitSet locationsMarker, Set<Integer> visitedVersions) {
+	private void taintVersions(OramSnapshot currentSnapshot, BitSet locationsMarker) {
 		BitSet currentLocationMarker = null;
 		Integer versionId = currentSnapshot.getVersionId();
 		if (!visitedVersions.contains(versionId)) {
@@ -299,7 +370,7 @@ public abstract class ORAM {
 		}
 		for (OramSnapshot previous : currentSnapshot.getPrevious()) {
 			if (!visitedVersions.contains(previous.getVersionId()))
-				taintVersions(previous, currentLocationMarker, visitedVersions);
+				taintVersions(previous, currentLocationMarker);
 		}
 	}
 
@@ -312,11 +383,11 @@ public abstract class ORAM {
 		return oramId;
 	}
 
-	public int getOutstandingNumber() {
+	public int getNumberOfOutstanding() {
 		return outstandingTrees.size();
 	}
 
-	public int getAllVersionNumber() {
+	public int getNumberOfVersion() {
 		return currentNumberOfSnapshots;
 	}
 }

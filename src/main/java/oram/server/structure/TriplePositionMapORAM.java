@@ -8,10 +8,11 @@ import java.util.Map;
 
 public class TriplePositionMapORAM extends ORAM {
 
-	public TriplePositionMapORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize,
-								 int blockSize, EncryptedPositionMap encryptedPositionMap,
-								 EncryptedStash encryptedStash) {
-		super(oramId, positionMapType, treeHeight, bucketSize, blockSize, encryptedPositionMap, encryptedStash);
+	public TriplePositionMapORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
+								 int treeHeight, int bucketSize, int blockSize,
+								 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+		super(oramId, positionMapType, garbageCollectionFrequency, treeHeight, bucketSize, blockSize,
+				encryptedPositionMap, encryptedStash);
 	}
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {

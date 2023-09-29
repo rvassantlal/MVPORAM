@@ -35,6 +35,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private final String sarCommand;
 	private int round;
 	private int nRounds;
+	private int gcFrequency;
 	private int treeHeight;
 	private int bucketSize;
 	private int blockSize;
@@ -84,14 +85,19 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
 		positionMapType = benchmarkParameters.getProperty("experiment.position_map_type");
+		String[] garbageCollectionFrequencies =
+				benchmarkParameters.getProperty("experiment.garbage_collection_frequencies").split(" ");
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
 
+		//Parse parameters
+		int[] gcFrequencies = new int[garbageCollectionFrequencies.length];
 		int[] treeHeights = new int[treeHeightTokens.length];
 		int[] bucketSizes = new int[bucketSizeTokens.length];
 		int[] blockSizes = new int[blockSizeTokens.length];
 		for (int i = 0; i < treeHeightTokens.length; i++) {
+			gcFrequencies[i] = Integer.parseInt(garbageCollectionFrequencies[i]);
 			treeHeights[i] = Integer.parseInt(treeHeightTokens[i]);
 			bucketSizes[i] = Integer.parseInt(bucketSizeTokens[i]);
 			blockSizes[i] = Integer.parseInt(blockSizeTokens[i]);
@@ -111,6 +117,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 		for (int i = 0; i < treeHeights.length; i++) {
 			logger.info("============ Strategy Parameters ============");
+			gcFrequency = gcFrequencies[i];
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];
 			blockSize = blockSizes[i];
@@ -119,6 +126,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
 			logger.info("Position map type: {}", positionMapType);
+			logger.info("Garbage collection frequency: {}", gcFrequency);
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
@@ -152,8 +160,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 							clientWorkers, clientsPerWorker);
 
 					//Wait for system to stabilize
-					logger.info("Waiting 10s...");
-					sleepSeconds(10);
+					logger.info("Waiting 15s...");
+					sleepSeconds(15);
 
 					//Get measurements
 					getMeasurements();
@@ -221,8 +229,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + positionMapType + " " + treeHeight + " " + bucketSize
-						+ " " + blockSize + " " + isMeasurementWorker;
+						+ " " + nRequests + " " + positionMapType + " " + gcFrequency + " " + treeHeight + " "
+						+ bucketSize + " " + blockSize + " " + isMeasurementWorker;
 				commands[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
@@ -241,7 +249,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String fileName = "measurements_height_" + treeHeight + "_bucket_" + bucketSize + "_block_" + blockSize + ".csv";
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
-			resultFile.write("clients(#),avgLatency(ns),latencyDev(ns),avgThroughput(ops/s),throughputDev(ops/s),maxLatency(ns),maxThroughput(ops/s)\n");
+			resultFile.write("clients(#),avgLatency(ns),latencyDev(ns),avgThroughput(ops/s),throughputDev(ops/s)," +
+					"maxLatency(ns),maxThroughput(ops/s)\n");
 			for (int i = 0; i < nRounds; i++) {
 				int clients = numMaxRealClients[i];
 				double aLat = avgLatency[i];
@@ -265,7 +274,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 		//Wait for measurements
 		logger.info("Measuring during 120s");
-		sleepSeconds(120);
+		sleepSeconds(60 * 6);
 
 		//Stop measurements
 		measurementWorkers.values().forEach(WorkerHandler::stopProcessing);
@@ -485,7 +494,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			evictionThroughput[i] = (long) (nEvictionRequests[i] / (delta[i] / 1_000_000_000.0));
 		}
 		Storage st = new Storage(evictionThroughput);
-		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{} | minOutstanding:{} maxOutstanding:{} | minTotalTrees:{} maxTotalTrees:{} [{} samples]",
+		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{} " +
+						"| minOutstanding:{} maxOutstanding:{} | minTotalTrees:{} maxTotalTrees:{} [{} samples]",
 				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients,
 				minOutstanding, maxOutstanding, minTotalTrees, maxTotalTrees, evictionThroughput.length);
 		numMaxRealClients[round - 1] = (int) maxClients;
@@ -501,7 +511,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
 			int size = clients.length;
-			resultFile.write("clients(#),delta(ns),getPMRequests(#),getPSRequests(#),evictionRequests(#),outstanding(#),totalTrees(#)\n");
+			resultFile.write("clients(#),delta(ns),getPMRequests(#),getPSRequests(#),evictionRequests(#)," +
+					"outstanding(#),totalTrees(#)\n");
 			for (int i = 0; i < size; i++) {
 				resultFile.write(String.format("%d,%d,%d,%d,%d,%d,%d\n", clients[i], delta[i], nGetPMRequests[i],
 						nGetPSRequests[i], nEvictionRequests[i], outstanding[i], totalTrees[i]));

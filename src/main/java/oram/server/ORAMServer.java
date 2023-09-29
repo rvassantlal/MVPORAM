@@ -45,7 +45,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 	@Override
 	public ConfidentialMessage appExecuteOrdered(byte[] plainData, VerifiableShare[] shares, MessageContext msgCtx) {
-		ServerOperationType op = null;
+		ServerOperationType op;
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(plainData);
 			 DataInputStream in = new DataInputStream(bis)) {
 			op = ServerOperationType.getOperation(in.readByte());
@@ -114,10 +114,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				request.getEncryptedPath(), msgCtx.getSender());
 		long end = System.nanoTime();
 		long delay = end - start;
-		logger.info("eviction[ns]: {}", delay);
+		logger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
-		outstandingNumber = oram.getOutstandingNumber();
-		totalNumber = oram.getAllVersionNumber();
+		outstandingNumber = oram.getNumberOfOutstanding();
+		totalNumber = oram.getNumberOfVersion();
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -145,7 +145,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
-			logger.info("getPathStash[ns]: {}", delay);
+			logger.debug("getPathStash[ns]: {}", delay);
 			getPSCounter++;
 		}
 	}
@@ -157,12 +157,14 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} else {
 			ORAMContext oramContext = oram.getOramContext();
 			PositionMapType positionMapType = oramContext.getPositionMapType();
+			int garbageCollectionFrequency = oramContext.getGarbageCollectionFrequency();
 			int treeHeight = oramContext.getTreeHeight();
 			int nBlocksPerBucket = oramContext.getBucketSize();
 			int blockSize = oramContext.getBlockSize();
 			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 				 DataOutputStream out = new DataOutputStream(bos)) {
 				out.writeByte(positionMapType.ordinal());
+				out.writeInt(garbageCollectionFrequency);
 				out.writeInt(treeHeight);
 				out.writeInt(nBlocksPerBucket);
 				out.writeInt(blockSize);
@@ -196,7 +198,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
-			logger.info("getPositionMap[ns]: {}", delay);
+			logger.debug("getPositionMap[ns]: {}", delay);
 			getPMCounter++;
 		}
 	}
@@ -204,6 +206,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private ConfidentialMessage createORAM(CreateORAMMessage request) {
 		int oramId = request.getOramId();
 		PositionMapType positionMapType = request.getPositionMapType();
+		int garbageCollectionFrequency = request.getGarbageCollectionFrequency();
 		int treeHeight = request.getTreeHeight();
 		int nBlocksPerBucket = request.getNBlocksPerBucket();
 		int blockSize = request.getBlockSize();
@@ -217,12 +220,12 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			ORAM oram;
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP) {
 				logger.debug("Using full position map");
-				oram = new FullPositionMapORAM(oramId, positionMapType, treeHeight, nBlocksPerBucket, blockSize,
-						encryptedPositionMap, encryptedStash);
+				oram = new FullPositionMapORAM(oramId, positionMapType, garbageCollectionFrequency, treeHeight,
+						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
 			} else if (positionMapType == PositionMapType.TRIPLE_POSITION_MAP) {
 				logger.debug("Using triple position map");
-				oram = new TriplePositionMapORAM(oramId, positionMapType, treeHeight, nBlocksPerBucket, blockSize,
-						encryptedPositionMap, encryptedStash);
+				oram = new TriplePositionMapORAM(oramId, positionMapType, garbageCollectionFrequency, treeHeight,
+						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
 			} else {
 				logger.error("Unknown position map type");
 				return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});

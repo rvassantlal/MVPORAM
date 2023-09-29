@@ -28,8 +28,8 @@ public class ORAMManager {
 		this.encryptionManager = new EncryptionManager();
 	}
 
-	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize,
-								 int blockSize) {
+	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
+								 int treeHeight, int bucketSize, int blockSize) {
 		try {
 			EncryptedPositionMap encryptedPositionMap;
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
@@ -37,8 +37,8 @@ public class ORAMManager {
 			else
 				encryptedPositionMap = initializeEmptyTriplePositionMap();
 			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
-			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType, treeHeight, bucketSize,
-					blockSize, encryptedPositionMap, encryptedStash);
+			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType, garbageCollectionFrequency,
+					treeHeight, bucketSize, blockSize, encryptedPositionMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 			if (serializedRequest == null) {
 				return null;
@@ -53,7 +53,8 @@ public class ORAMManager {
 				return null;
 			}
 			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-			ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
+			ORAMContext oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight,
+					treeSize, bucketSize, blockSize);
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
 				return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			else
@@ -78,6 +79,7 @@ public class ORAMManager {
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPlainData());
 				 DataInputStream in = new DataInputStream(bis)) {
 				PositionMapType positionMapType = PositionMapType.getPositionMapType(in.readByte());
+				int garbageCollectionFrequency = in.readInt();
 				int treeHeight = in.readInt();
 				if (treeHeight == -1) {
 					return null;
@@ -85,7 +87,8 @@ public class ORAMManager {
 				int bucketSize = in.readInt();
 				int blockSize = in.readInt();
 				int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-				ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
+				ORAMContext oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight,
+						treeSize, bucketSize, blockSize);
 				if (oramContext.getPositionMapType() == PositionMapType.FULL_POSITION_MAP)
 					return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 				else

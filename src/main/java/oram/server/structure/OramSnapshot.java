@@ -5,20 +5,20 @@ import java.io.Serializable;
 import java.util.*;
 
 
-public class OramSnapshot implements Serializable {
+public class OramSnapshot implements Serializable, Comparable<OramSnapshot> {
 	private final Integer versionId;
 	private final Set<OramSnapshot> previous;// older versions
 	private final Set<OramSnapshot> childSnapshots; // newer versions
-	private EncryptedStash stash;
+	private final EncryptedStash stash;
 	private final HashMap<Integer, EncryptedBucket> difTree;
 
 	public OramSnapshot(int versionId, OramSnapshot[] previousTrees,
-						EncryptedStash encryptedStash) {
+						EncryptedStash encryptedStash, int treeLevel) {
 		this.versionId = versionId;
-		this.difTree = new HashMap<>();
+		this.difTree = new HashMap<>(treeLevel);
 		this.stash = encryptedStash;
-		this.previous = new LinkedHashSet<>();
-		this.childSnapshots = new HashSet<>();
+		this.previous = new TreeSet<>();
+		this.childSnapshots = new TreeSet<>();
 		Collections.addAll(previous, previousTrees);
 	}
 
@@ -70,9 +70,6 @@ public class OramSnapshot implements Serializable {
 	public void addPrevious(OramSnapshot previousVersion) {
 		this.previous.add(previousVersion);
 	}
-	public void addPrevious(Set<OramSnapshot> previous) {
-		this.previous.addAll(previous);
-	}
 
 	public void removePrevious(List<OramSnapshot> previousVersion) {
 		previousVersion.forEach(previous::remove);
@@ -84,5 +81,10 @@ public class OramSnapshot implements Serializable {
 
 	public void removeStash() {
 		stash.clearStash();
+	}
+
+	@Override
+	public int compareTo(OramSnapshot o) {
+		return Integer.compare(versionId, o.versionId);
 	}
 }

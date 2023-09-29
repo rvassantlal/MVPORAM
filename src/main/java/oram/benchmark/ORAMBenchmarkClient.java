@@ -14,10 +14,10 @@ import java.util.concurrent.CountDownLatch;
 public class ORAMBenchmarkClient {
 	private final static Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
-		if (args.length != 8) {
+		if (args.length != 9) {
 			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
-					"<nRequests> <position map type: full | triple> <treeHeight> <bucketSize> <blockSize> " +
-					"<isMeasurementLeader>");
+					"<nRequests> <position map type: full | triple> <gc frequency> <treeHeight> <bucketSize> " +
+					"<blockSize> <isMeasurementLeader>");
 			System.exit(-1);
 		}
 
@@ -35,18 +35,19 @@ public class ORAMBenchmarkClient {
 			System.exit(-1);
 			return;
 		}
-		int treeHeight = Integer.parseInt(args[4]);
-		int bucketSize = Integer.parseInt(args[5]);
-		int blockSize = Integer.parseInt(args[6]);
-		boolean measurementLeader = Boolean.parseBoolean(args[7]);
+		int garbageCollectionFrequency = Integer.parseInt(args[4]);
+		int treeHeight = Integer.parseInt(args[5]);
+		int bucketSize = Integer.parseInt(args[6]);
+		int blockSize = Integer.parseInt(args[7]);
+		boolean measurementLeader = Boolean.parseBoolean(args[8]);
 
 		CountDownLatch latch = new CountDownLatch(nClients);
 		Client[] clients = new Client[nClients];
 		for (int i = 0; i < nClients; i++) {
 			clients[i] = new Client(oramId, initialClientId, initialClientId + i, positionMapType,
-					treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
+					garbageCollectionFrequency, treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
 			clients[i].start();
-			Thread.sleep(10);
+			Thread.sleep(1000);
 		}
 
 		try {
@@ -69,7 +70,8 @@ public class ORAMBenchmarkClient {
 		private final int address;
 		private final boolean measurementLeader;
 
-		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType, int treeHeight, int bucketSize, int blockSize,
+		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType,
+					   int garbageCollectionFrequency, int treeHeight, int bucketSize, int blockSize,
 					   CountDownLatch latch, int nRequests, boolean measurementLeader) throws SecretSharingException {
 			this.initialClientId = initialClientId;
 			this.oramManager = new ORAMManager(clientId);
@@ -77,7 +79,8 @@ public class ORAMBenchmarkClient {
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
-			this.oram = oramManager.createORAM(oramId, oramType, treeHeight, bucketSize, blockSize);
+			this.oram = oramManager.createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, bucketSize,
+					blockSize);
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}

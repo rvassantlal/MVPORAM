@@ -15,8 +15,15 @@ import java.util.List;
 
 public class RandomParallelTester {
 	private static final Logger logger = LoggerFactory.getLogger("benchmark");
-	private static final String[] expressions10 = {"Lively", "Tranquil", "Rhythm", "Candid", "Glimpse", "Dazzle", "Effervescent", "Mirth", "Delicate", "Whimsy"};
-	private static final String[] expressions55 = {"test1", "test2", "Parallel", "content", "oram", "benchmark", "Pineapple", "Cascade", "Whimsical", "Zephyr", "Serendipity", "Quixotic", "Bubble", "Enigma", "Luminous", "Jubilant", "Mellifluous", "Saffron", "Euphoria", "Quirk", "Galaxy", "Breeze", "Aurora", "Mystic", "Ethereal", "Bountiful", "Velvet", "Meadow", "Whiskers", "Harmonious", "Citrus", "Gossamer", "Tranquil", "Ponder", "Frolic", "Blissful", "Mystify", "Blossom", "Wanderlust", "Enchant", "Luminary", "Ripple", "Enthrall", "Symphony", "Labyrinth", "Sizzle", "Jubilee", "Driftwood", "Quench", "Twilight", "Spellbound", "Tranquility", "Mirage", "Elixir", "Glimmer", "Enchanted"};
+	private static final String[] expressions10 = {"Lively", "Tranquil", "Rhythm", "Candid", "Glimpse", "Dazzle",
+			"Effervescent", "Mirth", "Delicate", "Whimsy"};
+	private static final String[] expressions55 = {"test1", "test2", "Parallel", "content", "oram", "benchmark",
+			"Pineapple", "Cascade", "Whimsical", "Zephyr", "Serendipity", "Quixotic", "Bubble", "Enigma",
+			"Luminous", "Jubilant", "Mellifluous", "Saffron", "Euphoria", "Quirk", "Galaxy", "Breeze", "Aurora",
+			"Mystic", "Ethereal", "Bountiful", "Velvet", "Meadow", "Whiskers", "Harmonious", "Citrus", "Gossamer",
+			"Tranquil", "Ponder", "Frolic", "Blissful", "Mystify", "Blossom", "Wanderlust", "Enchant", "Luminary",
+			"Ripple", "Enthrall", "Symphony", "Labyrinth", "Sizzle", "Jubilee", "Driftwood", "Quench", "Twilight",
+			"Spellbound", "Tranquility", "Mirage", "Elixir", "Glimmer", "Enchanted"};
 	static int testSize = -1;
 	static SecureRandom rnd;
 	static int maxAddress;
@@ -43,12 +50,14 @@ public class RandomParallelTester {
 		for (int i = 1; i < nClients + 1; i++) {
 			oramManagerList.add(new ORAMManager(i));
 		}
+		int garbageCollectionFrequency = 2001;
 		int treeHeight = 3;
 		int nBlocksPerBucket = 4;
 		int blockSize = 256;
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
 
-		oramManagerList.get(0).createORAM(oramId, oramType, treeHeight, nBlocksPerBucket, blockSize);
+		oramManagerList.get(0).createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, nBlocksPerBucket,
+				blockSize);
 
 		for (ORAMManager oramManager : oramManagerList) {
 			ORAMObject oram = oramManager.getORAM(oramId);
