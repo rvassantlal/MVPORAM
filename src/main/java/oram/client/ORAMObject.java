@@ -99,6 +99,8 @@ public abstract class ORAMObject {
 
 	public int getPathId(PositionMap mergedPositionMap, int address) {
 		int pathId = mergedPositionMap.getPathAt(address);
+		logger.debug("Getting pathId {} for address {} and version {}", pathId, address,
+				mergedPositionMap.getVersionIdAt(address));
 		if (pathId == ORAMUtils.DUMMY_PATH) {
 			pathId = generateRandomPathId();
 			this.isRealAccess = false;
@@ -120,10 +122,12 @@ public abstract class ORAMObject {
 
 		if (this.isRealAccess && op == Operation.READ) {
 			if (block == null) {
-				logger.error("Reading address {} from pathId {}", address, pathId);
-				logger.error(stashesAndPaths.toString());
-				logger.error(mergedPositionMap.toString());
-				logger.error(mergedStash.toString());
+				logger.error("[client {}] Reading address {} from pathId {}", serviceProxy.getProcessId(), address, pathId);
+				logger.error("[client {}] {}", serviceProxy.getProcessId(), stashesAndPaths);
+				logger.error("[client {}] {}", serviceProxy.getProcessId(), mergedPositionMap.toString());
+				logger.error("[client {}] {}", serviceProxy.getProcessId(), mergedStash);
+				throw new IllegalStateException("Block is null");
+				//System.exit(-1);
 			} else {
 				oldContent = block.getContent();
 			}
@@ -249,19 +253,21 @@ public abstract class ORAMObject {
 
 	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Bucket[]> paths,
 							PositionMap mergedPositionMap) {
-		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
-		for (Map.Entry<Integer, Bucket[]> entry : paths.entrySet()) {
-			List<Block> blocks = new LinkedList<>();
-			for (Bucket bucket : entry.getValue()) {
+		for (Bucket[] versions : paths.values()) {
+			for (Bucket bucket : versions) {
+				if (bucket == null)
+					continue;
 				for (Block block : bucket.readBucket()) {
-					if (block != null) {
-						blocks.add(block);
+					if (block == null)
+						continue;
+					int blockAddress = block.getAddress();
+					int blockVersionId = block.getVersionId();
+					if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
+						recentBlocks.put(blockAddress, block);
 					}
 				}
 			}
-			blocksToMerge.put(entry.getKey(), blocks);
 		}
-		selectRecentBlocks(recentBlocks, mergedPositionMap, blocksToMerge);
 	}
 
 	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Stash> stashes,

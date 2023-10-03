@@ -164,6 +164,8 @@ public class EncryptionManager {
 	}
 
 	public Bucket decryptBucket(ORAMContext oramContext, EncryptedBucket encryptedBucket) {
+		if (encryptedBucket == null)
+			return null;
 		byte[][] blocks = encryptedBucket.getBlocks();
 		Bucket newBucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize());
 

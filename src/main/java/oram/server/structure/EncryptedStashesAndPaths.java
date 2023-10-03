@@ -45,7 +45,10 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 			out.writeInt(entry.getKey());
 			out.writeInt(entry.getValue().length);
 			for (EncryptedBucket encryptedBucket : entry.getValue()) {
-				encryptedBucket.writeExternal(out);
+				out.writeBoolean(encryptedBucket != null);
+				if (encryptedBucket != null) {
+					encryptedBucket.writeExternal(out);
+				}
 			}
 		}
 	}
@@ -67,6 +70,9 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 			int nValues = in.readInt();
 			EncryptedBucket[] encryptedBuckets = new EncryptedBucket[nValues];
 			for (int i = 0; i < nValues; i++) {
+				if (!in.readBoolean()) {
+					continue;
+				}
 				EncryptedBucket bucket = new EncryptedBucket(oramContext.getBucketSize());
 				bucket.readExternal(in);
 				encryptedBuckets[i] = bucket;

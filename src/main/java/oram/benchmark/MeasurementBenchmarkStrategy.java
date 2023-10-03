@@ -273,7 +273,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		measurementWorkers.values().forEach(WorkerHandler::startProcessing);
 
 		//Wait for measurements
-		logger.info("Measuring during 120s");
+		logger.info("Measuring during {}s", 60 * 6);
 		sleepSeconds(60 * 6);
 
 		//Stop measurements
