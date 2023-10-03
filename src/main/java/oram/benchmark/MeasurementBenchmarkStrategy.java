@@ -144,8 +144,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					logger.info("============ Round: {} ============", round);
 					int nClients = clientsPerRound[round - 1];
 					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_pm_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
-							positionMapType, treeHeight, bucketSize, blockSize, round);
+					storageFileNamePrefix = String.format("f_%d_pm_%s_gc_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
+							positionMapType, gcFrequency, treeHeight, bucketSize, blockSize, round);
 					//Distribute clients per workers
 					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
 					String vector = Arrays.toString(clientsPerWorker);
