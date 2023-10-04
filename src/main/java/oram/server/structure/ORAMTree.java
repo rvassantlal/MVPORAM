@@ -9,6 +9,7 @@ public class ORAMTree {
 	private final ArrayList<LinkedList<OramSnapshot>> tree;
 	private final ORAMContext oramContext;
 	private final Map<Integer, int[]> preComputedPathLocations;
+	private final Set<Integer> outstandingBucketsVersions;
 
 	public ORAMTree(ORAMContext oramContext) {
 		this.oramContext = oramContext;
@@ -22,6 +23,7 @@ public class ORAMTree {
 		for (int i = 0; i < numberOfPaths; i++) {
 			preComputedPathLocations.put(i, ORAMUtils.computePathLocations(i, oramContext.getTreeHeight()));
 		}
+		this.outstandingBucketsVersions = new HashSet<>();
 	}
 
 	public void storeSnapshot(int pathId, OramSnapshot snapshot) {
@@ -31,35 +33,25 @@ public class ORAMTree {
 		}
 	}
 
-	public EncryptedBucket[] getPath(int pathId, int versionId) {
-		int[] pathLocations = preComputedPathLocations.get(pathId);
-		EncryptedBucket[] buckets = new EncryptedBucket[pathLocations.length];
-		for (int i = 0; i < pathLocations.length; i++) {
-			int pathLocation = pathLocations[i];
-			LinkedList<OramSnapshot> snapshots = tree.get(pathLocation);
-			for (OramSnapshot snapshot : snapshots) {
-				if (snapshot.getVersionId() <= versionId) {
-					buckets[i] = snapshot.getFromLocation(pathLocation);
-					break;
-				}
+	public LinkedList<EncryptedBucket> getFromRoot(Set<Integer> versionIds) {
+		LinkedList<OramSnapshot> snapshots = tree.get(0);
+		LinkedList<EncryptedBucket> result = new LinkedList<>();
+		for (OramSnapshot snapshot : snapshots) {
+			//System.out.println("Getting bucket from location " + pathLocation + " with version " + snapshot.getVersionId() + " and requested version " + versionId);
+			if (versionIds.contains(snapshot.getVersionId())) {
+				result.add(snapshot.getFromLocation(0));
 			}
 		}
-		//TODO what will happen when there is no bucket in the tree for the given versionId?
-		//maybe initialize the tree with empty buckets?
-
-		return buckets;
+		return result;
 	}
 
-	public LinkedList<EncryptedBucket> getPath2(int pathId, int versionId) {
-		int[] pathLocations = preComputedPathLocations.get(pathId);
+	public LinkedList<EncryptedBucket> getFromLocation(int location, int versionId) {
+		LinkedList<OramSnapshot> snapshots = tree.get(location);
 		LinkedList<EncryptedBucket> result = new LinkedList<>();
-		for (int pathLocation : pathLocations) {
-			LinkedList<OramSnapshot> snapshots = tree.get(pathLocation);
-			for (OramSnapshot snapshot : snapshots) {
-				//System.out.println("Getting bucket from location " + pathLocation + " with version " + snapshot.getVersionId() + " and requested version " + versionId);
-				if (snapshot.getVersionId() <= versionId) {
-					result.add(snapshot.getFromLocation(pathLocation));
-				}
+		for (OramSnapshot snapshot : snapshots) {
+			//System.out.println("Getting bucket from location " + pathLocation + " with version " + snapshot.getVersionId() + " and requested version " + versionId);
+			if (snapshot.getVersionId() <= versionId) {
+				result.add(snapshot.getFromLocation(location));
 			}
 		}
 		return result;

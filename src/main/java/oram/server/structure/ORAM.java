@@ -27,7 +27,9 @@ public abstract class ORAM {
 	private final Map<Integer, EncryptedStash> encryptedStashes;
 	private final Set<Integer> visitedVersions;
 	private final ORAMTree oramTree;
-	private final EncryptionManager encryptionManager;
+	private final Set<Integer> outstandingVersions;
+	private final EncryptionManager encryptionManager; //For debugging
+
 
 	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
 				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
@@ -47,6 +49,7 @@ public abstract class ORAM {
 		this.taintedSnapshots = new LinkedList<>();
 		this.encryptedStashes = new HashMap<>();
 		this.visitedVersions = new HashSet<>();
+		this.outstandingVersions = new HashSet<>();
 		int versionId = ++sequenceNumber;
 		this.positionMaps.put(versionId, encryptedPositionMap);
 		this.oramTree = new ORAMTree(oramContext);
@@ -70,17 +73,32 @@ public abstract class ORAM {
 		if (oramClientContext == null) {
 			return null;
 		}
+
 		oramClientContext.setPathId(pathId);
 		encryptedStashes.clear();//This is global and reused - make sure that returning this object doesn't cause any issues
 		OramSnapshot[] outstandingTrees = oramClientContext.getOutstandingVersions();
 
 		int maxVersion = 0;
+		outstandingVersions.clear();
 		for (OramSnapshot outstandingTree : outstandingTrees) {
 			encryptedStashes.put(outstandingTree.getVersionId(), outstandingTree.getStash());
 			maxVersion = Math.max(maxVersion, outstandingTree.getVersionId());
+			outstandingVersions.add(outstandingTree.getVersionId());
 		}
 
-		LinkedList<EncryptedBucket> paths = oramTree.getPath2(pathId, maxVersion);
+		int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());// pre compute
+		LinkedList<EncryptedBucket> paths = new LinkedList<>();
+		//logger.info("Client {} has {} outstanding versions", clientId, outstandingVersions.size());
+		for (int pathLocation : pathLocations) {
+			LinkedList<EncryptedBucket> snapshots;
+			if (pathLocation != 0) {
+				snapshots = oramTree.getFromLocation(pathLocation, maxVersion);
+			} else {
+				snapshots = oramTree.getFromRoot(outstandingVersions);
+			}
+			//logger.info("[Client {}] Path location {} has {} buckets ({})", clientId, pathLocation, snapshots.size(), snapshots);
+			paths.addAll(snapshots);
+		}
 
 		/*logger.info("Sending path {} to client {} with {} buckets", pathId, clientId, paths.size());
 		for (EncryptedBucket path : paths) {
@@ -124,10 +142,10 @@ public abstract class ORAM {
 		cleanOutstandingTrees(outstandingVersions);
 		currentNumberOfSnapshots++;
 		outstandingTrees.add(newVersion);
-		garbageCollect();
 		if(sequenceNumber % oramContext.getGarbageCollectionFrequency() == 0){
+			garbageCollect();
 		}
-		logger.info("{}", oramTree);
+		logger.debug("{}", oramTree);
 		return true;
 	}
 
@@ -141,8 +159,8 @@ public abstract class ORAM {
 		//long start, end;
 		//start = System.nanoTime();
 		garbageCollectSnapshot();
-		logger.info("Number of tainted versions: {}", taintedVersions.size());
-		logger.info("Number of used versions: {}", usedVersions.size());
+		//logger.info("Number of tainted versions: {}", taintedVersions.size());
+		//logger.info("Number of used versions: {}", usedVersions.size());
 		oramTree.garbageCollect(usedVersions);
 		visitedVersions.clear();
 		//long delta = end - start;
