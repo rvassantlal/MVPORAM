@@ -3,8 +3,10 @@ package oram.server.structure;
 import oram.messages.GetPositionMap;
 import oram.utils.PositionMapType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class TriplePositionMapORAM extends ORAM {
 
@@ -25,15 +27,18 @@ public class TriplePositionMapORAM extends ORAM {
 			}
 		}
 
-		OramSnapshot[] currentOutstandingVersions = new OramSnapshot[outstandingTrees.size()];
+		int[] currentOutstandingVersions = new int[outstandingTrees.size()];
+		EncryptedStash[] currentOutstandingStashes = new EncryptedStash[outstandingTrees.size()];
 		int i = 0;
-		for (OramSnapshot snapshot : outstandingTrees) {
-			currentOutstandingVersions[i] = snapshot;
+		for (int outstandingVersion : outstandingTrees) {
+			currentOutstandingVersions[i] = outstandingVersion;
+			currentOutstandingStashes[i] = stashes.get(outstandingVersion);
 			i++;
 		}
-
+		HashMap<Integer, Set<Integer>> outstandingTree = oramTree.getOutstandingBucketsVersions();
 		int newVersionId = sequenceNumber++;
-		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);
+		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions,
+				currentOutstandingStashes, newVersionId, outstandingTree);
 
 		oramClientContexts.put(clientId, oramClientContext);
 		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);

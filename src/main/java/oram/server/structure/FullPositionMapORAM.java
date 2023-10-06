@@ -3,8 +3,10 @@ package oram.server.structure;
 import oram.messages.GetPositionMap;
 import oram.utils.PositionMapType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class FullPositionMapORAM extends ORAM {
 
@@ -17,26 +19,29 @@ public class FullPositionMapORAM extends ORAM {
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {
 		Map<Integer, EncryptedPositionMap> resultedPositionMap = new HashMap<>(outstandingTrees.size());
-		OramSnapshot[] currentOutstandingVersions = new OramSnapshot[outstandingTrees.size()];
+		int[] currentOutstandingVersions = new int[outstandingTrees.size()];
+		EncryptedStash[] currentOutstandingStashes = new EncryptedStash[outstandingTrees.size()];
 		int i = 0;
-		for (OramSnapshot snapshot : outstandingTrees) {
-			int versionId = snapshot.getVersionId();
-			currentOutstandingVersions[i] = snapshot;
-			resultedPositionMap.put(versionId, positionMaps.get(versionId));
+		for (int outstandingVersion : outstandingTrees) {
+			currentOutstandingVersions[i] = outstandingVersion;
+			currentOutstandingStashes[i] = stashes.get(outstandingVersion);
+			resultedPositionMap.put(outstandingVersion, positionMaps.get(outstandingVersion));
 			i++;
 		}
+		HashMap<Integer, Set<Integer>> outstandingTree = oramTree.getOutstandingBucketsVersions();
 		int newVersionId = ++sequenceNumber;
-		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId);
+		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions,
+				currentOutstandingStashes, newVersionId, outstandingTree);
 
 		oramClientContexts.put(clientId, oramClientContext);
 		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);
 	}
 
 	@Override
-	protected void cleanOutstandingTrees(OramSnapshot[] outstandingVersions) {
+	protected void cleanOutstandingTrees(int[] outstandingVersions) {
 		super.cleanOutstandingTrees(outstandingVersions);
-		for (OramSnapshot outstandingVersion : outstandingVersions) {
-			positionMaps.remove(outstandingVersion.getVersionId());
+		for (int outstandingVersion : outstandingVersions) {
+			positionMaps.remove(outstandingVersion);
 		}
 	}
 }

@@ -63,7 +63,7 @@ public class RandomParallelTester {
 			ORAMObject oram = oramManager.getORAM(oramId);
 			threads.add(new Thread(() -> {
 				for (int i = 0; i < testSize; i++) {
-					System.out.println(i);
+					//System.out.println(i);
 					randomAccess(oram);
 				}
 			}));
@@ -96,11 +96,11 @@ public class RandomParallelTester {
 				randomWord = expressions10[rnd.nextInt(expressions10.length)];
 			byte[] response = oram.writeMemory(address, randomWord.getBytes());
 			String responseString = response == null ? "null" : new String(response);
-			logger.info("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): " + responseString);
+			//logger.info("write \"" + randomWord + "\" to address" + address + ". Response (oldValue): " + responseString);
 		} else {
 			byte[] response = oram.readMemory(address);
 			String responseString = response == null ? "null" : new String(response);
-			logger.info("read from address" + address + ". Response: " + responseString);
+			//logger.info("read from address" + address + ". Response: " + responseString);
 		}
 
 	}

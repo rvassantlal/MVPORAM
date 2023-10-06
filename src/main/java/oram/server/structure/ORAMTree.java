@@ -6,55 +6,50 @@ import oram.utils.ORAMUtils;
 import java.util.*;
 
 public class ORAMTree {
-	private final ArrayList<LinkedList<OramSnapshot>> tree;
+	private final ArrayList<BucketHolder> tree;
 	private final ORAMContext oramContext;
-	private final Map<Integer, int[]> preComputedPathLocations;
-	private final Set<Integer> outstandingBucketsVersions;
+	private final HashMap<Integer, Set<Integer>> outstandingBucketsVersions;
 
 	public ORAMTree(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 		this.tree = new ArrayList<>(treeSize);
+		this.outstandingBucketsVersions = new HashMap<>(treeSize);
 		for (int i = 0; i < treeSize; i++) {
-			tree.add(new LinkedList<>());
-		}
-		int numberOfPaths = 1 << oramContext.getTreeHeight();
-		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
-		for (int i = 0; i < numberOfPaths; i++) {
-			preComputedPathLocations.put(i, ORAMUtils.computePathLocations(i, oramContext.getTreeHeight()));
-		}
-		this.outstandingBucketsVersions = new HashSet<>();
-	}
-
-	public void storeSnapshot(int pathId, OramSnapshot snapshot) {
-		int[] pathLocations = preComputedPathLocations.get(pathId);
-		for (int pathLocation : pathLocations) {
-			tree.get(pathLocation).addFirst(snapshot);
+			tree.add(new BucketHolder());
+			outstandingBucketsVersions.put(i, new HashSet<>());
 		}
 	}
 
-	public LinkedList<EncryptedBucket> getFromRoot(Set<Integer> versionIds) {
-		LinkedList<OramSnapshot> snapshots = tree.get(0);
-		LinkedList<EncryptedBucket> result = new LinkedList<>();
-		for (OramSnapshot snapshot : snapshots) {
-			//System.out.println("Getting bucket from location " + pathLocation + " with version " + snapshot.getVersionId() + " and requested version " + versionId);
-			if (versionIds.contains(snapshot.getVersionId())) {
-				result.add(snapshot.getFromLocation(0));
-			}
+	public HashMap<Integer, Set<Integer>> getOutstandingBucketsVersions() {
+		HashMap<Integer, Set<Integer>> result = new HashMap<>(tree.size());
+
+		for (int i = 0; i < tree.size(); i++) {
+			BucketHolder bucketHolder = tree.get(i);
+			Set<Integer> outstandingBuckets = outstandingBucketsVersions.get(i);
+			outstandingBuckets.clear();
+			outstandingBuckets.addAll(bucketHolder.getOutstandingBucketsVersions());
+			Set<Integer> partialResult = new HashSet<>(outstandingBuckets);
+			result.put(i, partialResult);
 		}
+
 		return result;
 	}
 
-	public LinkedList<EncryptedBucket> getFromLocation(int location, int versionId) {
-		LinkedList<OramSnapshot> snapshots = tree.get(location);
-		LinkedList<EncryptedBucket> result = new LinkedList<>();
-		for (OramSnapshot snapshot : snapshots) {
-			//System.out.println("Getting bucket from location " + pathLocation + " with version " + snapshot.getVersionId() + " and requested version " + versionId);
-			if (snapshot.getVersionId() <= versionId) {
-				result.add(snapshot.getFromLocation(location));
-			}
+	public EncryptedBucket[][] getPath(int[] pathLocations, HashMap<Integer, Set<Integer>> outstandingTree) {
+		EncryptedBucket[][] buckets = new EncryptedBucket[pathLocations.length][];
+		for (int i = 0; i < pathLocations.length; i++) {
+			int pathLocation = pathLocations[i];
+			Set<Integer> locationOutstandingVersions = outstandingTree.get(pathLocation);
+			BucketHolder bucketHolder = tree.get(pathLocation);
+			buckets[i] = bucketHolder.getBuckets(locationOutstandingVersions);
 		}
-		return result;
+		return buckets;
+	}
+
+	public void storeBucket(int location, BucketSnapshot snapshot, Set<Integer> outstandingVersions,
+							Set<Integer> globalOutstandingVersions) {
+		tree.get(location).addSnapshot(snapshot, outstandingVersions, globalOutstandingVersions);
 	}
 
 	@Override
@@ -73,29 +68,5 @@ public class ORAMTree {
 			sb.append('\n');
 		}
 		return sb.toString();
-	}
-
-	public void garbageCollect(int minOutstandingVersionId) {
-		for (LinkedList<OramSnapshot> oramSnapshots : tree) {
-			Iterator<OramSnapshot> iterator = oramSnapshots.iterator();
-			while (iterator.hasNext()) {
-				OramSnapshot oramSnapshot = iterator.next();
-				if (oramSnapshot.getVersionId() < minOutstandingVersionId) {
-					if (iterator.hasNext())
-						iterator.next();
-					break;
-				}
-			}
-			while (iterator.hasNext()) {
-				iterator.next();
-				iterator.remove();
-			}
-		}
-	}
-
-	public void garbageCollect(Set<Integer> taintedVersions) {
-		for (LinkedList<OramSnapshot> oramSnapshots : tree) {
-			oramSnapshots.removeIf(oramSnapshot -> !taintedVersions.contains(oramSnapshot.getVersionId()));
-		}
 	}
 }
