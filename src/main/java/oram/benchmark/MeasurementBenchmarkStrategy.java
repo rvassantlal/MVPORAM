@@ -160,8 +160,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 							clientWorkers, clientsPerWorker);
 
 					//Wait for system to stabilize
-					logger.info("Waiting 15s...");
-					sleepSeconds(15);
+					logger.info("Waiting 30s...");
+					sleepSeconds(30);
 
 					//Get measurements
 					getMeasurements();
@@ -273,8 +273,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		measurementWorkers.values().forEach(WorkerHandler::startProcessing);
 
 		//Wait for measurements
-		logger.info("Measuring during {}s", 60 * 6);
-		sleepSeconds(60 * 6);
+		logger.info("Measuring during {}s", 60 * 2);
+		sleepSeconds(60 * 2);
 
 		//Stop measurements
 		measurementWorkers.values().forEach(WorkerHandler::stopProcessing);

@@ -7,12 +7,12 @@ public class ORAMClientContext {
 	private final int[] outstandingVersion;
 	private final EncryptedStash[] outstandingStashes;
 	private final int newVersionId;
-	private HashMap<Integer, Set<Integer>> outstandingTree;
+	private HashMap<Integer, Set<BucketSnapshot>> outstandingTree;
 
 	private int pathId;
 
 	public ORAMClientContext(int[] outstandingVersions, EncryptedStash[] outstandingStashes, int newVersionId,
-							 HashMap<Integer, Set<Integer>> outstandingTree) {
+							 HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
 		this.outstandingVersion = outstandingVersions;
 		this.outstandingStashes = outstandingStashes;
 		this.newVersionId = newVersionId;
@@ -27,11 +27,11 @@ public class ORAMClientContext {
 		return outstandingStashes;
 	}
 
-	public HashMap<Integer, Set<Integer>> getOutstandingTree() {
+	public HashMap<Integer, Set<BucketSnapshot>> getOutstandingTree() {
 		return outstandingTree;
 	}
 
-	public void setOutstandingTree(HashMap<Integer, Set<Integer>> outstandingTree) {
+	public void setOutstandingTree(HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
 		this.outstandingTree = outstandingTree;
 	}
 

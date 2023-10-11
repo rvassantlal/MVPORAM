@@ -1,7 +1,7 @@
 package oram.server.structure;
 
 public class BucketSnapshot implements Comparable<BucketSnapshot> {
-	private final Integer versionId;
+	private final int versionId;
 	private final EncryptedBucket bucket;
 
 	public BucketSnapshot(int versionId, EncryptedBucket bucket) {
@@ -9,12 +9,17 @@ public class BucketSnapshot implements Comparable<BucketSnapshot> {
 		this.bucket = bucket;
 	}
 
-	public Integer getVersionId() {
+	public int getVersionId() {
 		return versionId;
 	}
 
 	public EncryptedBucket getBucket() {
 		return bucket;
+	}
+
+	@Override
+	public int hashCode() {
+		return versionId;
 	}
 
 	@Override

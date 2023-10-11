@@ -66,31 +66,35 @@ public abstract class ORAM {
 
 		oramClientContext.setPathId(pathId);
 		getPSEncryptedStashesBuffer.clear();//This is global and reused - make sure that returning this object doesn't cause any issues
+
 		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 		int[] pathLocations = preComputedPathLocations.get(pathId);
+
 		EncryptedStash[] outstandingStashes = oramClientContext.getOutstandingStashes();
-		HashMap<Integer, Set<Integer>> outstandingTree = oramClientContext.getOutstandingTree();
-		HashMap<Integer, Set<Integer>> usedOutstandingTreeVersions = new HashMap<>(oramContext.getTreeLevels());
+		HashMap<Integer, Set<BucketSnapshot>> outstandingTree = oramClientContext.getOutstandingTree();
+		HashMap<Integer, Set<BucketSnapshot>> outstandingTreePath = new HashMap<>(oramContext.getTreeLevels());
+
+		logger.debug("Client {} is reading path {} with {} outstanding versions", clientId, pathId,
+				outstandingVersions.length);
 		for (int i = 0; i < outstandingVersions.length; i++) {
 			getPSEncryptedStashesBuffer.put(outstandingVersions[i], outstandingStashes[i]);
 		}
 
-		logger.info("Client {} is reading path {} with {} outstanding versions", clientId, pathId,
-				outstandingVersions.length);
+
 		for (int pathLocation : pathLocations) {
-			usedOutstandingTreeVersions.put(pathLocation, outstandingTree.get(pathLocation));
-			logger.info("Location {} has {} outstanding versions", pathLocation,
-					outstandingTree.get(pathLocation));
+			Set<BucketSnapshot> outstandingBucket = new HashSet<>(outstandingTree.get(pathLocation));
+			outstandingTreePath.put(pathLocation, outstandingBucket);
+			logger.debug("Location {} has {} outstanding versions", pathLocation, outstandingBucket.size());
 		}
-		EncryptedBucket[][] path = oramTree.getPath(pathLocations, usedOutstandingTreeVersions);
-		oramClientContext.setOutstandingTree(usedOutstandingTreeVersions);
+		EncryptedBucket[][] path = oramTree.getPath(pathLocations, outstandingTreePath);
+		oramClientContext.setOutstandingTree(outstandingTreePath);
+		oramTree.freeOutStandingTreeContextHolder(outstandingTree);
 
 		Map<Integer, EncryptedBucket[]> compactedPaths = new HashMap<>(path.length);
 		for (int i = 0; i < path.length; i++) {
-			logger.info("Path location index {} has {} buckets", i, path[i].length);
+			logger.debug("Path location index {} has {} buckets", i, path[i].length);
 			compactedPaths.put(i, path[i]);
 		}
-
 		return new EncryptedStashesAndPaths(getPSEncryptedStashesBuffer, compactedPaths);
 	}
 
@@ -107,28 +111,29 @@ public abstract class ORAM {
 		positionMaps.put(newVersionId, encryptedPositionMap);
 		stashes.put(newVersionId, encryptedStash);
 
-		logger.info("Client {} is performing eviction in path {}", clientId, oramClientContext.getPathId());
+		logger.debug("Client {} is performing eviction in path {} with version {}", clientId,
+				oramClientContext.getPathId(), newVersionId);
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
 			int location = entry.getKey();
-			locationOutstandingVersions.clear();
+			/*locationOutstandingVersions.clear();
 			for (ORAMClientContext value : oramClientContexts.values()) {
-				Set<Integer> clientLocationOV = value.getOutstandingTree().get(location);
+				Set<BucketSnapshot> clientLocationOV = value.getOutstandingTree().get(location);
 				if (clientLocationOV == null) {// This client doesn't have any outstanding version for this location
 					continue;
 				}
 				locationOutstandingVersions.addAll(clientLocationOV);
-			}
+			}*/
 			BucketSnapshot bucketSnapshot = new BucketSnapshot(newVersionId, entry.getValue());
+			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
 			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().get(location),
 					locationOutstandingVersions);
-			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
 		}
 
 		cleanOutstandingTrees(oramClientContext.getOutstandingVersions());
 		currentNumberOfSnapshots++;
 		outstandingTrees.add(newVersionId);
 
-		logger.info("{}", oramTree);
+		logger.debug("{}\n", oramTree);
 		return true;
 	}
 

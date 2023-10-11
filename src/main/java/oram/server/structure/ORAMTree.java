@@ -8,46 +8,58 @@ import java.util.*;
 public class ORAMTree {
 	private final ArrayList<BucketHolder> tree;
 	private final ORAMContext oramContext;
-	private final HashMap<Integer, Set<Integer>> outstandingBucketsVersions;
+	private final Deque<HashMap<Integer, Set<BucketSnapshot>>> outstandingTreeContextHolders;
 
 	public ORAMTree(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 		this.tree = new ArrayList<>(treeSize);
-		this.outstandingBucketsVersions = new HashMap<>(treeSize);
+		this.outstandingTreeContextHolders = new ArrayDeque<>();
 		for (int i = 0; i < treeSize; i++) {
 			tree.add(new BucketHolder());
-			outstandingBucketsVersions.put(i, new HashSet<>());
 		}
 	}
 
-	public HashMap<Integer, Set<Integer>> getOutstandingBucketsVersions() {
-		HashMap<Integer, Set<Integer>> result = new HashMap<>(tree.size());
+	public void freeOutStandingTreeContextHolder(HashMap<Integer, Set<BucketSnapshot>> outstandingTreeContext) {
+		for (int i = 0; i < tree.size(); i++) {
+			outstandingTreeContext.get(i).clear();
+		}
+		outstandingTreeContextHolders.addFirst(outstandingTreeContext);
+	}
+
+	public HashMap<Integer, Set<BucketSnapshot>> getOutstandingBucketsVersions() {
+		HashMap<Integer, Set<BucketSnapshot>> result = outstandingTreeContextHolders.pollFirst();
+		if (result == null) {
+			result = new HashMap<>(tree.size());
+		}
 
 		for (int i = 0; i < tree.size(); i++) {
 			BucketHolder bucketHolder = tree.get(i);
-			Set<Integer> outstandingBuckets = outstandingBucketsVersions.get(i);
-			outstandingBuckets.clear();
-			outstandingBuckets.addAll(bucketHolder.getOutstandingBucketsVersions());
-			Set<Integer> partialResult = new HashSet<>(outstandingBuckets);
-			result.put(i, partialResult);
+			Set<BucketSnapshot> outstandingTreeBucket = bucketHolder.getOutstandingBucketsVersions();
+			Set<BucketSnapshot> partialResult = result.get(i);
+			if (partialResult == null) {
+				partialResult = new HashSet<>(outstandingTreeBucket);
+				result.put(i, partialResult);
+			} else {
+				partialResult.addAll(outstandingTreeBucket);
+			}
 		}
 
 		return result;
 	}
 
-	public EncryptedBucket[][] getPath(int[] pathLocations, HashMap<Integer, Set<Integer>> outstandingTree) {
+	public EncryptedBucket[][] getPath(int[] pathLocations, HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
 		EncryptedBucket[][] buckets = new EncryptedBucket[pathLocations.length][];
 		for (int i = 0; i < pathLocations.length; i++) {
 			int pathLocation = pathLocations[i];
-			Set<Integer> locationOutstandingVersions = outstandingTree.get(pathLocation);
+			Set<BucketSnapshot> locationOutstandingVersions = outstandingTree.get(pathLocation);
 			BucketHolder bucketHolder = tree.get(pathLocation);
 			buckets[i] = bucketHolder.getBuckets(locationOutstandingVersions);
 		}
 		return buckets;
 	}
 
-	public void storeBucket(int location, BucketSnapshot snapshot, Set<Integer> outstandingVersions,
+	public void storeBucket(int location, BucketSnapshot snapshot, Set<BucketSnapshot> outstandingVersions,
 							Set<Integer> globalOutstandingVersions) {
 		tree.get(location).addSnapshot(snapshot, outstandingVersions, globalOutstandingVersions);
 	}

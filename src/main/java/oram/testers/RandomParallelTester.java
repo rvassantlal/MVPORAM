@@ -51,7 +51,7 @@ public class RandomParallelTester {
 			oramManagerList.add(new ORAMManager(i));
 		}
 		int garbageCollectionFrequency = 2001;
-		int treeHeight = 3;
+		int treeHeight = 4;
 		int nBlocksPerBucket = 4;
 		int blockSize = 256;
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
