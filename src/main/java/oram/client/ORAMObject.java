@@ -27,6 +27,7 @@ public abstract class ORAMObject {
 	private final SecureRandom rndGenerator;
 	byte[] oldContent = null;
 	private boolean isRealAccess;
+	private boolean isMeasure;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) {
@@ -35,6 +36,10 @@ public abstract class ORAMObject {
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
 		this.rndGenerator = new SecureRandom("oram".getBytes());
+	}
+
+	public void measure() {
+		isMeasure = true;
 	}
 
 	/**
@@ -69,6 +74,9 @@ public abstract class ORAMObject {
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
 
+		long start, end, delay;
+
+		start = System.nanoTime();
 		PositionMaps oldPositionMaps = getPositionMaps();
 		if (oldPositionMaps == null) {
 			logger.error("Position map of oram {} is null", oramId);
@@ -80,12 +88,28 @@ public abstract class ORAMObject {
 			logger.error("Failed to merge position maps of oram {}", oramId);
 			return null;
 		}
+		end = System.nanoTime();
+		delay = end - start;
+		if (isMeasure) {
+			logger.info("MPM: {}", delay);
+		}
 
 		int pathId = getPathId(mergedPositionMap, address);
+
+		start = System.nanoTime();
 		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps.getNewVersionId(), mergedPositionMap);
-
+		end = System.nanoTime();
+		delay = end - start;
+		if (isMeasure) {
+			logger.info("MPS: {}", delay);
+		}
+		start = System.nanoTime();
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
-
+		end = System.nanoTime();
+		delay = end - start;
+		if (isMeasure) {
+			logger.info("MEviction: {}", delay);
+		}
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);
 		}

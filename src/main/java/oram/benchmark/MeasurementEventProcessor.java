@@ -17,9 +17,9 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 	private static final String SERVER_READY_PATTERN = "Ready to process operations";
 	private static final String CLIENT_READY_PATTERN = "Executing experiment";
 	private static final String MEASUREMENT_PATTERN = "M:";
-	private static final String GET_PM_MEASUREMENT_PATTERN = "getPositionMap";
-	private static final String GET_PS_MEASUREMENT_PATTERN = "getPathStash";
-	private static final String EVICTION_MEASUREMENT_PATTERN = "eviction";
+	private static final String GET_PM_MEASUREMENT_PATTERN = "MPM:";
+	private static final String GET_PS_MEASUREMENT_PATTERN = "MPS:";
+	private static final String EVICTION_MEASUREMENT_PATTERN = "MEviction:";
 
 	private static final String SAR_READY_PATTERN = "%";
 
@@ -159,7 +159,10 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 	}
 	private IProcessingResult processClientMeasurements() {
 		long[] latencies = parseLatency(rawGlobalMeasurements);
-		return new Measurement(latencies);
+		long[] getPMLatency = parseLatency(rawGetPMMeasurements);
+		long[] getPSLatency = parseLatency(rawGetPSMeasurements);
+		long[] evictionLatency = parseLatency(rawEvictionMeasurements);
+		return new Measurement(latencies, getPMLatency, getPSLatency, evictionLatency);
 	}
 
 	private IProcessingResult processServerMeasurements() {
@@ -170,6 +173,9 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 		long[] nEvictionRequests = new long[rawGlobalMeasurements.size()];
 		long[] outstanding = new long[rawGlobalMeasurements.size()];
 		long[] totalVersions = new long[rawGlobalMeasurements.size()];
+		long[] getPMAvg = new long[rawGlobalMeasurements.size()];
+		long[] getPSAvg = new long[rawGlobalMeasurements.size()];
+		long[] evictionAvg = new long[rawGlobalMeasurements.size()];
 		int i = 0;
 		for (String rawMeasurement : rawGlobalMeasurements) {
 			String token = rawMeasurement.split(">")[1];
@@ -182,15 +188,14 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 			nEvictionRequests[i] = Long.parseLong(strValues[4]);
 			outstanding[i] = Long.parseLong(strValues[5]);
 			totalVersions[i] = Long.parseLong(strValues[6]);
+			getPMAvg[i] = Long.parseLong(strValues[7]);
+			getPSAvg[i] = Long.parseLong(strValues[8]);
+			evictionAvg[i] = Long.parseLong(strValues[9]);
 			i++;
 		}
 
-		long[] getPMLatency = parseLatency(rawGetPMMeasurements);
-		long[] getPSLatency = parseLatency(rawGetPSMeasurements);
-		long[] evictionLatency = parseLatency(rawEvictionMeasurements);
-
-		return new Measurement(clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests, getPMLatency,
-				getPSLatency, evictionLatency, outstanding, totalVersions);
+		return new Measurement(clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests, getPMAvg,
+				getPSAvg, evictionAvg, outstanding, totalVersions);
 	}
 
 	private long[] parseLatency(LinkedList<String> rawMeasurements) {

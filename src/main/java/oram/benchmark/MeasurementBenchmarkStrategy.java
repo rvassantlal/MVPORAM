@@ -35,7 +35,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private final String sarCommand;
 	private int round;
 	private int nRounds;
-	private int gcFrequency;
 	private int treeHeight;
 	private int bucketSize;
 	private int blockSize;
@@ -85,19 +84,15 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
 		positionMapType = benchmarkParameters.getProperty("experiment.position_map_type");
-		String[] garbageCollectionFrequencies =
-				benchmarkParameters.getProperty("experiment.garbage_collection_frequencies").split(" ");
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
 
 		//Parse parameters
-		int[] gcFrequencies = new int[garbageCollectionFrequencies.length];
 		int[] treeHeights = new int[treeHeightTokens.length];
 		int[] bucketSizes = new int[bucketSizeTokens.length];
 		int[] blockSizes = new int[blockSizeTokens.length];
 		for (int i = 0; i < treeHeightTokens.length; i++) {
-			gcFrequencies[i] = Integer.parseInt(garbageCollectionFrequencies[i]);
 			treeHeights[i] = Integer.parseInt(treeHeightTokens[i]);
 			bucketSizes[i] = Integer.parseInt(bucketSizeTokens[i]);
 			blockSizes[i] = Integer.parseInt(blockSizeTokens[i]);
@@ -117,7 +112,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 		for (int i = 0; i < treeHeights.length; i++) {
 			logger.info("============ Strategy Parameters ============");
-			gcFrequency = gcFrequencies[i];
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];
 			blockSize = blockSizes[i];
@@ -126,7 +120,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
 			logger.info("Position map type: {}", positionMapType);
-			logger.info("Garbage collection frequency: {}", gcFrequency);
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
@@ -144,8 +137,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					logger.info("============ Round: {} ============", round);
 					int nClients = clientsPerRound[round - 1];
 					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_pm_%s_gc_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
-							positionMapType, gcFrequency, treeHeight, bucketSize, blockSize, round);
+					storageFileNamePrefix = String.format("f_%d_pm_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
+							positionMapType, treeHeight, bucketSize, blockSize, nClients);
 					//Distribute clients per workers
 					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
 					String vector = Arrays.toString(clientsPerWorker);
@@ -229,7 +222,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + positionMapType + " " + gcFrequency + " " + treeHeight + " "
+						+ " " + nRequests + " " + positionMapType + " " + treeHeight + " "
 						+ bucketSize + " " + blockSize + " " + isMeasurementWorker;
 				commands[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
@@ -394,9 +387,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			}
 		} else if (clientWorkersIds.contains(workerId)) {
 			if (clientWorkers[0].getWorkerId() == workerId) { //measurement client
-				if (measurements.length == 1) {
+				if (measurements.length == 4) {
 					logger.debug("Received measurement client latency results");
-					processClientMeasurementResults(measurements[0]);
+					processClientMeasurementResults(measurements[0], measurements[1], measurements[2], measurements[3]);
 					measurementDeliveredCounter.countDown();
 				} else {
 					logger.debug("Received measurement client resources usage results");
@@ -404,7 +397,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					measurementDeliveredCounter.countDown();
 				}
 			} else if (clientWorkers[1].getWorkerId() == workerId) { //load client
-				if (measurements.length > 1) {
+				if (measurements.length > 4) {
 					logger.debug("Received load client resources usage results");
 					processResourcesMeasurements(measurements, "load_client");
 					measurementDeliveredCounter.countDown();
@@ -460,22 +453,33 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	}
 
 
-	private void processClientMeasurementResults(long[] latencies) {
-		saveClientMeasurements(latencies);
+	private void processClientMeasurementResults(long[] latencies, long[] getPMLatencies, long[] getPSLatencies,
+												 long[] evictionLatencies) {
+		saveClientMeasurements(latencies, getPMLatencies, getPSLatencies, evictionLatencies);
 		Storage st = new Storage(latencies);
-		logger.info("Client Measurement[ms] - avg:{} dev:{} max:{} [{} samples]", st.getAverage(true) / 1000000,
-				st.getDP(true) / 1000000, st.getMax(true) / 1000000, latencies.length);
+		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
+		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
+		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
+		logger.info("Client-side measurements [{} samples]:", latencies.length);
+		logger.info("\tAccess latency[ms]: avg:{} dev:{} max: {}", st.getAverage(true) / 1_000_000,
+				st.getDP(true) / 1_000_000, st.getMax(true) / 1_000_000);
+		logger.info("\tGet PM latency[ms]: avg:{}", getPMLatenciesStorage.getAverage(true) / 1_000_000);
+		logger.info("\tGet PS latency[ms]: avg:{}", getPSLatenciesStorage.getAverage(true) / 1_000_000);
+		logger.info("\tEviction latency[ms]: avg:{}", evictionLatenciesStorage.getAverage(true) / 1_000_000);
+
 		avgLatency[round - 1] = st.getAverage(true);
 		latencyDev[round - 1] = st.getDP(true);
 		maxLatency[round - 1] = st.getMax(true);
 	}
 
 	private void processServerMeasurementResults(long[] clients, long[] delta, long[] nGetPMRequests,
-												 long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
-												 long[] getPSLatency, long[] evictionLatency,
+												 long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatencies,
+												 long[] getPSLatencies, long[] evictionLatencies,
 												 long[] outstanding, long[] totalTrees) {
 		saveServerMeasurements(clients, delta, nGetPMRequests, nGetPSRequests, nEvictionRequests,
-				getPMLatency, getPSLatency, evictionLatency, outstanding, totalTrees);
+				getPMLatencies, getPSLatencies, evictionLatencies, outstanding, totalTrees);
+		long[] getPMThroughput = new long[clients.length];
+		long[] getPSThroughput = new long[clients.length];
 		long[] evictionThroughput = new long[clients.length];
 		long minClients = Long.MAX_VALUE;
 		long maxClients = Long.MIN_VALUE;
@@ -491,22 +495,40 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			maxOutstanding = Long.max(maxOutstanding, outstanding[i]);
 			minTotalTrees = Long.min(minTotalTrees, totalTrees[i]);
 			maxTotalTrees = Long.max(maxTotalTrees, totalTrees[i]);
+			getPMThroughput[i] = (long) (nGetPMRequests[i] / (delta[i] / 1_000_000_000.0));
+			getPSThroughput[i] = (long) (nGetPSRequests[i] / (delta[i] / 1_000_000_000.0));
 			evictionThroughput[i] = (long) (nEvictionRequests[i] / (delta[i] / 1_000_000_000.0));
 		}
-		Storage st = new Storage(evictionThroughput);
-		logger.info("Server Measurement[evictions/s] - avg:{} dev:{} max:{} | minClients:{} maxClients:{} " +
-						"| minOutstanding:{} maxOutstanding:{} | minTotalTrees:{} maxTotalTrees:{} [{} samples]",
-				st.getAverage(true), st.getDP(true), st.getMax(true), minClients, maxClients,
-				minOutstanding, maxOutstanding, minTotalTrees, maxTotalTrees, evictionThroughput.length);
+		Storage getPMThroughputStorage = new Storage(getPMThroughput);
+		Storage getPSThroughputStorage = new Storage(getPSThroughput);
+		Storage evictionThroughputStorage = new Storage(evictionThroughput);
+		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
+		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
+		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
+		logger.info("Server-side measurements [{} samples]:", evictionThroughput.length);
+		logger.info("\tClients[#]: min:{} max:{}", minClients, maxClients);
+		logger.info("\tOutstanding trees[#]: min:{} max:{}", minOutstanding, maxOutstanding);
+		logger.info("\tTotal trees[#]: min:{} max:{}", minTotalTrees, maxTotalTrees);
+		logger.info("\tGet PM[ops/s]: avg:{} dev:{} max: {}", getPMThroughputStorage.getAverage(true),
+				getPMThroughputStorage.getDP(true), getPMThroughputStorage.getMax(true));
+		logger.info("\tGet PS[ops/s]: avg:{} dev:{} max: {}", getPSThroughputStorage.getAverage(true),
+				getPSThroughputStorage.getDP(true), getPSThroughputStorage.getMax(true));
+		logger.info("\tEviction[ops/s]: avg:{} dev:{} max: {}", evictionThroughputStorage.getAverage(true),
+				evictionThroughputStorage.getDP(true), evictionThroughputStorage.getMax(true));
+		logger.info("\tGet PM latency[ms]: avg:{}", getPMLatenciesStorage.getAverage(true) / 1_000_000);
+		logger.info("\tGet PS latency[ms]: avg:{}", getPSLatenciesStorage.getAverage(true) / 1_000_000);
+		logger.info("\tEviction latency[ms]: avg:{}", evictionLatenciesStorage.getAverage(true) / 1_000_000);
+
 		numMaxRealClients[round - 1] = (int) maxClients;
-		avgThroughput[round - 1] = st.getAverage(true);
-		throughputDev[round - 1] = st.getDP(true);
-		maxThroughput[round - 1] = st.getMax(true);
+		avgThroughput[round - 1] = evictionThroughputStorage.getAverage(true);
+		throughputDev[round - 1] = evictionThroughputStorage.getDP(true);
+		maxThroughput[round - 1] = evictionThroughputStorage.getMax(true);
 	}
 
 	public void saveServerMeasurements(long[] clients, long[] delta, long[] nGetPMRequests,
-									   long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatency,
-									   long[] getPSLatency, long[] evictionLatency, long[] outstanding, long[] totalTrees) {
+									   long[] nGetPSRequests, long[] nEvictionRequests, long[] getPMLatencies,
+									   long[] getPSLatencies, long[] evictionLatencies, long[] outstanding,
+									   long[] totalTrees) {
 		String fileName = storageFileNamePrefix + "server_global.csv";
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
@@ -522,16 +544,26 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.error("Error while storing server results", e);
 		}
 		String getPMFileName = storageFileNamePrefix + "server_getPM.csv";
-		saveLatency(getPMFileName, getPMLatency);
+		saveLatency(getPMFileName, getPMLatencies);
 		String getPSFileName = storageFileNamePrefix + "server_getPS.csv";
-		saveLatency(getPSFileName, getPSLatency);
+		saveLatency(getPSFileName, getPSLatencies);
 		String evictionFileName = storageFileNamePrefix + "server_eviction.csv";
-		saveLatency(evictionFileName, evictionLatency);
+		saveLatency(evictionFileName, evictionLatencies);
 	}
 
-	public void saveClientMeasurements(long[] latencies) {
-		String fileName = storageFileNamePrefix + "client.csv";
+	public void saveClientMeasurements(long[] latencies, long[] getPMLatencies, long[] getPSLatencies,
+									   long[] evictionLatencies) {
+		String fileName = storageFileNamePrefix + "client_global.csv";
 		saveLatency(fileName, latencies);
+
+		String getPMFileName = storageFileNamePrefix + "client_getPM.csv";
+		saveLatency(getPMFileName, getPMLatencies);
+
+		String getPSFileName = storageFileNamePrefix + "client_getPS.csv";
+		saveLatency(getPSFileName, getPSLatencies);
+
+		String evictionFileName = storageFileNamePrefix + "client_eviction.csv";
+		saveLatency(evictionFileName, evictionLatencies);
 	}
 
 	private void saveLatency(String fileName, long[] latencies) {

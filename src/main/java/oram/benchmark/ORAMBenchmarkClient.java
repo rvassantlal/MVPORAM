@@ -14,9 +14,9 @@ import java.util.concurrent.CountDownLatch;
 public class ORAMBenchmarkClient {
 	private final static Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
-		if (args.length != 9) {
+		if (args.length != 8) {
 			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
-					"<nRequests> <position map type: full | triple> <gc frequency> <treeHeight> <bucketSize> " +
+					"<nRequests> <position map type: full | triple> <treeHeight> <bucketSize> " +
 					"<blockSize> <isMeasurementLeader>");
 			System.exit(-1);
 		}
@@ -35,11 +35,11 @@ public class ORAMBenchmarkClient {
 			System.exit(-1);
 			return;
 		}
-		int garbageCollectionFrequency = Integer.parseInt(args[4]);
-		int treeHeight = Integer.parseInt(args[5]);
-		int bucketSize = Integer.parseInt(args[6]);
-		int blockSize = Integer.parseInt(args[7]);
-		boolean measurementLeader = Boolean.parseBoolean(args[8]);
+		int garbageCollectionFrequency = 1;
+		int treeHeight = Integer.parseInt(args[4]);
+		int bucketSize = Integer.parseInt(args[5]);
+		int blockSize = Integer.parseInt(args[6]);
+		boolean measurementLeader = Boolean.parseBoolean(args[7]);
 
 		CountDownLatch latch = new CountDownLatch(nClients);
 		Client[] clients = new Client[nClients];
@@ -85,6 +85,10 @@ public class ORAMBenchmarkClient {
 				oram = oramManager.getORAM(oramId);
 			}
 
+			if (initialClientId == clientId && measurementLeader) {
+				oram.measure();
+			}
+
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
 			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
@@ -108,7 +112,7 @@ public class ORAMBenchmarkClient {
 						//break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
-						logger.info("M: " + delay);
+						logger.info("M: {}", delay);
 					}
 				}
 			} finally {

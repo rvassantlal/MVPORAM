@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -24,8 +25,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final TreeMap<Integer, ORAM> orams;
 	private final TreeSet<Integer> senders;
 	private int getPMCounter = 0;
+	private final ArrayList<Long> getPMLatencies;
 	private int getPSCounter = 0;
+	private final ArrayList<Long> getPSLatencies;
 	private int evictCounter = 0;
+	private final ArrayList<Long> evictionLatencies;
 	private int outstandingNumber = 0;
 	private int totalNumber = 0;
 	private long lastPrint;
@@ -34,6 +38,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	public ORAMServer(int processId) {
 		this.orams = new TreeMap<>();
 		senders = new TreeSet<>();
+		getPMLatencies = new ArrayList<>();
+		getPSLatencies = new ArrayList<>();
+		evictionLatencies = new ArrayList<>();
 		//Starting server
 		new ConfidentialServerFacade(processId, this);
 
@@ -114,6 +121,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				request.getEncryptedPath(), msgCtx.getSender());
 		long end = System.nanoTime();
 		long delay = end - start;
+		evictionLatencies.add(delay);
 		logger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
 		outstandingNumber = oram.getNumberOfOutstanding();
@@ -145,6 +153,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
+			getPSLatencies.add(delay);
 			logger.debug("getPathStash[ns]: {}", delay);
 			getPSCounter++;
 		}
@@ -198,6 +207,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
+			getPMLatencies.add(delay);
 			logger.debug("getPositionMap[ns]: {}", delay);
 			getPMCounter++;
 		}
@@ -240,16 +250,33 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - lastPrint;
 		if (delay >= 2_000_000_000) {
-			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|allTrees[#]" +
-							")>({}|{}|{}|{}|{}|{}|{})",
-					senders.size(), delay, getPMCounter, getPSCounter, evictCounter,outstandingNumber,totalNumber);
+			long getPMAvgLatency = computeAverage(getPMLatencies);
+			long getPSAvgLatency = computeAverage(getPSLatencies);
+			long evictionAvgLatency = computeAverage(evictionLatencies);
+			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|" +
+							"allTrees[#]|getPMAvg[ns]|getPSAvg[ns]|evictionAvg[ns])>({}|{}|{}|{}|{}|{}|{}|{}|{}|{})",
+					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, outstandingNumber, totalNumber,
+					getPMAvgLatency, getPSAvgLatency, evictionAvgLatency);
 			getPMCounter = 0;
 			getPSCounter = 0;
 			evictCounter = 0;
+			getPMLatencies.clear();
+			getPSLatencies.clear();
+			evictionLatencies.clear();
 			lastPrint = end;
 		}
 	}
 
+	private long computeAverage(ArrayList<Long> values) {
+		if (values.isEmpty()) {
+			return -1;
+		}
+		long sum = values.get(0);
+		for (int i = 1; i < values.size(); i++) {
+			sum += values.get(i);
+		}
+		return sum / values.size();
+	}
 
 	@Override
 	public ConfidentialSnapshot getConfidentialSnapshot() {
