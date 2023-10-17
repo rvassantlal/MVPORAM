@@ -35,7 +35,7 @@ public class TriplePositionMapORAM extends ORAM {
 			currentOutstandingStashes[i] = stashes.get(outstandingVersion);
 			i++;
 		}
-		HashMap<Integer, Set<BucketSnapshot>> outstandingTree = oramTree.getOutstandingBucketsVersions();
+		OutstandingTreeContext outstandingTree = oramTree.getOutstandingBucketsVersions();
 		int newVersionId = ++sequenceNumber;
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions,
 				currentOutstandingStashes, newVersionId, outstandingTree);

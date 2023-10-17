@@ -28,7 +28,7 @@ public class FullPositionMapORAM extends ORAM {
 			resultedPositionMap.put(outstandingVersion, positionMaps.get(outstandingVersion));
 			i++;
 		}
-		HashMap<Integer, Set<BucketSnapshot>> outstandingTree = oramTree.getOutstandingBucketsVersions();
+		OutstandingTreeContext outstandingTree = oramTree.getOutstandingBucketsVersions();
 		int newVersionId = ++sequenceNumber;
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions,
 				currentOutstandingStashes, newVersionId, outstandingTree);

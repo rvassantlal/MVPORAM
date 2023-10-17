@@ -69,8 +69,8 @@ public abstract class ORAM {
 		int[] pathLocations = preComputedPathLocations.get(pathId);
 
 		EncryptedStash[] outstandingStashes = oramClientContext.getOutstandingStashes();
-		HashMap<Integer, Set<BucketSnapshot>> outstandingTree = oramClientContext.getOutstandingTree();
-		HashMap<Integer, Set<BucketSnapshot>> outstandingTreePath = new HashMap<>(oramContext.getTreeLevels());
+		OutstandingTreeContext outstandingTree = oramClientContext.getOutstandingTree();
+		OutstandingTreeContext outstandingTreePath = new OutstandingTreeContext(oramContext.getTreeLevels());
 
 		logger.debug("Client {} is reading path {} with {} outstanding versions", clientId, pathId,
 				outstandingVersions.length);
@@ -78,10 +78,9 @@ public abstract class ORAM {
 			getPSEncryptedStashesBuffer.put(outstandingVersions[i], outstandingStashes[i]);
 		}
 
-
 		for (int pathLocation : pathLocations) {
-			Set<BucketSnapshot> outstandingBucket = new HashSet<>(outstandingTree.get(pathLocation));
-			outstandingTreePath.put(pathLocation, outstandingBucket);
+			Set<BucketSnapshot> outstandingBucket = new HashSet<>(outstandingTree.getLocation(pathLocation));
+			outstandingTreePath.updateLocation(pathLocation, outstandingBucket);
 			logger.debug("Location {} has {} outstanding versions", pathLocation, outstandingBucket.size());
 		}
 		EncryptedBucket[][] path = oramTree.getPath(pathLocations, outstandingTreePath);
@@ -115,7 +114,7 @@ public abstract class ORAM {
 			int location = entry.getKey();
 			BucketSnapshot bucketSnapshot = new BucketSnapshot(newVersionId, entry.getValue());
 			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
-			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().get(location));
+			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().getLocation(location));
 		}
 
 		cleanOutstandingTrees(oramClientContext.getOutstandingVersions());

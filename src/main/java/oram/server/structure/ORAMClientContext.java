@@ -1,18 +1,14 @@
 package oram.server.structure;
 
-import java.util.HashMap;
-import java.util.Set;
-
 public class ORAMClientContext {
 	private final int[] outstandingVersion;
 	private final EncryptedStash[] outstandingStashes;
 	private final int newVersionId;
-	private HashMap<Integer, Set<BucketSnapshot>> outstandingTree;
-
+	private OutstandingTreeContext outstandingTree;
 	private int pathId;
 
 	public ORAMClientContext(int[] outstandingVersions, EncryptedStash[] outstandingStashes, int newVersionId,
-							 HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
+							 OutstandingTreeContext outstandingTree) {
 		this.outstandingVersion = outstandingVersions;
 		this.outstandingStashes = outstandingStashes;
 		this.newVersionId = newVersionId;
@@ -27,11 +23,11 @@ public class ORAMClientContext {
 		return outstandingStashes;
 	}
 
-	public HashMap<Integer, Set<BucketSnapshot>> getOutstandingTree() {
+	public OutstandingTreeContext getOutstandingTree() {
 		return outstandingTree;
 	}
 
-	public void setOutstandingTree(HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
+	public void setOutstandingTree(OutstandingTreeContext outstandingTree) {
 		this.outstandingTree = outstandingTree;
 	}
 

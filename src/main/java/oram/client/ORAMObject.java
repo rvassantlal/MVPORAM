@@ -170,7 +170,7 @@ public abstract class ORAMObject {
 
 	public boolean evict(PositionMap mergedPositionMap, Stash stash, int oldPathId,
 						 Operation op, int changedAddress, int newVersionId) {
-		int newPathId = generateRandomPathIdByBucket(oldPathId);
+		int newPathId = generateRandomPathId();
 		PositionMap updatedPositionMap = updatePositionMap(op, mergedPositionMap, isRealAccess, changedAddress,
 				newPathId, newVersionId);
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());

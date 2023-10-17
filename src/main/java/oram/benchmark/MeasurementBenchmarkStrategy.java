@@ -4,6 +4,7 @@ import bftsmart.benchmark.Measurement;
 import controller.IBenchmarkStrategy;
 import controller.IWorkerStatusListener;
 import controller.WorkerHandler;
+import oram.utils.ORAMUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import util.Storage;
@@ -120,6 +121,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
 			logger.info("Position map type: {}", positionMapType);
+			logger.info("Number of buckets: {}", ORAMUtils.computeNumberOfNodes(treeHeight));
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];

@@ -8,60 +8,59 @@ import java.util.*;
 public class ORAMTree {
 	private final ArrayList<BucketHolder> tree;
 	private final ORAMContext oramContext;
-	private final Deque<HashMap<Integer, Set<BucketSnapshot>>> outstandingTreeContextHoldersPool;
-	private final Set<Integer> dirtyLocations;
-	private HashMap<Integer, Set<BucketSnapshot>> currentOutstandingTreeContext;
+	private final Deque<OutstandingTreeContext> outstandingTreeContextsPool;
+	private OutstandingTreeContext currentOutstandingTreeContext;
+	private final ArrayList<OutstandingTreeContext> outstandingTreeContexts;
 	private final Map<Integer, EncryptedBucket> getBucketsBuffer;
 
 	public ORAMTree(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 		this.tree = new ArrayList<>(treeSize);
-		this.outstandingTreeContextHoldersPool = new ArrayDeque<>();
-		this.dirtyLocations = new HashSet<>();
-		this.currentOutstandingTreeContext = new HashMap<>(treeSize);
 		this.getBucketsBuffer = new HashMap<>();
+		this.outstandingTreeContexts = new ArrayList<>();
+		this.outstandingTreeContextsPool = new ArrayDeque<>();
+		this.currentOutstandingTreeContext = new OutstandingTreeContext(treeSize);
+		outstandingTreeContexts.add(currentOutstandingTreeContext);
+		outstandingTreeContextsPool.addFirst(currentOutstandingTreeContext);
 		for (int i = 0; i < treeSize; i++) {
 			tree.add(new BucketHolder());
-			currentOutstandingTreeContext.put(i, new HashSet<>());
 		}
 	}
 
-	public void freeOutStandingTreeContextHolder(HashMap<Integer, Set<BucketSnapshot>> outstandingTreeContext) {
-		outstandingTreeContextHoldersPool.addFirst(outstandingTreeContext);
+	public void freeOutStandingTreeContextHolder(OutstandingTreeContext outstandingTreeContext) {
+		outstandingTreeContextsPool.addFirst(outstandingTreeContext);
 	}
 
-	public HashMap<Integer, Set<BucketSnapshot>> getOutstandingBucketsVersions() {
-		HashMap<Integer, Set<BucketSnapshot>> result = outstandingTreeContextHoldersPool.pollFirst();
-		if (result == null) {
-			result = new HashMap<>(currentOutstandingTreeContext);
-		}
+	public OutstandingTreeContext getOutstandingBucketsVersions() {
+		OutstandingTreeContext outstandingTreeContext = outstandingTreeContextsPool.pollFirst();
 
-		//Create copy of the current context
-		result.putAll(currentOutstandingTreeContext);
+		if (outstandingTreeContext == null) {
+			outstandingTreeContext = new OutstandingTreeContext(currentOutstandingTreeContext);
+			outstandingTreeContexts.add(outstandingTreeContext);
+		}
 
 		//Update dirty locations - location written during the last eviction
-		for (Integer dirtyLocation : dirtyLocations) {
+		for (Integer dirtyLocation : outstandingTreeContext.getDirtyLocations()) {
 			BucketHolder bucketHolder = tree.get(dirtyLocation);
 			ArrayList<BucketSnapshot> outstandingTreeBucket = bucketHolder.getOutstandingBucketsVersions();
 			Set<BucketSnapshot> partialResult = new HashSet<>(outstandingTreeBucket);
-			result.put(dirtyLocation, partialResult);
+			outstandingTreeContext.updateLocation(dirtyLocation, partialResult);
 		}
 
-		dirtyLocations.clear();
+		outstandingTreeContext.clearDirtyLocations();
 
-		currentOutstandingTreeContext = result;
+		currentOutstandingTreeContext = outstandingTreeContext;
 
 		return currentOutstandingTreeContext;
 	}
 
-	public EncryptedBucket[][] getPath(int[] pathLocations, HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
+	public EncryptedBucket[][] getPath(int[] pathLocations, OutstandingTreeContext outstandingTree) {
 		EncryptedBucket[][] buckets = new EncryptedBucket[pathLocations.length][];
 
 		for (int i = 0; i < pathLocations.length; i++) {
 			int pathLocation = pathLocations[i];
-			//System.out.println(pathLocation);
-			Set<BucketSnapshot> locationOutstandingVersions = outstandingTree.get(pathLocation);
+			Set<BucketSnapshot> locationOutstandingVersions = outstandingTree.getLocation(pathLocation);
 			buckets[i] = getBuckets(locationOutstandingVersions);
 		}
 		return buckets;
@@ -86,7 +85,9 @@ public class ORAMTree {
 
 	public void storeBucket(int location, BucketSnapshot snapshot, Set<BucketSnapshot> outstandingVersions) {
 		tree.get(location).addSnapshot(snapshot, outstandingVersions);
-		dirtyLocations.add(location);
+		for (OutstandingTreeContext outstandingTreeContext : outstandingTreeContexts) {
+			outstandingTreeContext.markDirtyLocation(location);
+		}
 	}
 
 	@Override
