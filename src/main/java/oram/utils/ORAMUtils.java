@@ -20,11 +20,7 @@ public class ORAMUtils {
 	}
 
 	public static int computeNumberOfNodes(int treeHeight) {
-		int nNodes = 0;
-		for (int i = 0; i <= treeHeight; i++) {
-			nNodes += 1 << i;
-		}
-		return nNodes;
+		return (1 << treeHeight + 1) - 1;
 	}
 
 	public static int[] computePathLocations(int pathId, int treeHeight) {

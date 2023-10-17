@@ -8,60 +8,85 @@ import java.util.*;
 public class ORAMTree {
 	private final ArrayList<BucketHolder> tree;
 	private final ORAMContext oramContext;
-	private final Deque<HashMap<Integer, Set<BucketSnapshot>>> outstandingTreeContextHolders;
+	private final Deque<HashMap<Integer, Set<BucketSnapshot>>> outstandingTreeContextHoldersPool;
+	private final Set<Integer> dirtyLocations;
+	private HashMap<Integer, Set<BucketSnapshot>> currentOutstandingTreeContext;
+	private final Map<Integer, EncryptedBucket> getBucketsBuffer;
 
 	public ORAMTree(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 		this.tree = new ArrayList<>(treeSize);
-		this.outstandingTreeContextHolders = new ArrayDeque<>();
+		this.outstandingTreeContextHoldersPool = new ArrayDeque<>();
+		this.dirtyLocations = new HashSet<>();
+		this.currentOutstandingTreeContext = new HashMap<>(treeSize);
+		this.getBucketsBuffer = new HashMap<>();
 		for (int i = 0; i < treeSize; i++) {
 			tree.add(new BucketHolder());
+			currentOutstandingTreeContext.put(i, new HashSet<>());
 		}
 	}
 
 	public void freeOutStandingTreeContextHolder(HashMap<Integer, Set<BucketSnapshot>> outstandingTreeContext) {
-		for (int i = 0; i < tree.size(); i++) {
-			outstandingTreeContext.get(i).clear();
-		}
-		outstandingTreeContextHolders.addFirst(outstandingTreeContext);
+		outstandingTreeContextHoldersPool.addFirst(outstandingTreeContext);
 	}
 
 	public HashMap<Integer, Set<BucketSnapshot>> getOutstandingBucketsVersions() {
-		HashMap<Integer, Set<BucketSnapshot>> result = outstandingTreeContextHolders.pollFirst();
+		HashMap<Integer, Set<BucketSnapshot>> result = outstandingTreeContextHoldersPool.pollFirst();
 		if (result == null) {
-			result = new HashMap<>(tree.size());
+			result = new HashMap<>(currentOutstandingTreeContext);
 		}
 
-		for (int i = 0; i < tree.size(); i++) {
-			BucketHolder bucketHolder = tree.get(i);
-			Set<BucketSnapshot> outstandingTreeBucket = bucketHolder.getOutstandingBucketsVersions();
-			Set<BucketSnapshot> partialResult = result.get(i);
-			if (partialResult == null) {
-				partialResult = new HashSet<>(outstandingTreeBucket);
-				result.put(i, partialResult);
-			} else {
-				partialResult.addAll(outstandingTreeBucket);
-			}
+		//Create copy of the current context
+		result.putAll(currentOutstandingTreeContext);
+
+		//Update dirty locations - location written during the last eviction
+		for (Integer dirtyLocation : dirtyLocations) {
+			BucketHolder bucketHolder = tree.get(dirtyLocation);
+			ArrayList<BucketSnapshot> outstandingTreeBucket = bucketHolder.getOutstandingBucketsVersions();
+			Set<BucketSnapshot> partialResult = new HashSet<>(outstandingTreeBucket);
+			result.put(dirtyLocation, partialResult);
 		}
 
-		return result;
+		dirtyLocations.clear();
+
+		currentOutstandingTreeContext = result;
+
+		return currentOutstandingTreeContext;
 	}
 
 	public EncryptedBucket[][] getPath(int[] pathLocations, HashMap<Integer, Set<BucketSnapshot>> outstandingTree) {
 		EncryptedBucket[][] buckets = new EncryptedBucket[pathLocations.length][];
+
 		for (int i = 0; i < pathLocations.length; i++) {
 			int pathLocation = pathLocations[i];
+			//System.out.println(pathLocation);
 			Set<BucketSnapshot> locationOutstandingVersions = outstandingTree.get(pathLocation);
-			BucketHolder bucketHolder = tree.get(pathLocation);
-			buckets[i] = bucketHolder.getBuckets(locationOutstandingVersions);
+			buckets[i] = getBuckets(locationOutstandingVersions);
 		}
 		return buckets;
 	}
 
-	public void storeBucket(int location, BucketSnapshot snapshot, Set<BucketSnapshot> outstandingVersions,
-							Set<Integer> globalOutstandingVersions) {
-		tree.get(location).addSnapshot(snapshot, outstandingVersions, globalOutstandingVersions);
+	private EncryptedBucket[] getBuckets(Set<BucketSnapshot> outstandingTree) {
+		int[] versions = new int[outstandingTree.size()];
+		int k = 0;
+		for (BucketSnapshot bucketSnapshot : outstandingTree) {
+			getBucketsBuffer.put(bucketSnapshot.getVersionId(), bucketSnapshot.getBucket());
+			versions[k++] = bucketSnapshot.getVersionId();
+		}
+		Arrays.sort(versions);
+		EncryptedBucket[] result = new EncryptedBucket[getBucketsBuffer.size()];
+		for (int i = 0; i < versions.length; i++) {
+			result[i] = getBucketsBuffer.get(versions[i]);
+		}
+		getBucketsBuffer.clear();
+
+		return result;
+	}
+
+	public void storeBucket(int location, BucketSnapshot snapshot, Set<BucketSnapshot> outstandingVersions) {
+		tree.get(location).addSnapshot(snapshot, outstandingVersions);
+		dirtyLocations.add(location);
 	}
 
 	@Override

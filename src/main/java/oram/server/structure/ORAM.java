@@ -22,7 +22,6 @@ public abstract class ORAM {
 	private final Map<Integer, EncryptedStash> getPSEncryptedStashesBuffer;
 	private final Map<Integer, int[]> preComputedPathLocations;
 	protected final ORAMTree oramTree;
-	private final Set<Integer> locationOutstandingVersions;// Stores outstanding versions of all clients
 
 	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
 				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
@@ -37,7 +36,6 @@ public abstract class ORAM {
 		this.positionMaps = new HashMap<>();
 		this.stashes = new HashMap<>();
 		this.getPSEncryptedStashesBuffer = new HashMap<>();
-		this.locationOutstandingVersions = new HashSet<>();
 		this.oramTree = new ORAMTree(oramContext);
 		this.oramClientContexts = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
@@ -115,18 +113,9 @@ public abstract class ORAM {
 				oramClientContext.getPathId(), newVersionId);
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
 			int location = entry.getKey();
-			/*locationOutstandingVersions.clear();
-			for (ORAMClientContext value : oramClientContexts.values()) {
-				Set<BucketSnapshot> clientLocationOV = value.getOutstandingTree().get(location);
-				if (clientLocationOV == null) {// This client doesn't have any outstanding version for this location
-					continue;
-				}
-				locationOutstandingVersions.addAll(clientLocationOV);
-			}*/
 			BucketSnapshot bucketSnapshot = new BucketSnapshot(newVersionId, entry.getValue());
 			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
-			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().get(location),
-					locationOutstandingVersions);
+			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().get(location));
 		}
 
 		cleanOutstandingTrees(oramClientContext.getOutstandingVersions());
