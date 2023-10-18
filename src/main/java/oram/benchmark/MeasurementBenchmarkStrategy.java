@@ -11,9 +11,7 @@ import util.Storage;
 import worker.IProcessingResult;
 import worker.ProcessInformation;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -74,6 +72,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	public void executeBenchmark(WorkerHandler[] workers, Properties benchmarkParameters) {
 		int nServerWorkers = Integer.parseInt(benchmarkParameters.getProperty("experiment.n"));
 		int f = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
+		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
 		measureResources = true;
 		int nClientWorkers = workers.length - nServerWorkers;
@@ -108,8 +107,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Arrays.stream(clientWorkers).forEach(w -> clientWorkersIds.add(w.getWorkerId()));
 
 		//Setup workers
-		String setupInformation = String.format("%d\t%d", nServerWorkers, f);
-		Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
+		if (hostFile != null) {
+			logger.info("Setting up workers...");
+			String hosts = loadHosts(hostFile);
+			if (hosts == null)
+				return;
+			String setupInformation = String.format("%b\t%d\t%s", true, f, hosts);
+			Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
+		}
 
 		for (int i = 0; i < treeHeights.length; i++) {
 			logger.info("============ Strategy Parameters ============");
@@ -578,6 +583,22 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			resultFile.flush();
 		} catch (IOException e) {
 			logger.error("Failed to save latency", e);
+		}
+	}
+
+	private String loadHosts(String hostFile) {
+		try (BufferedReader in = new BufferedReader(new FileReader(hostFile))) {
+			StringBuilder sb = new StringBuilder();
+			String line;
+			while ((line = in.readLine()) != null) {
+				sb.append(line);
+				sb.append("\n");
+			}
+			sb.deleteCharAt(sb.length() - 1);
+			return sb.toString();
+		} catch (IOException e) {
+			logger.error("Failed to load hosts file", e);
+			return null;
 		}
 	}
 }
