@@ -12,6 +12,7 @@ import worker.IProcessingResult;
 import worker.ProcessInformation;
 
 import java.io.*;
+import java.lang.reflect.Array;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -103,6 +104,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		clientWorkers = new WorkerHandler[nClientWorkers];
 		System.arraycopy(workers, 0, serverWorkers, 0, nServerWorkers);
 		System.arraycopy(workers, nServerWorkers, clientWorkers, 0, nClientWorkers);
+		//Sort client workers to use the same worker as measurement client
+		Arrays.sort(clientWorkers, (o1, o2) -> -Integer.compare(o1.getWorkerId(), o2.getWorkerId()));
 		Arrays.stream(serverWorkers).forEach(w -> serverWorkersIds.add(w.getWorkerId()));
 		Arrays.stream(clientWorkers).forEach(w -> clientWorkersIds.add(w.getWorkerId()));
 

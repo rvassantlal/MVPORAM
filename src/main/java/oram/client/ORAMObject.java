@@ -91,7 +91,7 @@ public abstract class ORAMObject {
 		end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
-			logger.info("MPM: {}", delay);
+			logger.info("MGetPMOP: {}", delay);
 		}
 
 		int pathId = getPathId(mergedPositionMap, address);
@@ -101,14 +101,14 @@ public abstract class ORAMObject {
 		end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
-			logger.info("MPS: {}", delay);
+			logger.info("MGetPSOP: {}", delay);
 		}
 		start = System.nanoTime();
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
 		end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
-			logger.info("MEviction: {}", delay);
+			logger.info("MEvictionOP: {}", delay);
 		}
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);

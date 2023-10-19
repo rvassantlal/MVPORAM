@@ -17,9 +17,9 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 	private static final String SERVER_READY_PATTERN = "Ready to process operations";
 	private static final String CLIENT_READY_PATTERN = "Executing experiment";
 	private static final String MEASUREMENT_PATTERN = "M:";
-	private static final String GET_PM_MEASUREMENT_PATTERN = "MPM:";
-	private static final String GET_PS_MEASUREMENT_PATTERN = "MPS:";
-	private static final String EVICTION_MEASUREMENT_PATTERN = "MEviction:";
+	private static final String GET_PM_MEASUREMENT_PATTERN = "MGetPMOP:";
+	private static final String GET_PS_MEASUREMENT_PATTERN = "MGetPSOP:";
+	private static final String EVICTION_MEASUREMENT_PATTERN = "MEvictionOP:";
 
 	private static final String SAR_READY_PATTERN = "%";
 
