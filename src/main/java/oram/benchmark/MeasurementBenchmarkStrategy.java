@@ -12,7 +12,6 @@ import worker.IProcessingResult;
 import worker.ProcessInformation;
 
 import java.io.*;
-import java.lang.reflect.Array;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -79,7 +78,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		int nClientWorkers = workers.length - nServerWorkers;
 		int maxClientsPerProcess = 3;
 		int nRequests = 10_000_000;
-		int sleepBetweenRounds = 10;
+		int sleepBetweenRounds = 30;
 		int[] clientsPerRound = new int[tokens.length];
 		for (int i = 0; i < tokens.length; i++) {
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
@@ -470,12 +469,17 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
 		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
 		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
-		logger.info("Client-side measurements [{} samples]:", latencies.length);
-		logger.info("\tAccess latency[ms]: avg:{} dev:{} max: {}", st.getAverage(true) / 1_000_000,
-				st.getDP(true) / 1_000_000, st.getMax(true) / 1_000_000);
-		logger.info("\tGet PM latency[ms]: avg:{}", getPMLatenciesStorage.getAverage(true) / 1_000_000);
-		logger.info("\tGet PS latency[ms]: avg:{}", getPSLatenciesStorage.getAverage(true) / 1_000_000);
-		logger.info("\tEviction latency[ms]: avg:{}", evictionLatenciesStorage.getAverage(true) / 1_000_000);
+		String sb = String.format("Client-side measurements [%d samples]:\n", latencies.length) +
+				String.format("\tAccess latency[ms]: avg:%.3f dev:%.3f max: %d\n",
+						st.getAverage(true) / 1_000_000.0, st.getDP(true) / 1_000_000.0,
+						st.getMax(true) / 1_000_000) +
+				String.format("\tGet PM latency[ms]: avg:%.3f\n",
+						getPMLatenciesStorage.getAverage(true) / 1_000_000.0) +
+				String.format("\tGet PS latency[ms]: avg:%.3f\n",
+						getPSLatenciesStorage.getAverage(true) / 1_000_000.0) +
+				String.format("\tEviction latency[ms]: avg:%.3f",
+						evictionLatenciesStorage.getAverage(true) / 1_000_000.0);
+		logger.info(sb);
 
 		avgLatency[round - 1] = st.getAverage(true);
 		latencyDev[round - 1] = st.getDP(true);
@@ -515,19 +519,28 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
 		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
 		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
-		logger.info("Server-side measurements [{} samples]:", evictionThroughput.length);
-		logger.info("\tClients[#]: min:{} max:{}", minClients, maxClients);
-		logger.info("\tOutstanding trees[#]: min:{} max:{}", minOutstanding, maxOutstanding);
-		logger.info("\tTotal trees[#]: min:{} max:{}", minTotalTrees, maxTotalTrees);
-		logger.info("\tGet PM[ops/s]: avg:{} dev:{} max: {}", getPMThroughputStorage.getAverage(true),
-				getPMThroughputStorage.getDP(true), getPMThroughputStorage.getMax(true));
-		logger.info("\tGet PS[ops/s]: avg:{} dev:{} max: {}", getPSThroughputStorage.getAverage(true),
-				getPSThroughputStorage.getDP(true), getPSThroughputStorage.getMax(true));
-		logger.info("\tEviction[ops/s]: avg:{} dev:{} max: {}", evictionThroughputStorage.getAverage(true),
-				evictionThroughputStorage.getDP(true), evictionThroughputStorage.getMax(true));
-		logger.info("\tGet PM latency[ms]: avg:{}", getPMLatenciesStorage.getAverage(true) / 1_000_000);
-		logger.info("\tGet PS latency[ms]: avg:{}", getPSLatenciesStorage.getAverage(true) / 1_000_000);
-		logger.info("\tEviction latency[ms]: avg:{}", evictionLatenciesStorage.getAverage(true) / 1_000_000);
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length));
+		sb.append(String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients));
+		sb.append(String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding));
+		sb.append(String.format("\tTotal trees[#]: min:%d max:%d\n", minTotalTrees, maxTotalTrees));
+		sb.append(String.format("\tGet PM[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				getPMThroughputStorage.getAverage(true), getPMThroughputStorage.getDP(true),
+				getPMThroughputStorage.getMax(true)));
+		sb.append(String.format("\tGet PS[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				getPSThroughputStorage.getAverage(true), getPSThroughputStorage.getDP(true),
+				getPSThroughputStorage.getMax(true)));
+		sb.append(String.format("\tEviction[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				evictionThroughputStorage.getAverage(true), evictionThroughputStorage.getDP(true),
+				evictionThroughputStorage.getMax(true)));
+		sb.append(String.format("\tGet PM latency[ms]: avg:%.3f\n",
+				getPMLatenciesStorage.getAverage(true) / 1_000_000.0));
+		sb.append(String.format("\tGet PS latency[ms]: avg:%.3f\n",
+				getPSLatenciesStorage.getAverage(true) / 1_000_000.0));
+		sb.append(String.format("\tEviction latency[ms]: avg:%.3f",
+				evictionLatenciesStorage.getAverage(true) / 1_000_000.0));
+
+		logger.info(sb.toString());
 
 		numMaxRealClients[round - 1] = (int) maxClients;
 		avgThroughput[round - 1] = evictionThroughputStorage.getAverage(true);

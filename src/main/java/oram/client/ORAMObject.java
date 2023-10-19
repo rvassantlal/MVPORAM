@@ -52,7 +52,7 @@ public abstract class ORAMObject {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
 		byte[] result = access(Operation.READ, address, null);
-		System.gc();
+		//System.gc();
 		return result;
 	}
 
@@ -67,7 +67,7 @@ public abstract class ORAMObject {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
 		byte[] result = access(Operation.WRITE, address, content);
-		System.gc();
+		//System.gc();
 		return result;
 	}
 
@@ -82,16 +82,16 @@ public abstract class ORAMObject {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
+		end = System.nanoTime();
+		delay = end - start;
+		if (isMeasure) {
+			logger.info("MGetPMOP: {}", delay);
+		}
 
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps);
 		if (mergedPositionMap == null) {
 			logger.error("Failed to merge position maps of oram {}", oramId);
 			return null;
-		}
-		end = System.nanoTime();
-		delay = end - start;
-		if (isMeasure) {
-			logger.info("MGetPMOP: {}", delay);
 		}
 
 		int pathId = getPathId(mergedPositionMap, address);
@@ -103,6 +103,7 @@ public abstract class ORAMObject {
 		if (isMeasure) {
 			logger.info("MGetPSOP: {}", delay);
 		}
+
 		start = System.nanoTime();
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
 		end = System.nanoTime();
@@ -110,6 +111,7 @@ public abstract class ORAMObject {
 		if (isMeasure) {
 			logger.info("MEvictionOP: {}", delay);
 		}
+
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);
 		}
