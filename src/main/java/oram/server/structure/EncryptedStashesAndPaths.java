@@ -2,6 +2,7 @@ package oram.server.structure;
 
 import oram.utils.CustomExternalizable;
 import oram.utils.ORAMContext;
+import vss.secretsharing.VerifiableShare;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -14,15 +15,22 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 	private ORAMContext oramContext;
 	private Map<Integer, EncryptedStash> encryptedStashes;
 	private Map<Integer, EncryptedBucket[]> paths;
+	private Map<Integer, VerifiableShare> encryptionKeyShares;
 
 	public EncryptedStashesAndPaths(ORAMContext oramContext) {
 		this.oramContext = oramContext;
 	}
 
 	public EncryptedStashesAndPaths(Map<Integer, EncryptedStash> encryptedStashes,
-									Map<Integer, EncryptedBucket[]> paths) {
+                                    Map<Integer, EncryptedBucket[]> paths,
+									Map<Integer, VerifiableShare> encryptionKeyShares) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
+		this.encryptionKeyShares = encryptionKeyShares;
+	}
+
+	public Map<Integer, VerifiableShare> getEncryptionKeyShares() {
+		return encryptionKeyShares;
 	}
 
 	public Map<Integer, EncryptedStash> getEncryptedStashes() {

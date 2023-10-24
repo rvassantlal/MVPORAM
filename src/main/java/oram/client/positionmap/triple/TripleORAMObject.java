@@ -7,7 +7,8 @@ import oram.client.structure.PositionMap;
 import oram.client.structure.PositionMaps;
 import oram.messages.GetPositionMap;
 import oram.messages.ORAMMessage;
-import oram.security.EncryptionManager;
+import oram.security.AbstractEncryptionManager;
+import oram.security.FixedKeyEncryptionManager;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
@@ -21,7 +22,7 @@ public class TripleORAMObject extends ORAMObject {
 	private int latestSequenceNumber;
 
 	public TripleORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
-							EncryptionManager encryptionManager) throws SecretSharingException {
+							AbstractEncryptionManager encryptionManager) throws SecretSharingException {
 		super(serviceProxy, oramId, oramContext, encryptionManager);
 		this.mergedPositionMap = new PositionMap(oramContext.getTreeSize());
 		this.latestSequenceNumber = ORAMUtils.DUMMY_VERSION;
@@ -60,7 +61,7 @@ public class TripleORAMObject extends ORAMObject {
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
 			if (response == null || response.getPlainData() == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPlainData());
+			return encryptionManager.decryptPositionMapsResponse(response);
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;

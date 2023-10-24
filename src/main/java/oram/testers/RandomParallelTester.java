@@ -34,8 +34,10 @@ public class RandomParallelTester {
 		int nClients = Integer.parseInt(args[0]);
 		int oramId = Integer.parseInt(args[1]);
 		testSize = Integer.parseInt(args[2]);
+		String positionMapType = args[3];
+		boolean distributeKey = Boolean.getBoolean(args[4]);
 		PositionMapType oramType;
-		switch (args[3]) {
+		switch (positionMapType) {
 			case "full":
 				oramType = PositionMapType.FULL_POSITION_MAP;
 				break;
@@ -48,15 +50,15 @@ public class RandomParallelTester {
 		List<ORAMManager> oramManagerList = new ArrayList<>();
 		List<Thread> threads = new ArrayList<>();
 		for (int i = 1; i < nClients + 1; i++) {
-			oramManagerList.add(new ORAMManager(i));
+			oramManagerList.add(new ORAMManager(i, distributeKey));
 		}
-		int garbageCollectionFrequency = 2001;
+		boolean isDistributedKey = false;
 		int treeHeight = 4;
 		int nBlocksPerBucket = 4;
 		int blockSize = 256;
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
 
-		oramManagerList.get(0).createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, nBlocksPerBucket,
+		oramManagerList.get(0).createORAM(oramId, oramType, isDistributedKey, treeHeight, nBlocksPerBucket,
 				blockSize);
 
 		for (ORAMManager oramManager : oramManagerList) {

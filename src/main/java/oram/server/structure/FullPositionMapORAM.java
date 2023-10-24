@@ -2,30 +2,35 @@ package oram.server.structure;
 
 import oram.messages.GetPositionMap;
 import oram.utils.PositionMapType;
+import vss.secretsharing.VerifiableShare;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class FullPositionMapORAM extends ORAM {
 
-	public FullPositionMapORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
-							   int treeHeight, int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
-							   EncryptedStash encryptedStash) {
-		super(oramId, positionMapType, garbageCollectionFrequency, treeHeight, bucketSize, blockSize,
-				encryptedPositionMap, encryptedStash);
+	public FullPositionMapORAM(int oramId, PositionMapType positionMapType, boolean isDistributedKey,
+                               int treeHeight, int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
+                               EncryptedStash encryptedStash, VerifiableShare encryptionKeyShare) {
+		super(oramId, positionMapType, isDistributedKey, treeHeight, bucketSize, blockSize,
+				encryptedPositionMap, encryptedStash, encryptionKeyShare);
 	}
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {
 		Map<Integer, EncryptedPositionMap> resultedPositionMap = new HashMap<>(outstandingTrees.size());
 		int[] currentOutstandingVersions = new int[outstandingTrees.size()];
 		EncryptedStash[] currentOutstandingStashes = new EncryptedStash[outstandingTrees.size()];
+		if (oramContext.isDistributedKey()) {
+			encryptionKeySharesBuffer.clear();
+		}
 		int i = 0;
 		for (int outstandingVersion : outstandingTrees) {
 			currentOutstandingVersions[i] = outstandingVersion;
 			currentOutstandingStashes[i] = stashes.get(outstandingVersion);
 			resultedPositionMap.put(outstandingVersion, positionMaps.get(outstandingVersion));
+			if (oramContext.isDistributedKey()) {
+				encryptionKeySharesBuffer.put(outstandingVersion, encryptionKeyShares.get(outstandingVersion));
+			}
 			i++;
 		}
 		OutstandingTreeContext outstandingTree = oramTree.getOutstandingBucketsVersions();
@@ -34,7 +39,7 @@ public class FullPositionMapORAM extends ORAM {
 				currentOutstandingStashes, newVersionId, outstandingTree);
 
 		oramClientContexts.put(clientId, oramClientContext);
-		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);
+		return new EncryptedPositionMaps(newVersionId, resultedPositionMap, encryptionKeySharesBuffer);
 	}
 
 	@Override

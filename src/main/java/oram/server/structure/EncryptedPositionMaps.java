@@ -1,6 +1,7 @@
 package oram.server.structure;
 
 import oram.utils.CustomExternalizable;
+import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
 import java.util.Arrays;
@@ -11,12 +12,16 @@ public class EncryptedPositionMaps implements CustomExternalizable {
 
 	private int newVersionId;
 	private Map<Integer, EncryptedPositionMap> encryptedPositionMaps;
+	private Map<Integer, VerifiableShare> encryptionKeyShares;
+	private VerifiableShare[] orderedEncryptionKeyShares;
 
-	public EncryptedPositionMaps(){}
+	public EncryptedPositionMaps() {}
 
-	public EncryptedPositionMaps(int newVersionId, Map<Integer, EncryptedPositionMap> encryptedPositionMaps) {
+	public EncryptedPositionMaps(int newVersionId, Map<Integer, EncryptedPositionMap> encryptedPositionMaps,
+								 Map<Integer, VerifiableShare> encryptionKeyShares) {
 		this.newVersionId = newVersionId;
 		this.encryptedPositionMaps = encryptedPositionMaps;
+		this.encryptionKeyShares = encryptionKeyShares;
 	}
 
 	@Override
@@ -30,9 +35,11 @@ public class EncryptedPositionMaps implements CustomExternalizable {
 		Arrays.sort(keys);
 
 		out.writeInt(encryptedPositionMaps.size());
+		int i = 0;
 		for (int key : keys) {
 			out.writeInt(key);
 			encryptedPositionMaps.get(key).writeExternal(out);
+			orderedEncryptionKeyShares[i++] = encryptionKeyShares.get(key);
 		}
 	}
 
@@ -51,6 +58,10 @@ public class EncryptedPositionMaps implements CustomExternalizable {
 
 	public Map<Integer, EncryptedPositionMap> getEncryptedPositionMaps() {
 		return encryptedPositionMaps;
+	}
+
+	public VerifiableShare[] getOrderedEncryptionKeyShares() {
+		return orderedEncryptionKeyShares;
 	}
 
 	public int getNewVersionId() {

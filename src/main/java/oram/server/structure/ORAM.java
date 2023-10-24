@@ -6,38 +6,47 @@ import oram.utils.ORAMUtils;
 import oram.utils.PositionMapType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import vss.secretsharing.VerifiableShare;
 
 import java.util.*;
 
 public abstract class ORAM {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final int oramId;
-	private final ORAMContext oramContext;
+	protected final ORAMContext oramContext;
 	protected final List<Integer> outstandingTrees; //all versions that are not previous of any other version
 	protected final Map<Integer, EncryptedPositionMap> positionMaps;
 	protected final Map<Integer, EncryptedStash> stashes;
+	protected final Map<Integer, VerifiableShare> encryptionKeyShares;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
 	protected int sequenceNumber = 0;
 	private int currentNumberOfSnapshots;
 	private final Map<Integer, EncryptedStash> getPSEncryptedStashesBuffer;
+	protected final Map<Integer, VerifiableShare> encryptionKeySharesBuffer;
 	private final Map<Integer, int[]> preComputedPathLocations;
 	protected final ORAMTree oramTree;
 
-	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
-				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
-				EncryptedStash encryptedStash) {
+	public ORAM(int oramId, PositionMapType positionMapType, boolean isDistributedKey, int treeHeight,
+                int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
+                EncryptedStash encryptedStash, VerifiableShare encryptionKeyShare) {
 		this.oramId = oramId;
 		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 		int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
-		this.oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight, treeSize,
+		this.oramContext = new ORAMContext(positionMapType, isDistributedKey, treeHeight, treeSize,
 				bucketSize, blockSize);
 		logger.info("ORAM tree capacity: {} blocks ({} buckets)", treeSize, nBuckets);
 		this.outstandingTrees = new LinkedList<>();
 		this.positionMaps = new HashMap<>();
 		this.stashes = new HashMap<>();
 		this.getPSEncryptedStashesBuffer = new HashMap<>();
+		if (oramContext.isDistributedKey()) {
+			this.encryptionKeySharesBuffer = new HashMap<>();
+		} else {
+			this.encryptionKeySharesBuffer = null;
+		}
 		this.oramTree = new ORAMTree(oramContext);
 		this.oramClientContexts = new HashMap<>();
+		this.encryptionKeyShares = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
 		for (int i = 0; i < numberOfPaths; i++) {
@@ -46,6 +55,9 @@ public abstract class ORAM {
 		int versionId = ++sequenceNumber;
 		this.positionMaps.put(versionId, encryptedPositionMap);
 		this.stashes.put(versionId, encryptedStash);
+		if (oramContext.isDistributedKey()) {
+			encryptionKeyShares.put(versionId, encryptionKeyShare);
+		}
 		currentNumberOfSnapshots++;
 		outstandingTrees.add(versionId);
 	}
@@ -63,7 +75,11 @@ public abstract class ORAM {
 		}
 
 		oramClientContext.setPathId(pathId);
-		getPSEncryptedStashesBuffer.clear();//This is global and reused - make sure that returning this object doesn't cause any issues
+		//This is global and reused - make sure that returning this object doesn't cause any issues
+		getPSEncryptedStashesBuffer.clear();
+		if (oramContext.isDistributedKey()) {
+			encryptionKeySharesBuffer.clear();
+		}
 
 		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 		int[] pathLocations = preComputedPathLocations.get(pathId);
@@ -81,6 +97,12 @@ public abstract class ORAM {
 		for (int pathLocation : pathLocations) {
 			Set<BucketSnapshot> outstandingBucket = new HashSet<>(outstandingTree.getLocation(pathLocation));
 			outstandingTreePath.updateLocation(pathLocation, outstandingBucket);
+			if (oramContext.isDistributedKey()) {
+				for (BucketSnapshot bucketSnapshot : outstandingBucket) {
+					encryptionKeySharesBuffer.put(bucketSnapshot.getVersionId(),
+							encryptionKeyShares.get(bucketSnapshot.getVersionId()));
+				}
+			}
 			logger.debug("Location {} has {} outstanding versions", pathLocation, outstandingBucket.size());
 		}
 		EncryptedBucket[][] path = oramTree.getPath(pathLocations, outstandingTreePath);
@@ -92,11 +114,12 @@ public abstract class ORAM {
 			logger.debug("Path location index {} has {} buckets", i, path[i].length);
 			compactedPaths.put(i, path[i]);
 		}
-		return new EncryptedStashesAndPaths(getPSEncryptedStashesBuffer, compactedPaths);
+		return new EncryptedStashesAndPaths(getPSEncryptedStashesBuffer, compactedPaths, encryptionKeySharesBuffer);
 	}
 
 	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-								   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
+								   Map<Integer, EncryptedBucket> encryptedPath, int clientId,
+								   VerifiableShare encryptionKeyShare) {
 		ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
 		if (oramClientContext == null) {
 			logger.debug("Client {} doesn't have any client context", clientId);
@@ -107,7 +130,9 @@ public abstract class ORAM {
 
 		positionMaps.put(newVersionId, encryptedPositionMap);
 		stashes.put(newVersionId, encryptedStash);
-
+		if (oramContext.isDistributedKey()) {
+			encryptionKeyShares.put(newVersionId, encryptionKeyShare);
+		}
 		logger.debug("Client {} is performing eviction in path {} with version {}", clientId,
 				oramClientContext.getPathId(), newVersionId);
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {

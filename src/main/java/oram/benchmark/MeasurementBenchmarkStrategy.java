@@ -37,6 +37,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private int treeHeight;
 	private int bucketSize;
 	private int blockSize;
+	private boolean distributeEncryptionKey;
 	private WorkerHandler[] clientWorkers;
 	private WorkerHandler[] serverWorkers;
 	private final Map<Integer,WorkerHandler> measurementWorkers;
@@ -84,6 +85,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
 		positionMapType = benchmarkParameters.getProperty("experiment.position_map_type");
+		distributeEncryptionKey = Boolean.parseBoolean(
+				benchmarkParameters.getProperty("experiment.distribute_encryption_key"));
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
@@ -124,10 +127,11 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			bucketSize = bucketSizes[i];
 			blockSize = blockSizes[i];
 
+			logger.info("Position map type: {}", positionMapType);
+			logger.info("Distribute encryption key: {}", distributeEncryptionKey);
 			logger.info("Tree height: {}", treeHeight);
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
-			logger.info("Position map type: {}", positionMapType);
 			logger.info("Number of buckets: {}", ORAMUtils.computeNumberOfNodes(treeHeight));
 
 			nRounds = clientsPerRound.length;
@@ -231,8 +235,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + positionMapType + " " + treeHeight + " "
-						+ bucketSize + " " + blockSize + " " + isMeasurementWorker;
+						+ " " + nRequests + " " + positionMapType + " " + distributeEncryptionKey + " " +
+						treeHeight + " " + bucketSize + " " + blockSize + " " + isMeasurementWorker;
 				commands[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
@@ -519,28 +523,27 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
 		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
 		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
-		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length));
-		sb.append(String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients));
-		sb.append(String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding));
-		sb.append(String.format("\tTotal trees[#]: min:%d max:%d\n", minTotalTrees, maxTotalTrees));
-		sb.append(String.format("\tGet PM[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-				getPMThroughputStorage.getAverage(true), getPMThroughputStorage.getDP(true),
-				getPMThroughputStorage.getMax(true)));
-		sb.append(String.format("\tGet PS[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-				getPSThroughputStorage.getAverage(true), getPSThroughputStorage.getDP(true),
-				getPSThroughputStorage.getMax(true)));
-		sb.append(String.format("\tEviction[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-				evictionThroughputStorage.getAverage(true), evictionThroughputStorage.getDP(true),
-				evictionThroughputStorage.getMax(true)));
-		sb.append(String.format("\tGet PM latency[ms]: avg:%.3f\n",
-				getPMLatenciesStorage.getAverage(true) / 1_000_000.0));
-		sb.append(String.format("\tGet PS latency[ms]: avg:%.3f\n",
-				getPSLatenciesStorage.getAverage(true) / 1_000_000.0));
-		sb.append(String.format("\tEviction latency[ms]: avg:%.3f",
-				evictionLatenciesStorage.getAverage(true) / 1_000_000.0));
+		String sb = String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length) +
+				String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients) +
+				String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding) +
+				String.format("\tTotal trees[#]: min:%d max:%d\n", minTotalTrees, maxTotalTrees) +
+				String.format("\tGet PM[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+						getPMThroughputStorage.getAverage(true), getPMThroughputStorage.getDP(true),
+						getPMThroughputStorage.getMax(true)) +
+				String.format("\tGet PS[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+						getPSThroughputStorage.getAverage(true), getPSThroughputStorage.getDP(true),
+						getPSThroughputStorage.getMax(true)) +
+				String.format("\tEviction[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+						evictionThroughputStorage.getAverage(true), evictionThroughputStorage.getDP(true),
+						evictionThroughputStorage.getMax(true)) +
+				String.format("\tGet PM latency[ms]: avg:%.3f\n",
+						getPMLatenciesStorage.getAverage(true) / 1_000_000.0) +
+				String.format("\tGet PS latency[ms]: avg:%.3f\n",
+						getPSLatenciesStorage.getAverage(true) / 1_000_000.0) +
+				String.format("\tEviction latency[ms]: avg:%.3f",
+						evictionLatenciesStorage.getAverage(true) / 1_000_000.0);
 
-		logger.info(sb.toString());
+		logger.info(sb);
 
 		numMaxRealClients[round - 1] = (int) maxClients;
 		avgThroughput[round - 1] = evictionThroughputStorage.getAverage(true);

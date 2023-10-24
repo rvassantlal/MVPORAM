@@ -14,10 +14,10 @@ import java.util.concurrent.CountDownLatch;
 public class ORAMBenchmarkClient {
 	private final static Logger logger = LoggerFactory.getLogger("benchmark.oram");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
-		if (args.length != 8) {
+		if (args.length != 9) {
 			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
-					"<nRequests> <position map type: full | triple> <treeHeight> <bucketSize> " +
-					"<blockSize> <isMeasurementLeader>");
+					"<nRequests> <position map type: full | triple> <distribute encryption key?> <treeHeight> " +
+					"<bucketSize> <blockSize> <isMeasurementLeader>");
 			System.exit(-1);
 		}
 
@@ -25,8 +25,14 @@ public class ORAMBenchmarkClient {
 		int initialClientId = Integer.parseInt(args[0]);
 		int nClients = Integer.parseInt(args[1]);
 		int nRequests = Integer.parseInt(args[2]);
+		String positionMapTypeString = args[3];
+		boolean distributeKey = Boolean.getBoolean(args[4]);
+		int treeHeight = Integer.parseInt(args[5]);
+		int bucketSize = Integer.parseInt(args[6]);
+		int blockSize = Integer.parseInt(args[7]);
+		boolean measurementLeader = Boolean.parseBoolean(args[8]);
 		PositionMapType positionMapType;
-		if (args[3].equals("full")) {
+		if (positionMapTypeString.equals("full")) {
 			positionMapType = PositionMapType.FULL_POSITION_MAP;
 		} else if (args[3].equals("triple")) {
 			positionMapType = PositionMapType.TRIPLE_POSITION_MAP;
@@ -35,17 +41,12 @@ public class ORAMBenchmarkClient {
 			System.exit(-1);
 			return;
 		}
-		int garbageCollectionFrequency = 1;
-		int treeHeight = Integer.parseInt(args[4]);
-		int bucketSize = Integer.parseInt(args[5]);
-		int blockSize = Integer.parseInt(args[6]);
-		boolean measurementLeader = Boolean.parseBoolean(args[7]);
 
 		CountDownLatch latch = new CountDownLatch(nClients);
 		Client[] clients = new Client[nClients];
 		for (int i = 0; i < nClients; i++) {
-			clients[i] = new Client(oramId, initialClientId, initialClientId + i, positionMapType,
-					garbageCollectionFrequency, treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
+			clients[i] = new Client(oramId, initialClientId, initialClientId + i, positionMapType, distributeKey,
+					treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
 			clients[i].start();
 			Thread.sleep(1000);
 		}
@@ -70,17 +71,16 @@ public class ORAMBenchmarkClient {
 		private final int address;
 		private final boolean measurementLeader;
 
-		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType,
-					   int garbageCollectionFrequency, int treeHeight, int bucketSize, int blockSize,
-					   CountDownLatch latch, int nRequests, boolean measurementLeader) throws SecretSharingException {
+		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType, boolean distributeKey,
+					   int treeHeight, int bucketSize, int blockSize, CountDownLatch latch, int nRequests,
+					   boolean measurementLeader) throws SecretSharingException {
 			this.initialClientId = initialClientId;
-			this.oramManager = new ORAMManager(clientId);
+			this.oramManager = new ORAMManager(clientId, distributeKey);
 			this.clientId = clientId;
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
-			this.oram = oramManager.createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, bucketSize,
-					blockSize);
+			this.oram = oramManager.createORAM(oramId, oramType, distributeKey, treeHeight, bucketSize, blockSize);
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}

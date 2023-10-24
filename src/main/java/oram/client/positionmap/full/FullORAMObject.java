@@ -3,7 +3,8 @@ package oram.client.positionmap.full;
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
 import oram.messages.GetPositionMap;
-import oram.security.EncryptionManager;
+import oram.security.AbstractEncryptionManager;
+import oram.security.FixedKeyEncryptionManager;
 import oram.client.ORAMObject;
 import oram.client.structure.PositionMap;
 import oram.client.structure.PositionMaps;
@@ -16,7 +17,7 @@ import vss.facade.SecretSharingException;
 
 public class FullORAMObject extends ORAMObject {
 	public FullORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
-						  EncryptionManager encryptionManager) throws SecretSharingException {
+						  AbstractEncryptionManager encryptionManager) throws SecretSharingException {
 		super(serviceProxy, oramId, oramContext, encryptionManager);
 	}
 
@@ -40,9 +41,9 @@ public class FullORAMObject extends ORAMObject {
 				return null;
 			}
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPlainData() == null)
+			if (response == null)
 				return null;
-			return encryptionManager.decryptPositionMaps(response.getPlainData());
+			return encryptionManager.decryptPositionMapsResponse(response);
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;

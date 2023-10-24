@@ -8,7 +8,7 @@ import java.io.*;
 
 public class CreateORAMMessage extends ORAMMessage {
 	private PositionMapType positionMapType;
-	private int garbageCollectionFrequency;
+	private boolean isDistributedKey;
 	private int treeHeight;
 	private int nBlocksPerBucket;
 	private int blockSize;
@@ -17,12 +17,12 @@ public class CreateORAMMessage extends ORAMMessage {
 
 	public CreateORAMMessage() {}
 
-	public CreateORAMMessage(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
+	public CreateORAMMessage(int oramId, PositionMapType positionMapType, boolean isDistributedKey,
 							 int treeHeight, int nBlocksPerBucket, int blockSize,
 							 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		super(oramId);
 		this.positionMapType = positionMapType;
-		this.garbageCollectionFrequency = garbageCollectionFrequency;
+		this.isDistributedKey = isDistributedKey;
 		this.treeHeight = treeHeight;
 		this.nBlocksPerBucket = nBlocksPerBucket;
 		this.blockSize = blockSize;
@@ -34,8 +34,8 @@ public class CreateORAMMessage extends ORAMMessage {
 		return positionMapType;
 	}
 
-	public int getGarbageCollectionFrequency() {
-		return garbageCollectionFrequency;
+	public boolean isDistributedKey() {
+		return isDistributedKey;
 	}
 
 	public int getTreeHeight() {
@@ -62,7 +62,7 @@ public class CreateORAMMessage extends ORAMMessage {
 	public void writeExternal(DataOutput out) throws IOException {
 		super.writeExternal(out);
 		out.writeByte(positionMapType.ordinal());
-		out.writeInt(garbageCollectionFrequency);
+		out.writeBoolean(isDistributedKey);
 		out.writeInt(treeHeight);
 		out.writeInt(nBlocksPerBucket);
 		out.writeInt(blockSize);
@@ -74,7 +74,7 @@ public class CreateORAMMessage extends ORAMMessage {
 	public void readExternal(DataInput in) throws IOException {
 		super.readExternal(in);
 		positionMapType = PositionMapType.getPositionMapType(in.readByte());
-		garbageCollectionFrequency = in.readInt();
+		isDistributedKey = in.readBoolean();
 		treeHeight = in.readInt();
 		nBlocksPerBucket = in.readInt();
 		blockSize = in.readInt();
