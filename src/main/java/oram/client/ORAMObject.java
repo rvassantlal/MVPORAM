@@ -27,7 +27,7 @@ public abstract class ORAMObject {
 	private final SecureRandom rndGenerator;
 	byte[] oldContent = null;
 	private boolean isRealAccess;
-	private boolean isMeasure;
+	protected boolean isMeasure;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) {
@@ -74,19 +74,19 @@ public abstract class ORAMObject {
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
 
-		long start, end, delay;
+		//long start, end, delay;
 
-		start = System.nanoTime();
+		//start = System.nanoTime();
 		PositionMaps oldPositionMaps = getPositionMaps();
 		if (oldPositionMaps == null) {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
-		end = System.nanoTime();
+		/*end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
 			logger.info("MGetPMOP: {}", delay);
-		}
+		}*/
 
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps);
 		if (mergedPositionMap == null) {
@@ -96,21 +96,21 @@ public abstract class ORAMObject {
 
 		int pathId = getPathId(mergedPositionMap, address);
 
-		start = System.nanoTime();
+		//start = System.nanoTime();
 		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps.getNewVersionId(), mergedPositionMap);
-		end = System.nanoTime();
+		/*end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
 			logger.info("MGetPSOP: {}", delay);
-		}
+		}*/
 
-		start = System.nanoTime();
+		//start = System.nanoTime();
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
-		end = System.nanoTime();
+		/*end = System.nanoTime();
 		delay = end - start;
 		if (isMeasure) {
 			logger.info("MEvictionOP: {}", delay);
-		}
+		}*/
 
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);
@@ -225,8 +225,14 @@ public abstract class ORAMObject {
 			if (serializedRequest == null) {
 				return false;
 			}
-
+			long start, end, delay;
+			start = System.nanoTime();
 			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			end = System.nanoTime();
+			delay = end - start;
+			if (isMeasure) {
+				logger.info("MEvictionOP: {}", delay);
+			}
 			if (response == null || response.getPlainData() == null) {
 				return false;
 			}
@@ -325,7 +331,14 @@ public abstract class ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
+			long start, end, delay;
+			start = System.nanoTime();
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			end = System.nanoTime();
+			delay = end - start;
+			if (isMeasure) {
+				logger.info("MGetPSOP: {}", delay);
+			}
 			if (response == null || response.getPlainData() == null)
 				return null;
 

@@ -57,7 +57,14 @@ public class TripleORAMObject extends ORAMObject {
 			if (serializedRequest == null) {
 				return null;
 			}
+			long start, end, delay;
+			start = System.nanoTime();
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			end = System.nanoTime();
+			delay = end - start;
+			if (isMeasure) {
+				logger.info("MGetPMOP: {}", delay);
+			}
 			if (response == null || response.getPlainData() == null)
 				return null;
 			return encryptionManager.decryptPositionMaps(response.getPlainData());
