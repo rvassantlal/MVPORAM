@@ -9,6 +9,15 @@ public class BucketHolder {
 		this.outstandingBuckets = new ArrayList<>();
 	}
 
+	public BucketHolder(ArrayList<BucketSnapshot> outstandingBucketsVersions) {
+		this.outstandingBuckets = new ArrayList<>(outstandingBucketsVersions);
+	}
+
+	public void update(ArrayList<BucketSnapshot> outstandingLocation) {
+		outstandingBuckets.clear();
+		outstandingBuckets.addAll(outstandingLocation);
+	}
+
 	public void addSnapshot(BucketSnapshot snapshot, Set<BucketSnapshot> outstandingVersions) {
 		outstandingBuckets.removeIf(outstandingVersions::contains);
 

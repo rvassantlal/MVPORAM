@@ -60,28 +60,25 @@ public class EncryptionManager {
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
 												  EncryptedStashesAndPaths encryptedStashesAndPaths) {
 		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
-				encryptedStashesAndPaths.getEncryptedStashes());
-		Map<Integer, Bucket[]> paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
+				encryptedStashesAndPaths.getOutstandingVersions(), encryptedStashesAndPaths.getEncryptedStashes());
+		Bucket[] paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
 		return new StashesAndPaths(stashes, paths);
 	}
 
-	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
-		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.size());
-		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
-			stashes.put(entry.getKey(), decryptStash(blockSize, entry.getValue()));
+	private Map<Integer, Stash> decryptStashes(int blockSize, int[] outstandingVersions,
+											   EncryptedStash[] encryptedStashes) {
+		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.length);
+		for (int i = 0; i < outstandingVersions.length; i++) {
+			stashes.put(outstandingVersions[i], decryptStash(blockSize, encryptedStashes[i]));
 		}
+
 		return stashes;
 	}
 
-	private Map<Integer, Bucket[]> decryptPaths(ORAMContext oramContext, Map<Integer, EncryptedBucket[]> encryptedPaths) {
-		Map<Integer, Bucket[]> paths = new HashMap<>(encryptedPaths.size());
-		for (Map.Entry<Integer, EncryptedBucket[]> entry : encryptedPaths.entrySet()) {
-			EncryptedBucket[] encryptedBuckets = entry.getValue();
-			Bucket[] buckets = new Bucket[encryptedBuckets.length];
-			for (int i = 0; i < encryptedBuckets.length; i++) {
-				buckets[i] = decryptBucket(oramContext, encryptedBuckets[i]);
-			}
-			paths.put(entry.getKey(), buckets);
+	private Bucket[] decryptPaths(ORAMContext oramContext, EncryptedBucket[] encryptedPaths) {
+		Bucket[] paths = new Bucket[encryptedPaths.length];
+		for (int i = 0; i < encryptedPaths.length; i++) {
+			paths[i] = decryptBucket(oramContext, encryptedPaths[i]);
 		}
 		return paths;
 	}
@@ -201,7 +198,7 @@ public class EncryptionManager {
 		Block[] blocks = bucket.readBucket();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
-				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION, 
+				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION,
 						ORAMUtils.DUMMY_BLOCK);
 			}
 		}

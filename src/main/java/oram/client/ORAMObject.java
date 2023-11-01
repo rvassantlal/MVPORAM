@@ -74,19 +74,11 @@ public abstract class ORAMObject {
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
 
-		//long start, end, delay;
-
-		//start = System.nanoTime();
 		PositionMaps oldPositionMaps = getPositionMaps();
 		if (oldPositionMaps == null) {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
-		/*end = System.nanoTime();
-		delay = end - start;
-		if (isMeasure) {
-			logger.info("MGetPMOP: {}", delay);
-		}*/
 
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps);
 		if (mergedPositionMap == null) {
@@ -96,21 +88,9 @@ public abstract class ORAMObject {
 
 		int pathId = getPathId(mergedPositionMap, address);
 
-		//start = System.nanoTime();
 		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps.getNewVersionId(), mergedPositionMap);
-		/*end = System.nanoTime();
-		delay = end - start;
-		if (isMeasure) {
-			logger.info("MGetPSOP: {}", delay);
-		}*/
 
-		//start = System.nanoTime();
 		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
-		/*end = System.nanoTime();
-		delay = end - start;
-		if (isMeasure) {
-			logger.info("MEvictionOP: {}", delay);
-		}*/
 
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);
@@ -269,8 +249,7 @@ public abstract class ORAMObject {
 		return possiblePaths.get(rndGenerator.nextInt(possiblePaths.size()));
 	}
 
-	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Map<Integer, Bucket[]> paths,
-									   PositionMap mergedPositionMap) {
+	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Bucket[] paths, PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
 
 		mergeStashes(recentBlocks, stashes, mergedPositionMap);
@@ -283,20 +262,18 @@ public abstract class ORAMObject {
 		return mergedStash;
 	}
 
-	private void mergePaths(Map<Integer, Block> recentBlocks, Map<Integer, Bucket[]> paths,
+	private void mergePaths(Map<Integer, Block> recentBlocks, Bucket[] paths,
 							PositionMap mergedPositionMap) {
-		for (Bucket[] versions : paths.values()) {
-			for (Bucket bucket : versions) {
-				if (bucket == null)
+		for (Bucket bucket : paths) {
+			if (bucket == null)
+				continue;
+			for (Block block : bucket.readBucket()) {
+				if (block == null)
 					continue;
-				for (Block block : bucket.readBucket()) {
-					if (block == null)
-						continue;
-					int blockAddress = block.getAddress();
-					int blockVersionId = block.getVersionId();
-					if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
-						recentBlocks.put(blockAddress, block);
-					}
+				int blockAddress = block.getAddress();
+				int blockVersionId = block.getVersionId();
+				if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
+					recentBlocks.put(blockAddress, block);
 				}
 			}
 		}

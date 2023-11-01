@@ -4,11 +4,12 @@ public class ORAMClientContext {
 	private final int[] outstandingVersion;
 	private final EncryptedStash[] outstandingStashes;
 	private final int newVersionId;
-	private OutstandingTreeContext outstandingTree;
+	private final OutstandingTree outstandingTree;
 	private int pathId;
+	private OutstandingPath outstandingPath;
 
 	public ORAMClientContext(int[] outstandingVersions, EncryptedStash[] outstandingStashes, int newVersionId,
-							 OutstandingTreeContext outstandingTree) {
+							 OutstandingTree outstandingTree) {
 		this.outstandingVersion = outstandingVersions;
 		this.outstandingStashes = outstandingStashes;
 		this.newVersionId = newVersionId;
@@ -23,12 +24,8 @@ public class ORAMClientContext {
 		return outstandingStashes;
 	}
 
-	public OutstandingTreeContext getOutstandingTree() {
+	public OutstandingTree getOutstandingTree() {
 		return outstandingTree;
-	}
-
-	public void setOutstandingTree(OutstandingTreeContext outstandingTree) {
-		this.outstandingTree = outstandingTree;
 	}
 
 	public int getNewVersionId() {
@@ -41,5 +38,13 @@ public class ORAMClientContext {
 
 	public int getPathId() {
 		return pathId;
+	}
+
+	public void storeOutstandingPath(OutstandingPath outstandingPath) {
+		this.outstandingPath = outstandingPath;
+	}
+
+	public OutstandingPath getOutstandingPath() {
+		return outstandingPath;
 	}
 }

@@ -30,9 +30,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ArrayList<Long> getPSLatencies;
 	private int evictCounter = 0;
 	private final ArrayList<Long> evictionLatencies;
-	private int outstandingNumber = 0;
-	private int totalNumber = 0;
 	private long lastPrint;
+	private int nOutstandingTreeObjects;
 
 
 	public ORAMServer(int processId) {
@@ -124,8 +123,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		evictionLatencies.add(delay);
 		logger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
-		outstandingNumber = oram.getNumberOfOutstanding();
-		totalNumber = oram.getNumberOfVersion();
+		nOutstandingTreeObjects = oram.getNOutstandingTreeObjects();
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		else
@@ -255,7 +253,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			long evictionAvgLatency = computeAverage(evictionLatencies);
 			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|" +
 							"allTrees[#]|getPMAvg[ns]|getPSAvg[ns]|evictionAvg[ns])>({}|{}|{}|{}|{}|{}|{}|{}|{}|{})",
-					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, outstandingNumber, totalNumber,
+					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, nOutstandingTreeObjects, 0,
 					getPMAvgLatency, getPSAvgLatency, evictionAvgLatency);
 			getPMCounter = 0;
 			getPSCounter = 0;

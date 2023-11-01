@@ -18,10 +18,8 @@ public abstract class ORAM {
 	protected final Map<Integer, EncryptedStash> stashes;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
 	protected int sequenceNumber = 0;
-	private int currentNumberOfSnapshots;
-	private final Map<Integer, EncryptedStash> getPSEncryptedStashesBuffer;
+	protected final ORAMTreeManager oramTreeManager;
 	private final Map<Integer, int[]> preComputedPathLocations;
-	protected final ORAMTree oramTree;
 
 	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
 				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
@@ -35,23 +33,25 @@ public abstract class ORAM {
 		this.outstandingTrees = new LinkedList<>();
 		this.positionMaps = new HashMap<>();
 		this.stashes = new HashMap<>();
-		this.getPSEncryptedStashesBuffer = new HashMap<>();
-		this.oramTree = new ORAMTree(oramContext);
-		this.oramClientContexts = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
 		for (int i = 0; i < numberOfPaths; i++) {
 			preComputedPathLocations.put(i, ORAMUtils.computePathLocations(i, oramContext.getTreeHeight()));
 		}
+		this.oramTreeManager = new ORAMTreeManager(oramContext);
+		this.oramClientContexts = new HashMap<>();
 		int versionId = ++sequenceNumber;
 		this.positionMaps.put(versionId, encryptedPositionMap);
 		this.stashes.put(versionId, encryptedStash);
-		currentNumberOfSnapshots++;
 		outstandingTrees.add(versionId);
 	}
 
 	public ORAMContext getOramContext() {
 		return oramContext;
+	}
+
+	public int getNOutstandingTreeObjects() {
+		return oramTreeManager.getNOutstandingTreeObjects();
 	}
 
 	public abstract EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request);
@@ -63,36 +63,32 @@ public abstract class ORAM {
 		}
 
 		oramClientContext.setPathId(pathId);
-		getPSEncryptedStashesBuffer.clear();//This is global and reused - make sure that returning this object doesn't cause any issues
 
-		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 		int[] pathLocations = preComputedPathLocations.get(pathId);
 
+		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 		EncryptedStash[] outstandingStashes = oramClientContext.getOutstandingStashes();
-		OutstandingTreeContext outstandingTree = oramClientContext.getOutstandingTree();
-		OutstandingTreeContext outstandingTreePath = new OutstandingTreeContext(oramContext.getTreeLevels());
+		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
 
-		logger.debug("Client {} is reading path {} with {} outstanding versions", clientId, pathId,
+		logger.debug("Client {} is reading path {} ({}) with {} outstanding versions", clientId, pathId, pathLocations,
 				outstandingVersions.length);
-		for (int i = 0; i < outstandingVersions.length; i++) {
-			getPSEncryptedStashesBuffer.put(outstandingVersions[i], outstandingStashes[i]);
-		}
 
+		OutstandingPath outstandingPath = oramTreeManager.getPath(outstandingTree, pathLocations);
+
+		oramClientContext.storeOutstandingPath(outstandingPath);
+		int nTotalBuckets = outstandingPath.getTotalNumberOfBuckets();
+		EncryptedBucket[] encryptedBuckets = new EncryptedBucket[nTotalBuckets];
+		int k = 0;
 		for (int pathLocation : pathLocations) {
-			Set<BucketSnapshot> outstandingBucket = new HashSet<>(outstandingTree.getLocation(pathLocation));
-			outstandingTreePath.updateLocation(pathLocation, outstandingBucket);
-			logger.debug("Location {} has {} outstanding versions", pathLocation, outstandingBucket.size());
+			Set<BucketSnapshot> bucketsSet = outstandingPath.getLocation(pathLocation);
+			EncryptedBucket[] orderedBuckets = oramTreeManager.getBuckets(bucketsSet);
+			logger.debug("Path location {} has {} buckets", pathLocation, orderedBuckets.length);
+			for (EncryptedBucket orderedBucket : orderedBuckets) {
+				encryptedBuckets[k++] = orderedBucket;
+			}
 		}
-		EncryptedBucket[][] path = oramTree.getPath(pathLocations, outstandingTreePath);
-		oramClientContext.setOutstandingTree(outstandingTreePath);
-		oramTree.freeOutStandingTreeContextHolder(outstandingTree);
 
-		Map<Integer, EncryptedBucket[]> compactedPaths = new HashMap<>(path.length);
-		for (int i = 0; i < path.length; i++) {
-			logger.debug("Path location index {} has {} buckets", i, path[i].length);
-			compactedPaths.put(i, path[i]);
-		}
-		return new EncryptedStashesAndPaths(getPSEncryptedStashesBuffer, compactedPaths);
+		return new EncryptedStashesAndPaths(outstandingVersions, outstandingStashes, encryptedBuckets);
 	}
 
 	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
@@ -104,24 +100,27 @@ public abstract class ORAM {
 		}
 
 		int newVersionId = oramClientContext.getNewVersionId();
+		OutstandingPath outstandingPath = oramClientContext.getOutstandingPath();
 
 		positionMaps.put(newVersionId, encryptedPositionMap);
 		stashes.put(newVersionId, encryptedStash);
 
 		logger.debug("Client {} is performing eviction in path {} with version {}", clientId,
 				oramClientContext.getPathId(), newVersionId);
+		Map<Integer, BucketSnapshot> newBucketSnapshots = new HashMap<>(encryptedPath.size());
+
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
-			int location = entry.getKey();
+			Integer location = entry.getKey();
 			BucketSnapshot bucketSnapshot = new BucketSnapshot(newVersionId, entry.getValue());
 			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
-			oramTree.storeBucket(location, bucketSnapshot, oramClientContext.getOutstandingTree().getLocation(location));
+			newBucketSnapshots.put(location, bucketSnapshot);
 		}
+		oramTreeManager.storeBuckets(newBucketSnapshots, outstandingPath);
 
 		cleanOutstandingTrees(oramClientContext.getOutstandingVersions());
-		currentNumberOfSnapshots++;
 		outstandingTrees.add(newVersionId);
 
-		logger.debug("{}\n", oramTree);
+		logger.debug("{}\n", oramTreeManager);
 		return true;
 	}
 
@@ -139,13 +138,5 @@ public abstract class ORAM {
 
 	public int getOramId() {
 		return oramId;
-	}
-
-	public int getNumberOfOutstanding() {
-		return outstandingTrees.size();
-	}
-
-	public int getNumberOfVersion() {
-		return currentNumberOfSnapshots;
 	}
 }
