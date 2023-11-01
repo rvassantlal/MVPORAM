@@ -2,7 +2,9 @@ package oram.server.structure;
 
 import oram.utils.CustomExternalizable;
 
-import java.io.*;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class EncryptedStash implements CustomExternalizable {
@@ -38,9 +40,5 @@ public class EncryptedStash implements CustomExternalizable {
 	@Override
 	public String toString() {
 		return String.valueOf(Arrays.hashCode(encryptedStash));
-	}
-
-	public void clearStash() {
-		this.encryptedStash = null;
 	}
 }

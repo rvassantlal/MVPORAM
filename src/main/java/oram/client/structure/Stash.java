@@ -31,10 +31,6 @@ public class Stash implements CustomExternalizable {
 		return null;
 	}
 
-	public void remove(Block block) {
-		blocks.remove(block);
-	}
-
 	@Override
 	public void writeExternal(DataOutput out) throws IOException {
 		out.writeInt(blocks.size());

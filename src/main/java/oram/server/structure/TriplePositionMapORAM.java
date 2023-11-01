@@ -3,10 +3,8 @@ package oram.server.structure;
 import oram.messages.GetPositionMap;
 import oram.utils.PositionMapType;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class TriplePositionMapORAM extends ORAM {
 
