@@ -119,6 +119,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		}
 
 		for (int i = 0; i < treeHeights.length; i++) {
+			long startTime = System.currentTimeMillis();
 			logger.info("============ Strategy Parameters ============");
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];
@@ -129,6 +130,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Block size: {}", blockSize);
 			logger.info("Position map type: {}", positionMapType);
 			logger.info("Number of buckets: {}", ORAMUtils.computeNumberOfNodes(treeHeight));
+			logger.info("ORAM size: {} blocks", ORAMUtils.computeTreeSize(treeHeight, bucketSize));
+			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, bucketSize, blockSize));
+			logger.info("Path length: {} blocks", ORAMUtils.computePathLength(treeHeight, bucketSize));
+			logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
@@ -187,6 +192,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					lock.unlock();
 				}
 			}
+
+			long endTime = System.currentTimeMillis();
+			logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
+
 		}
 	}
 

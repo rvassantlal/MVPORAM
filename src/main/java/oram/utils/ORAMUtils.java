@@ -97,4 +97,16 @@ public class ORAMUtils {
 
 		return result;
 	}
+
+	public static int computePathLength(int treeHeight, int bucketSize) {
+		return (treeHeight + 1) * bucketSize;
+	}
+
+	public static int computePathSize(int treeHeight, int bucketSize, int blockSize) {
+		return (treeHeight + 1) * bucketSize * blockSize;
+	}
+
+	public static long computeDatabaseSize(int treeHeight, int bucketSize, int blockSize) {
+		return (long) computeTreeSize(treeHeight, bucketSize) * blockSize;
+	}
 }
