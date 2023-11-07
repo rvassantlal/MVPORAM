@@ -61,7 +61,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		this.serverWorkersIds = new HashSet<>();
 		this.clientWorkersIds = new HashSet<>();
 		this.measurementWorkers = new HashMap<>();
-		String initialCommand = "java -Xmx28g -Djava.security.properties=./config/java" +
+		String initialCommand = "java -Xmx60g -Djava.security.properties=./config/java" +
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 		this.serverCommand = initialCommand + "oram.server.ORAMServer ";
 		this.clientCommand = initialCommand + "oram.benchmark.ORAMBenchmarkClient ";

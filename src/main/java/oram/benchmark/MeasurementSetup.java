@@ -89,8 +89,8 @@ public class MeasurementSetup implements ISetupWorker {
 		ctx.append("system.totalordermulticast.log_parallel = false\n");
 		ctx.append("system.totalordermulticast.log_to_disk = false\n");
 		ctx.append("system.totalordermulticast.sync_log = false\n");
-		ctx.append("system.totalordermulticast.checkpoint_period = 102400000\n");
-		ctx.append("system.totalordermulticast.global_checkpoint_period = 120000000\n");
+		ctx.append("system.totalordermulticast.checkpoint_period = 100\n");
+		ctx.append("system.totalordermulticast.global_checkpoint_period = 1200\n");
 		ctx.append("system.totalordermulticast.checkpoint_to_disk = false\n");
 		ctx.append("system.totalordermulticast.sync_ckp = false\n");
 		ctx.append("system.initial.view = " + iview + "\n");
