@@ -2,26 +2,20 @@ package oram.server.structure;
 
 public class ORAMClientContext {
 	private final int[] outstandingVersion;
-	private final EncryptedStash[] outstandingStashes;
 	private final int newVersionId;
 	private final OutstandingTree outstandingTree;
 	private int pathId;
 	private OutstandingPath outstandingPath;
 
-	public ORAMClientContext(int[] outstandingVersions, EncryptedStash[] outstandingStashes, int newVersionId,
+	public ORAMClientContext(int[] outstandingVersions, int newVersionId,
 							 OutstandingTree outstandingTree) {
 		this.outstandingVersion = outstandingVersions;
-		this.outstandingStashes = outstandingStashes;
 		this.newVersionId = newVersionId;
 		this.outstandingTree = outstandingTree;
 	}
 
 	public int[] getOutstandingVersions() {
 		return outstandingVersion;
-	}
-
-	public EncryptedStash[] getOutstandingStashes() {
-		return outstandingStashes;
 	}
 
 	public OutstandingTree getOutstandingTree() {

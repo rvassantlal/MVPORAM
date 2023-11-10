@@ -5,6 +5,7 @@ import oram.utils.PositionMapType;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class TriplePositionMapORAM extends ORAM {
 
@@ -17,6 +18,8 @@ public class TriplePositionMapORAM extends ORAM {
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {
 		int lastVersion = request.getLastVersion();
+		OutstandingTree outstandingTree = oramTreeManager.getOutstandingTree();
+		Set<Integer> outstandingVersions = outstandingTree.getOutstandingVersions();
 		Map<Integer, EncryptedPositionMap> resultedPositionMap = new HashMap<>(sequenceNumber - lastVersion);
 		for (int i = lastVersion; i < sequenceNumber; i++) {
 			EncryptedPositionMap encryptedPositionMap = positionMaps.get(i);
@@ -25,21 +28,23 @@ public class TriplePositionMapORAM extends ORAM {
 			}
 		}
 
-		int[] currentOutstandingVersions = new int[outstandingTrees.size()];
-		EncryptedStash[] currentOutstandingStashes = new EncryptedStash[outstandingTrees.size()];
+		int[] currentOutstandingVersions = new int[outstandingVersions.size()];
 		int i = 0;
-		for (int outstandingVersion : outstandingTrees) {
+		for (int outstandingVersion : outstandingVersions) {
 			currentOutstandingVersions[i] = outstandingVersion;
-			currentOutstandingStashes[i] = stashes.get(outstandingVersion);
 			i++;
 		}
-		OutstandingTree outstandingTree = oramTreeManager.getOutstandingTree();
 		int newVersionId = ++sequenceNumber;
-		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions,
-				currentOutstandingStashes, newVersionId, outstandingTree);
+		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId,
+				outstandingTree);
 
 		oramClientContexts.put(clientId, oramClientContext);
 		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);
+	}
+
+	@Override
+	protected void cleanPositionMaps(int[] outstandingVersions) {
+
 	}
 
 

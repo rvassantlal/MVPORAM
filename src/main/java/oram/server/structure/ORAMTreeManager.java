@@ -12,12 +12,13 @@ public class ORAMTreeManager {
 	private final ArrayList<OutstandingTree> allOutstandingTreesObjects;
 	private final Map<Integer, EncryptedBucket> getBucketsBuffer;
 
-	public ORAMTreeManager(ORAMContext oramContext) {
+	public ORAMTreeManager(ORAMContext oramContext, int versionId, EncryptedStash encryptedStash) {
 		this.oramContext = oramContext;
 		this.unusedOutstandingTreesPool = new ArrayDeque<>();
 		this.getBucketsBuffer = new HashMap<>();
 		int nBuckets = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
-		this.currentOutstandingTree = new OutstandingTree(nBuckets, oramContext.getTreeLevels());
+		this.currentOutstandingTree = new OutstandingTree(nBuckets, oramContext.getTreeLevels(), versionId,
+				encryptedStash);
 		this.allOutstandingTreesObjects = new ArrayList<>();
 		allOutstandingTreesObjects.add(currentOutstandingTree);
 	}
@@ -42,6 +43,8 @@ public class ORAMTreeManager {
 		outstandingTree.decreaseNPointers();
 		if (outstandingTree.getNPointers() == 0 && outstandingTree != currentOutstandingTree) {
 			unusedOutstandingTreesPool.addFirst(outstandingTree);
+			outstandingTree.getStashes().clear();
+			outstandingTree.getOutstandingVersions().clear();
 		}
 
 		return outstandingPath;
@@ -64,7 +67,8 @@ public class ORAMTreeManager {
 		return result;
 	}
 
-	public void storeBuckets(Map<Integer, BucketSnapshot> newBucketSnapshots, OutstandingPath outstandingPath) {
+	public void storeBuckets(int newVersionId, Map<Integer, BucketSnapshot> newBucketSnapshots, OutstandingPath outstandingPath,
+							 int[] outstandingVersions, EncryptedStash encryptedStash) {
 		OutstandingTree workingOutstandingTree = currentOutstandingTree;
 		if (workingOutstandingTree.getNPointers() > 0) {
 			workingOutstandingTree = unusedOutstandingTreesPool.pollFirst();
@@ -74,7 +78,19 @@ public class ORAMTreeManager {
 			}
 		}
 
+		//Update outstanding versions and stashes
+		Map<Integer, EncryptedStash> workingOutstandingTreeStashes = workingOutstandingTree.getStashes();
+		Set<Integer> workingOutstandingTreeOutstandingVersions = workingOutstandingTree.getOutstandingVersions();
+		workingOutstandingTreeStashes.putAll(currentOutstandingTree.getStashes());
+		workingOutstandingTreeOutstandingVersions.addAll(currentOutstandingTree.getOutstandingVersions());
+		for (Integer outstandingVersion : outstandingVersions) {
+			workingOutstandingTreeStashes.remove(outstandingVersion);
+			workingOutstandingTreeOutstandingVersions.remove(outstandingVersion);
+		}
+		workingOutstandingTreeStashes.put(newVersionId, encryptedStash);
+		workingOutstandingTreeOutstandingVersions.add(newVersionId);
 
+		//Update dirty locations
 		for (Integer dirtyLocation : workingOutstandingTree.getDirtyLocations()) {
 			ArrayList<BucketSnapshot> currentOutstandingLocation = currentOutstandingTree.getLocation(dirtyLocation);
 			workingOutstandingTree.updateLocation(dirtyLocation, currentOutstandingLocation);
@@ -82,6 +98,7 @@ public class ORAMTreeManager {
 
 		workingOutstandingTree.clearDirtyLocations();
 
+		//Update outstanding path
 		for (Map.Entry<Integer, BucketSnapshot> entry : newBucketSnapshots.entrySet()) {
 			Integer dirtyLocation = entry.getKey();
 			Set<BucketSnapshot> outstandingLocation = outstandingPath.getLocation(dirtyLocation);

@@ -13,9 +13,7 @@ public abstract class ORAM {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final int oramId;
 	private final ORAMContext oramContext;
-	protected final List<Integer> outstandingTrees; //all versions that are not previous of any other version
 	protected final Map<Integer, EncryptedPositionMap> positionMaps;
-	protected final Map<Integer, EncryptedStash> stashes;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
 	protected int sequenceNumber = 0;
 	protected final ORAMTreeManager oramTreeManager;
@@ -30,20 +28,16 @@ public abstract class ORAM {
 		this.oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight, treeSize,
 				bucketSize, blockSize);
 		logger.info("ORAM tree capacity: {} blocks ({} buckets)", treeSize, nBuckets);
-		this.outstandingTrees = new LinkedList<>();
 		this.positionMaps = new HashMap<>();
-		this.stashes = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
 		for (int i = 0; i < numberOfPaths; i++) {
 			preComputedPathLocations.put(i, ORAMUtils.computePathLocations(i, oramContext.getTreeHeight()));
 		}
-		this.oramTreeManager = new ORAMTreeManager(oramContext);
 		this.oramClientContexts = new HashMap<>();
 		int versionId = ++sequenceNumber;
+		this.oramTreeManager = new ORAMTreeManager(oramContext, versionId, encryptedStash);
 		this.positionMaps.put(versionId, encryptedPositionMap);
-		this.stashes.put(versionId, encryptedStash);
-		outstandingTrees.add(versionId);
 	}
 
 	public ORAMContext getOramContext() {
@@ -66,8 +60,9 @@ public abstract class ORAM {
 
 		int[] pathLocations = preComputedPathLocations.get(pathId);
 
-		EncryptedStash[] outstandingStashes = oramClientContext.getOutstandingStashes();
 		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
+		EncryptedStash[] outstandingStashes = getOrderedStashesArray(outstandingTree.getStashes());
+
 
 		logger.debug("Client {} is reading path {} ({}) with {} outstanding stashes", clientId, pathId, pathLocations,
 				outstandingStashes.length);
@@ -90,6 +85,20 @@ public abstract class ORAM {
 		return new EncryptedStashesAndPaths(outstandingStashes, encryptedBuckets);
 	}
 
+	private EncryptedStash[] getOrderedStashesArray(Map<Integer, EncryptedStash> unorderedStashes) {
+		int[] versions = new int[unorderedStashes.size()];
+		int k = 0;
+		for (Integer version : unorderedStashes.keySet()) {
+			versions[k++] = version;
+		}
+		Arrays.sort(versions);
+		EncryptedStash[] orderedStashes = new EncryptedStash[versions.length];
+		for (int i = 0; i < versions.length; i++) {
+			orderedStashes[i] = unorderedStashes.get(versions[i]);
+		}
+		return orderedStashes;
+	}
+
 	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
 								   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
@@ -102,7 +111,6 @@ public abstract class ORAM {
 		OutstandingPath outstandingPath = oramClientContext.getOutstandingPath();
 
 		positionMaps.put(newVersionId, encryptedPositionMap);
-		stashes.put(newVersionId, encryptedStash);
 
 		logger.debug("Client {} is performing eviction in path {} with version {}", clientId,
 				oramClientContext.getPathId(), newVersionId);
@@ -114,21 +122,18 @@ public abstract class ORAM {
 			logger.debug("Storing bucket {} at location {}", bucketSnapshot, location);
 			newBucketSnapshots.put(location, bucketSnapshot);
 		}
-		oramTreeManager.storeBuckets(newBucketSnapshots, outstandingPath);
+		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 
-		cleanOutstandingTrees(oramClientContext.getOutstandingVersions());
-		outstandingTrees.add(newVersionId);
+		oramTreeManager.storeBuckets(newVersionId, newBucketSnapshots, outstandingPath, outstandingVersions,
+				encryptedStash);
+
+		cleanPositionMaps(outstandingVersions);
 
 		logger.debug("{}\n", oramTreeManager);
 		return true;
 	}
 
-	protected void cleanOutstandingTrees(int[] outstandingVersions) {
-		for (Integer outstandingVersion : outstandingVersions) {
-			outstandingTrees.remove(outstandingVersion);
-			stashes.remove(outstandingVersion);
-		}
-	}
+	abstract protected void cleanPositionMaps(int[] outstandingVersions);
 
 	@Override
 	public String toString() {

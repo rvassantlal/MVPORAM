@@ -1,22 +1,26 @@
 package oram.server.structure;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public class OutstandingTree {
 	private final BucketHolder[] tree;
+	private final Map<Integer, EncryptedStash> stashes;
+	private final Set<Integer> outstandingVersions;
 	private final int nLevels;
 	private final Set<Integer> dirtyLocations;
 	private int nPointers;
 
-	public OutstandingTree(int nBuckets, int nLevels) {
+	public OutstandingTree(int nBuckets, int nLevels, int versionId, EncryptedStash encryptedStash) {
 		this.tree = new BucketHolder[nBuckets];
 		this.nLevels = nLevels;
 		this.dirtyLocations = new HashSet<>();
 		for (int i = 0; i < nBuckets; i++) {
 			tree[i] = new BucketHolder();
 		}
+		this.stashes = new HashMap<>();
+		this.outstandingVersions = new HashSet<>();
+		stashes.put(versionId, encryptedStash);
+		outstandingVersions.add(versionId);
 	}
 
 	public OutstandingTree(OutstandingTree outstandingTree) {
@@ -27,6 +31,16 @@ public class OutstandingTree {
 		this.nLevels = outstandingTree.nLevels;
 		this.dirtyLocations = new HashSet<>(outstandingTree.dirtyLocations);
 		this.nPointers = 0;
+		this.stashes = new HashMap<>(outstandingTree.stashes.size());
+		this.outstandingVersions = new HashSet<>(outstandingTree.outstandingVersions.size());
+	}
+
+	public Map<Integer, EncryptedStash> getStashes() {
+		return stashes;
+	}
+
+	public Set<Integer> getOutstandingVersions() {
+		return outstandingVersions;
 	}
 
 	public void markDirtyLocation(Integer dirtyLocation) {
