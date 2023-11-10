@@ -10,7 +10,6 @@ import java.util.Arrays;
 
 public class EncryptedStashesAndPaths implements CustomExternalizable {
 	private ORAMContext oramContext;
-	private int[] outstandingVersions;
 	private EncryptedStash[] encryptedStashes;
 	private EncryptedBucket[] paths;
 
@@ -18,15 +17,9 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 		this.oramContext = oramContext;
 	}
 
-	public EncryptedStashesAndPaths(int[] outstandingVersions, EncryptedStash[] encryptedStashes,
-									EncryptedBucket[] paths) {
-		this.outstandingVersions = outstandingVersions;
+	public EncryptedStashesAndPaths(EncryptedStash[] encryptedStashes, EncryptedBucket[] paths) {
 		this.encryptedStashes = encryptedStashes;
 		this.paths = paths;
-	}
-
-	public int[] getOutstandingVersions() {
-		return outstandingVersions;
 	}
 
 	public EncryptedStash[] getEncryptedStashes() {
@@ -39,10 +32,7 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 
 	@Override
 	public void writeExternal(DataOutput out) throws IOException {
-		out.writeInt(outstandingVersions.length);
-		for (int outstandingVersion : outstandingVersions) {
-			out.writeInt(outstandingVersion);
-		}
+		out.writeInt(encryptedStashes.length);
 		for (EncryptedStash entry : encryptedStashes) {
 			entry.writeExternal(out);
 		}
@@ -58,10 +48,6 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 	@Override
 	public void readExternal(DataInput in) throws IOException {
 		int size = in.readInt();
-		outstandingVersions = new int[size];
-		for (int i = 0; i < size; i++) {
-			outstandingVersions[i] = in.readInt();
-		}
 		encryptedStashes = new EncryptedStash[size];
 		for (int i = 0; i < size; i++) {
 			EncryptedStash encryptedStash = new EncryptedStash();
@@ -86,7 +72,6 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder("EncryptedStashesAndPaths{");
-		sb.append("\n\toutstandingVersions: ").append(Arrays.toString(outstandingVersions));
 		sb.append("\n\tencryptedStashes: ").append(Arrays.deepHashCode(encryptedStashes));
 		sb.append("\n\tpaths:");
 		for (EncryptedBucket entry : paths) {

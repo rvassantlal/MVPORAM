@@ -51,9 +51,7 @@ public abstract class ORAMObject {
 	public byte[] readMemory(int address) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		byte[] result = access(Operation.READ, address, null);
-		//System.gc();
-		return result;
+		return access(Operation.READ, address, null);
 	}
 
 	/**
@@ -66,9 +64,7 @@ public abstract class ORAMObject {
 	public byte[] writeMemory(int address, byte[] content) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		byte[] result = access(Operation.WRITE, address, content);
-		//System.gc();
-		return result;
+		return access(Operation.WRITE, address, content);
 	}
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
@@ -233,11 +229,11 @@ public abstract class ORAMObject {
 		int location = myPath.get(bucketId);
 		ArrayList<Integer> possiblePaths = new ArrayList<>();
 		for (int i = 0; i < (1 << oramContext.getTreeHeight()); i++) {
-			List<Integer> toadd = ORAMUtils.computePathLocationsList(i, oramContext.getTreeHeight());
-			if(toadd.contains(location)) {
+			List<Integer> toAdd = ORAMUtils.computePathLocationsList(i, oramContext.getTreeHeight());
+			if(toAdd.contains(location)) {
 				boolean possible = true;
 				for (int j = bucketId-1; j >= 0; j--){
-					if(myPath.contains(toadd.get(j))) {
+					if(myPath.contains(toAdd.get(j))) {
 						possible = false;
 						break;
 					}
@@ -249,7 +245,7 @@ public abstract class ORAMObject {
 		return possiblePaths.get(rndGenerator.nextInt(possiblePaths.size()));
 	}
 
-	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Bucket[] paths, PositionMap mergedPositionMap) {
+	private Stash mergeStashesAndPaths(Stash[] stashes, Bucket[] paths, PositionMap mergedPositionMap) {
 		Map<Integer, Block> recentBlocks = new HashMap<>();
 
 		mergeStashes(recentBlocks, stashes, mergedPositionMap);
@@ -279,19 +275,14 @@ public abstract class ORAMObject {
 		}
 	}
 
-	private void mergeStashes(Map<Integer, Block> recentBlocks, Map<Integer, Stash> stashes,
+	private void mergeStashes(Map<Integer, Block> recentBlocks, Stash[] stashes,
 							  PositionMap mergedPositionMap) {
-		Map<Integer, List<Block>> blocksToMerge = new HashMap<>();
-		for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
-			blocksToMerge.put(entry.getKey(), entry.getValue().getBlocks());
-		}
-		selectRecentBlocks(recentBlocks, mergedPositionMap, blocksToMerge);
-	}
-
-	private void selectRecentBlocks(Map<Integer, Block> recentBlocks, PositionMap mergedPositionMap,
-									Map<Integer, List<Block>> blocksToMerge) {
-		for (Map.Entry<Integer, List<Block>> entry : blocksToMerge.entrySet()) {
-			for (Block block : entry.getValue()) {
+		for (Stash stash : stashes) {
+			if (stash == null) {
+				logger.warn("Stash is null");
+				continue;
+			}
+			for (Block block : stash.getBlocks()) {
 				int blockAddress = block.getAddress();
 				int blockVersionId = block.getVersionId();
 				if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {

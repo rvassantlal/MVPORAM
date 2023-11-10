@@ -59,17 +59,15 @@ public class EncryptionManager {
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
 												  EncryptedStashesAndPaths encryptedStashesAndPaths) {
-		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(),
-				encryptedStashesAndPaths.getOutstandingVersions(), encryptedStashesAndPaths.getEncryptedStashes());
+		Stash[] stashes = decryptStashes(oramContext.getBlockSize(), encryptedStashesAndPaths.getEncryptedStashes());
 		Bucket[] paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
 		return new StashesAndPaths(stashes, paths);
 	}
 
-	private Map<Integer, Stash> decryptStashes(int blockSize, int[] outstandingVersions,
-											   EncryptedStash[] encryptedStashes) {
-		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.length);
-		for (int i = 0; i < outstandingVersions.length; i++) {
-			stashes.put(outstandingVersions[i], decryptStash(blockSize, encryptedStashes[i]));
+	private Stash[] decryptStashes(int blockSize, EncryptedStash[] encryptedStashes) {
+		Stash[] stashes = new Stash[encryptedStashes.length];
+		for (int i = 0; i < encryptedStashes.length; i++) {
+			stashes[i] = decryptStash(blockSize, encryptedStashes[i]);
 		}
 
 		return stashes;

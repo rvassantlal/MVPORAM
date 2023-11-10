@@ -66,12 +66,11 @@ public abstract class ORAM {
 
 		int[] pathLocations = preComputedPathLocations.get(pathId);
 
-		int[] outstandingVersions = oramClientContext.getOutstandingVersions();
 		EncryptedStash[] outstandingStashes = oramClientContext.getOutstandingStashes();
 		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
 
-		logger.debug("Client {} is reading path {} ({}) with {} outstanding versions", clientId, pathId, pathLocations,
-				outstandingVersions.length);
+		logger.debug("Client {} is reading path {} ({}) with {} outstanding stashes", clientId, pathId, pathLocations,
+				outstandingStashes.length);
 
 		OutstandingPath outstandingPath = oramTreeManager.getPath(outstandingTree, pathLocations);
 
@@ -88,7 +87,7 @@ public abstract class ORAM {
 			}
 		}
 
-		return new EncryptedStashesAndPaths(outstandingVersions, outstandingStashes, encryptedBuckets);
+		return new EncryptedStashesAndPaths(outstandingStashes, encryptedBuckets);
 	}
 
 	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,

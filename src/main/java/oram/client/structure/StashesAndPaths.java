@@ -1,19 +1,18 @@
 package oram.client.structure;
 
 import java.util.Arrays;
-import java.util.Map;
 
 public class StashesAndPaths {
 
-	private final Map<Integer, Stash> stashes;
+	private final Stash[] stashes;
 	private final Bucket[] paths;
 
-	public StashesAndPaths(Map<Integer, Stash> stashes, Bucket[] paths) {
+	public StashesAndPaths(Stash[] stashes, Bucket[] paths) {
 		this.stashes = stashes;
 		this.paths = paths;
 	}
 
-	public Map<Integer, Stash> getStashes() {
+	public Stash[] getStashes() {
 		return stashes;
 	}
 
@@ -24,8 +23,7 @@ public class StashesAndPaths {
 	@Override
 	public String toString() {
 		return "StashesAndPaths{" +
-				"stashes=" + stashes.entrySet().stream().map(k -> k.getValue() == null ? k.getKey().toString()+ ", null"
-				: k.getKey().toString() + " , " + k.getValue().toString()).reduce(String::concat) +
+				"stashes=" + Arrays.stream(stashes).map(k -> k == null ? "null" : k.toString()).reduce(String::concat) +
 				", paths=" + Arrays.deepToString(paths) + '}';
 	}
 }
