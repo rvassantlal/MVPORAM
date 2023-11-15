@@ -78,16 +78,14 @@ public class TripleORAMObject extends ORAMObject {
 	protected PositionMap mergePositionMaps(PositionMaps oldPositionMaps) {
 		int highestSequenceNumber = oldPositionMaps.getNewVersionId();
 		Map<Integer, PositionMap> positionMaps = oldPositionMaps.getPositionMaps();
-
-		int firstSequenceNumber = latestSequenceNumber;
-		int oldSequenceNumber = latestSequenceNumber;
-		int j = 0;
-		for (int i = firstSequenceNumber; i < highestSequenceNumber; i++) {
+		boolean notNull = true;
+		for (int i = latestSequenceNumber; i < highestSequenceNumber; i++) {
+			if(i == ORAMUtils.DUMMY_VERSION)
+				continue;
 			PositionMap currentPM = positionMaps.get(i);
-			if (currentPM == null && oldSequenceNumber == firstSequenceNumber){
-				oldSequenceNumber += j;
-				latestSequenceNumber = oldSequenceNumber;
-			} else if (currentPM != null) {
+			if (currentPM == null) {
+				notNull = false;
+			} else {
 				int address = currentPM.getAddress();
 				if(address != ORAMUtils.DUMMY_ADDRESS && currentPM.getVersionIdAt(address) >=
 						mergedPositionMap.getVersionIdAt(address)) {
@@ -95,10 +93,9 @@ public class TripleORAMObject extends ORAMObject {
 					mergedPositionMap.setVersionIdAt(address, currentPM.getVersionIdAt(address));
 				}
 			}
-			j++;
-		}
-		if(firstSequenceNumber == latestSequenceNumber){
-			latestSequenceNumber = highestSequenceNumber;
+			if (notNull) {
+				latestSequenceNumber = i;
+			}
 		}
 		return mergedPositionMap;
 	}
