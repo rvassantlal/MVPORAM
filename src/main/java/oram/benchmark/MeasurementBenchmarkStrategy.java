@@ -70,11 +70,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	@Override
 	public void executeBenchmark(WorkerHandler[] workers, Properties benchmarkParameters) {
-		int nServerWorkers = Integer.parseInt(benchmarkParameters.getProperty("experiment.n"));
 		int f = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
 		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
-		measureResources = true;
+		measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));;
+
+		int nServerWorkers = 3 * f + 1;
 		int nClientWorkers = workers.length - nServerWorkers;
 		int maxClientsPerProcess = 3;
 		int nRequests = 10_000_000;
@@ -107,6 +108,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Arrays.sort(clientWorkers, (o1, o2) -> -Integer.compare(o1.getWorkerId(), o2.getWorkerId()));
 		Arrays.stream(serverWorkers).forEach(w -> serverWorkersIds.add(w.getWorkerId()));
 		Arrays.stream(clientWorkers).forEach(w -> clientWorkersIds.add(w.getWorkerId()));
+
+		printWorkersInfo();
 
 		//Setup workers
 		if (hostFile != null) {
@@ -197,6 +200,22 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 
 		}
+	}
+
+	private void printWorkersInfo() {
+		StringBuilder sb = new StringBuilder();
+		for (WorkerHandler serverWorker : serverWorkers) {
+			sb.append(serverWorker.getWorkerId());
+			sb.append(" ");
+		}
+		logger.info("Server workers: {}", sb);
+
+		sb = new StringBuilder();
+		for (WorkerHandler clientWorker : clientWorkers) {
+			sb.append(clientWorker.getWorkerId());
+			sb.append(" ");
+		}
+		logger.info("Client workers: {}", sb);
 	}
 
 	private void startServers(int nServerWorkers, WorkerHandler[] serverWorkers) throws InterruptedException {
@@ -292,12 +311,16 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 		//Get measurement results
 		int nMeasurements;
-		if (measurementWorkers.size() == 3) {
-			nMeasurements = 5;
+		if (measureResources) {
+			if (measurementWorkers.size() == 3) {
+				nMeasurements = 5;
+			} else {
+				nMeasurements = 6;
+			}
 		} else {
-			nMeasurements = 6;
+			nMeasurements = 2;
 		}
-		logger.debug("Getting measurements from {} workers...", measurementWorkers.size());
+		logger.debug("Getting {} measurements from {} workers...", nMeasurements, measurementWorkers.size());
 		measurementDeliveredCounter = new CountDownLatch(nMeasurements);
 
 		measurementWorkers.values().forEach(WorkerHandler::requestProcessingResult);
@@ -374,7 +397,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	}
 
 	@Override
-	public void onResult(int workerId, IProcessingResult processingResult) {
+	public synchronized void onResult(int workerId, IProcessingResult processingResult) {
 		Measurement measurement = (Measurement) processingResult;
 		long[][] measurements = measurement.getMeasurements();
 		logger.debug("Received {} measurements from worker {}", measurements.length, workerId);
@@ -397,7 +420,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					measurementDeliveredCounter.countDown();
 				}
 			} else if (serverWorkers[1].getWorkerId() == workerId) { //follower server
-				if (measurements.length > 10) {
+				if (measurements.length != 10) {
 					logger.debug("Received follower server resources usage results");
 					processResourcesMeasurements(measurements, "follower_server");
 					measurementDeliveredCounter.countDown();
