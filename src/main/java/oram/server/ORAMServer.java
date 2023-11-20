@@ -16,9 +16,11 @@ import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ORAMServer implements ConfidentialSingleExecutable {
 	private final Logger logger = LoggerFactory.getLogger("oram");
@@ -32,6 +34,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ArrayList<Long> evictionLatencies;
 	private long lastPrint;
 	private int nOutstandingTreeObjects;
+	private final HashMap<Integer, EvictionORAMMessage> evictionRequests = new HashMap<>();
+	private final Lock evictionLock = new ReentrantLock();
+	private final Condition evictionCondition = evictionLock.newCondition();
 
 
 	public ORAMServer(int processId) {
@@ -75,8 +80,25 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
 				case EVICTION:
-					request = new EvictionORAMMessage();
+					evictionLock.lock();
+					request = new ORAMMessage();
 					request.readExternal(in);
+					int hash = request.getOramId();
+
+					do {
+						logger.debug("Received eviction request from {} in {} ({})", msgCtx.getSender(), msgCtx.getSequence(), hash);
+						request = evictionRequests.get(hash);
+						if (request == null) {
+							logger.debug("No eviction request from {} in {}", msgCtx.getSender(), msgCtx.getSequence());
+							try {
+								evictionCondition.await();
+							} catch (InterruptedException e) {
+								logger.error("Interrupted while waiting for eviction request from {}", msgCtx.getSender());
+							}
+						}
+					} while (request == null);
+					evictionLock.unlock();
+
 					return performEviction((EvictionORAMMessage) request, msgCtx);
 			}
 		} catch (IOException e) {
@@ -103,6 +125,16 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
 					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
+				case EVICTION:
+					request = new EvictionORAMMessage();
+					request.readExternal(in);
+					evictionLock.lock();
+					int hash = msgCtx.getSender() + Arrays.hashCode(plainData) * 32;
+					logger.debug("Received eviction data request from {} in {} ({})", msgCtx.getSender(), msgCtx.getSequence(), hash);
+					evictionRequests.put(hash, (EvictionORAMMessage) request);
+					evictionCondition.signal();
+					evictionLock.unlock();
+					return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 			}
 		} catch (IOException e) {
 			logger.error("Failed to attend unordered request from {}", msgCtx.getSender(), e);

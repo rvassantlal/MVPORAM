@@ -196,14 +196,22 @@ public abstract class ORAMObject {
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
 										Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
-			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
-			if (serializedRequest == null) {
-				return false;
-			}
 			long start, end, delay;
 			start = System.nanoTime();
-			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			ORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
+
+			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
+			boolean isSuccessful = sendRequestData(serializedDataRequest);
+			if (!isSuccessful) {
+				return false;
+			}
+			int hash = serviceProxy.getProcessId() + Arrays.hashCode(serializedDataRequest) * 32;
+			ORAMMessage dataHashRequest = new ORAMMessage(hash);//Sending request hash as oramId (not ideal implementation)
+			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, dataHashRequest);
+			if (serializedEvictionRequest == null) {
+				return false;
+			}
+			Response response = serviceProxy.invokeOrdered(serializedEvictionRequest);
 			end = System.nanoTime();
 			delay = end - start;
 			if (isMeasure) {
@@ -217,6 +225,18 @@ public abstract class ORAMObject {
 		} catch (SecretSharingException e) {
 			return false;
 		}
+	}
+
+	private boolean sendRequestData(byte[] serializedDataRequest) throws SecretSharingException {
+		if (serializedDataRequest == null) {
+			return false;
+		}
+		Response response = serviceProxy.invokeUnordered(serializedDataRequest);
+		if (response == null || response.getPlainData() == null) {
+			return false;
+		}
+		Status status = Status.getStatus(response.getPlainData()[0]);
+		return status != Status.FAILED;
 	}
 
 	private int generateRandomPathId() {
