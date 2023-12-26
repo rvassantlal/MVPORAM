@@ -37,6 +37,10 @@ public class EncryptedStash implements CustomExternalizable {
 		}
 	}
 
+	public int getSerializedSize() {
+		return 4 + (encryptedStash == null ? 0 : encryptedStash.length);
+	}
+
 	@Override
 	public String toString() {
 		return String.valueOf(Arrays.hashCode(encryptedStash));

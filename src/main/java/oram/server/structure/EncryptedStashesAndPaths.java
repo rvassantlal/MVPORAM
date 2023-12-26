@@ -69,6 +69,21 @@ public class EncryptedStashesAndPaths implements CustomExternalizable {
 		}
 	}
 
+	public int getSerializedSize() {
+		int size = 4;
+		for (EncryptedStash entry : encryptedStashes) {
+			size += entry.getSerializedSize();
+		}
+		size += 4;
+		for (EncryptedBucket encryptedBucket : paths) {
+			size += 1;
+			if (encryptedBucket != null) {
+				size += encryptedBucket.getSerializedSize();
+			}
+		}
+		return size;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder("EncryptedStashesAndPaths{");

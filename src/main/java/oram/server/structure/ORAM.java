@@ -63,7 +63,6 @@ public abstract class ORAM {
 		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
 		EncryptedStash[] outstandingStashes = getOrderedStashesArray(outstandingTree.getStashes());
 
-
 		logger.debug("Client {} is reading path {} ({}) with {} outstanding stashes", clientId, pathId, pathLocations,
 				outstandingStashes.length);
 
@@ -81,7 +80,6 @@ public abstract class ORAM {
 				encryptedBuckets[k++] = orderedBucket;
 			}
 		}
-
 		return new EncryptedStashesAndPaths(outstandingStashes, encryptedBuckets);
 	}
 

@@ -38,6 +38,14 @@ public class EncryptedBucket implements CustomExternalizable {
 		}
 	}
 
+	public int getSerializedSize() {
+		int size = 0;
+		for (byte[] block : blocks) {
+			size += 4 + block.length;
+		}
+		return size;
+	}
+
 	@Override
 	public String toString() {
 		return String.valueOf(Arrays.deepHashCode(blocks));

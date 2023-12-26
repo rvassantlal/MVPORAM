@@ -20,6 +20,7 @@ import java.util.*;
 
 public abstract class ORAMObject {
 	protected final Logger logger = LoggerFactory.getLogger("oram");
+	protected final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	protected final ConfidentialServiceProxy serviceProxy;
 	protected final int oramId;
 	protected final ORAMContext oramContext;
@@ -75,6 +76,8 @@ public abstract class ORAMObject {
 			logger.error("Position map of oram {} is null", oramId);
 			return null;
 		}
+
+		measurementLogger.info("MReceivedPM: {}", oldPositionMaps.getPositionMaps().size());
 
 		PositionMap mergedPositionMap = mergePositionMaps(oldPositionMaps);
 		if (mergedPositionMap == null) {
@@ -214,9 +217,8 @@ public abstract class ORAMObject {
 			Response response = serviceProxy.invokeOrdered(serializedEvictionRequest);
 			end = System.nanoTime();
 			delay = end - start;
-			if (isMeasure) {
-				logger.info("MEvictionOP: {}", delay);
-			}
+			measurementLogger.info("MEvictionOP: {}", delay);
+
 			if (response == null || response.getPlainData() == null) {
 				return false;
 			}
@@ -324,9 +326,8 @@ public abstract class ORAMObject {
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
 			end = System.nanoTime();
 			delay = end - start;
-			if (isMeasure) {
-				logger.info("MGetPSOP: {}", delay);
-			}
+			measurementLogger.info("MGetPSOP: {}", delay);
+
 			if (response == null || response.getPlainData() == null)
 				return null;
 

@@ -112,7 +112,7 @@ public class ORAMBenchmarkClient {
 						//break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
-						logger.info("M: {}", delay);
+						logger.info("MGlobal: {}", delay);
 					}
 				}
 			} finally {

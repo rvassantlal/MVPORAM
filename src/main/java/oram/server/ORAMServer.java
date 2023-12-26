@@ -7,23 +7,20 @@ import confidential.facade.server.ConfidentialSingleExecutable;
 import confidential.statemanagement.ConfidentialSnapshot;
 import oram.messages.*;
 import oram.server.structure.*;
-import oram.utils.ORAMContext;
-import oram.utils.PositionMapType;
-import oram.utils.ServerOperationType;
-import oram.utils.Status;
+import oram.utils.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ORAMServer implements ConfidentialSingleExecutable {
 	private final Logger logger = LoggerFactory.getLogger("oram");
+	private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	private final TreeMap<Integer, ORAM> orams;
 	private final TreeSet<Integer> senders;
 	private int getPMCounter = 0;
@@ -115,16 +112,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			 DataInputStream in = new DataInputStream(bis)) {
 			ServerOperationType op = ServerOperationType.getOperation(in.readByte());
 			ORAMMessage request;
-			senders.add(msgCtx.getSender());
 			switch (op) {
 				case GET_ORAM:
 					request = new ORAMMessage();
 					request.readExternal(in);
 					return getORAM(request);
-				case GET_STASH_AND_PATH:
-					request = new StashPathORAMMessage();
-					request.readExternal(in);
-					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
 				case EVICTION:
 					request = new EvictionORAMMessage();
 					request.readExternal(in);
@@ -153,8 +145,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		evictionLatencies.add(delay);
-		logger.debug("eviction[ns]: {}", delay);
+		measurementLogger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
+
 		nOutstandingTreeObjects = oram.getNOutstandingTreeObjects();
 		if (isEvicted)
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
@@ -165,12 +158,17 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private ConfidentialMessage getStashesAndPaths(StashPathORAMMessage request, int clientId) {
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
-		if (oram == null)
+		if (oram == null) {
 			return null;
-
+		}
 		long start = System.nanoTime();
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		/*int encryptedStashesAndPathsSize = 0;
+		if (encryptedStashesAndPaths != null) {
+			encryptedStashesAndPathsSize = encryptedStashesAndPaths.getSerializedSize();
+		}
+		long start = System.nanoTime();
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(encryptedStashesAndPathsSize);
 			 DataOutputStream out = new DataOutputStream(bos)) {
 			if (encryptedStashesAndPaths != null)
 				encryptedStashesAndPaths.writeExternal(out);
@@ -183,10 +181,24 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} finally {
 			long end = System.nanoTime();
 			long delay = end - start;
+			System.out.println(delay);
 			getPSLatencies.add(delay);
-			logger.debug("getPathStash[ns]: {}", delay);
+			measurementLogger.debug("getPathStash[ns]: {}", delay);
 			getPSCounter++;
+
+		}*/
+		byte[] serializedPathAndStash = null;
+		if (encryptedStashesAndPaths != null) {
+			serializedPathAndStash = ORAMUtils.serializeEncryptedPathAndStash(encryptedStashesAndPaths);
 		}
+		long end = System.nanoTime();
+		long delay = end - start;
+		getPSLatencies.add(delay);
+		measurementLogger.debug("getPathStash[ns]: {}", delay);
+		getPSCounter++;
+		if (serializedPathAndStash == null)
+			return new ConfidentialMessage();
+		return new ConfidentialMessage(serializedPathAndStash);
 	}
 
 	private ConfidentialMessage getORAM(ORAMMessage request) {
@@ -225,22 +237,15 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long start = System.nanoTime();
 		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender(), request);
 
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 DataOutputStream out = new DataOutputStream(bos)) {
-			positionMaps.writeExternal(out);
-			out.flush();
-			bos.flush();
-			return new ConfidentialMessage(bos.toByteArray());
-		} catch (IOException e) {
-			logger.error("Failed to serialize position maps: {}", e.getMessage());
-			return new ConfidentialMessage();
-		} finally {
-			long end = System.nanoTime();
-			long delay = end - start;
-			getPMLatencies.add(delay);
-			logger.debug("getPositionMap[ns]: {}", delay);
-			getPMCounter++;
-		}
+		byte[] serializedPositionMaps = ORAMUtils.serializeEncryptedPositionMaps(positionMaps);
+
+		long end = System.nanoTime();
+		long delay = end - start;
+		getPMLatencies.add(delay);
+		measurementLogger.debug("getPositionMap[ns]: {}", delay);
+		getPMCounter++;
+
+		return new ConfidentialMessage(serializedPositionMaps);
 	}
 
 	private ConfidentialMessage createORAM(CreateORAMMessage request) {
@@ -283,9 +288,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			long getPMAvgLatency = computeAverage(getPMLatencies);
 			long getPSAvgLatency = computeAverage(getPSLatencies);
 			long evictionAvgLatency = computeAverage(evictionLatencies);
-			logger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|" +
-							"allTrees[#]|getPMAvg[ns]|getPSAvg[ns]|evictionAvg[ns])>({}|{}|{}|{}|{}|{}|{}|{}|{}|{})",
-					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, nOutstandingTreeObjects, 0,
+			measurementLogger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|" +
+							"getPMAvg[ns]|getPSAvg[ns]|evictionAvg[ns])>({}|{}|{}|{}|{}|{}|{}|{}|{})",
+					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, nOutstandingTreeObjects,
 					getPMAvgLatency, getPSAvgLatency, evictionAvgLatency);
 			getPMCounter = 0;
 			getPSCounter = 0;

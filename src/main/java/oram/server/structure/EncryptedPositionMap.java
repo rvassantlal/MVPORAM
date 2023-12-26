@@ -32,4 +32,8 @@ public class EncryptedPositionMap implements CustomExternalizable {
 			in.readFully(encryptedPositionMap);
 		}
 	}
+
+	public int getSerializedSize() {
+		return 4 + (encryptedPositionMap == null ? 0 : encryptedPositionMap.length);
+	}
 }

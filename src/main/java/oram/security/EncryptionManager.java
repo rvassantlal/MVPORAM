@@ -14,6 +14,7 @@ import java.util.Map;
 
 public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
+	private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	private final EncryptionAbstraction encryptionAbstraction;
 
 	public EncryptionManager() {
@@ -21,16 +22,9 @@ public class EncryptionManager {
 	}
 
 	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
-		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedPositionMaps);
-			 DataInputStream in = new DataInputStream(bis)) {
-			EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
-			encryptedPositionMaps.readExternal(in);
-			// logger.info("{} Encrypted position maps size: {} bytes", encryptedPositionMaps.getEncryptedPositionMaps().size(),serializedEncryptedPositionMaps.length);
-			return decryptPositionMaps(encryptedPositionMaps);
-		} catch (IOException e) {
-			logger.error("Failed to decrypt position map", e);
-			return null;
-		}
+		EncryptedPositionMaps encryptedPositionMaps =
+				ORAMUtils.deserializeEncryptedPositionMaps(serializedEncryptedPositionMaps);
+		return decryptPositionMaps(encryptedPositionMaps);
 	}
 
 	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
@@ -44,17 +38,9 @@ public class EncryptionManager {
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
-		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedEncryptedStashesAndPaths);
-			 DataInputStream in = new DataInputStream(bis)) {
-			//logger.info("Encrypted paths and stashes size: {} bytes", serializedEncryptedStashesAndPaths.length);
-			EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
-			encryptedStashesAndPaths.readExternal(in);
-
-			return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
-		} catch (IOException e) {
-			logger.error("Failed to decrypt stashes and paths", e);
-			return null;
-		}
+		EncryptedStashesAndPaths encryptedStashesAndPaths = ORAMUtils.deserializeEncryptedPathAndStash(oramContext,
+				serializedEncryptedStashesAndPaths);
+		return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
@@ -66,15 +52,20 @@ public class EncryptionManager {
 
 	private Stash[] decryptStashes(int blockSize, EncryptedStash[] encryptedStashes) {
 		Stash[] stashes = new Stash[encryptedStashes.length];
+		measurementLogger.info("MReceivedStashes: {}", stashes.length);
+		long nBlocks = 0;
 		for (int i = 0; i < encryptedStashes.length; i++) {
 			stashes[i] = decryptStash(blockSize, encryptedStashes[i]);
+			nBlocks += stashes[i].getBlocks().size();
 		}
+		measurementLogger.info("MReceivedStashBlocks: {}", nBlocks);
 
 		return stashes;
 	}
 
 	private Bucket[] decryptPaths(ORAMContext oramContext, EncryptedBucket[] encryptedPaths) {
 		Bucket[] paths = new Bucket[encryptedPaths.length];
+		measurementLogger.info("MReceivedPathSize: {}", encryptedPaths.length);
 		for (int i = 0; i < encryptedPaths.length; i++) {
 			paths[i] = decryptBucket(oramContext, encryptedPaths[i]);
 		}
@@ -112,6 +103,7 @@ public class EncryptionManager {
 	}
 
 	public EncryptedStash encryptStash(Stash stash) {
+		measurementLogger.info("MSentStashBlocks: {}", stash.getBlocks().size());
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			 DataOutputStream out = new DataOutputStream(bos)) {
 			stash.writeExternal(out);
@@ -184,6 +176,7 @@ public class EncryptionManager {
 
 	public Map<Integer, EncryptedBucket> encryptPath(ORAMContext oramContext, Map<Integer, Bucket> path) {
 		Map<Integer, EncryptedBucket> encryptedPath = new HashMap<>(path.size());
+		measurementLogger.info("MSentPathSize: {}", path.size());
 		for (Map.Entry<Integer, Bucket> entry : path.entrySet()) {
 			Bucket bucket = entry.getValue();
 			EncryptedBucket encryptedBucket = encryptBucket(oramContext, bucket);

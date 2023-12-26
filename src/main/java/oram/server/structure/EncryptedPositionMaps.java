@@ -56,4 +56,12 @@ public class EncryptedPositionMaps implements CustomExternalizable {
 	public int getNewVersionId() {
 		return newVersionId;
 	}
+
+	public int getSerializedSize() {
+		int size = 8;
+		for (Map.Entry<Integer, EncryptedPositionMap> entry : encryptedPositionMaps.entrySet()) {
+			size += 4 + entry.getValue().getSerializedSize();
+		}
+		return size;
+	}
 }

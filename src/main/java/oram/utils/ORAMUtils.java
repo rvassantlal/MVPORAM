@@ -1,13 +1,12 @@
 package oram.utils;
 
 import oram.messages.ORAMMessage;
+import oram.server.structure.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class ORAMUtils {
 	public static final int DUMMY_VERSION = 0;
@@ -108,5 +107,186 @@ public class ORAMUtils {
 
 	public static long computeDatabaseSize(int treeHeight, int bucketSize, int blockSize) {
 		return (long) computeTreeSize(treeHeight, bucketSize) * blockSize;
+	}
+
+	public static byte[] serializeEncryptedPathAndStash(EncryptedStashesAndPaths encryptedStashesAndPaths) {
+		int dataSize = encryptedStashesAndPaths.getSerializedSize();
+		byte[] result = new byte[dataSize];
+		EncryptedStash[] encryptedStashes = encryptedStashesAndPaths.getEncryptedStashes();
+		EncryptedBucket[] encryptedPaths = encryptedStashesAndPaths.getPaths();
+
+		int offset = 0;
+
+		//Serialize encrypted stashes
+		byte[] nStashes = toBytes(encryptedStashes.length);
+		System.arraycopy(nStashes, 0, result, offset, nStashes.length);
+		offset += nStashes.length;
+
+		for (EncryptedStash encryptedStash : encryptedStashes) {
+			byte[] encryptedStashBlocks = encryptedStash.getEncryptedStash();
+			byte[] sizeEncryptedStashBlocks;
+			if (encryptedStashBlocks == null) {
+				sizeEncryptedStashBlocks = toBytes(-1);
+			} else {
+				sizeEncryptedStashBlocks = toBytes(encryptedStashBlocks.length);
+			}
+			System.arraycopy(sizeEncryptedStashBlocks, 0, result, offset, sizeEncryptedStashBlocks.length);
+			offset += sizeEncryptedStashBlocks.length;
+			if (encryptedStashBlocks != null) {
+				System.arraycopy(encryptedStashBlocks, 0, result, offset, encryptedStashBlocks.length);
+				offset += encryptedStashBlocks.length;
+			}
+		}
+
+		//Serialize encrypted paths
+		byte[] nPaths = toBytes(encryptedPaths.length);
+		System.arraycopy(nPaths, 0, result, offset, nPaths.length);
+		offset += nPaths.length;
+
+		for (EncryptedBucket encryptedBucket : encryptedPaths) {
+			if (encryptedBucket == null) {
+				result[offset] = 0;
+			} else {
+				result[offset] = 1;
+			}
+			offset += 1;
+			if (encryptedBucket != null) {
+				byte[][] blocks = encryptedBucket.getBlocks();
+				for (byte[] block : blocks) {
+					byte[] sizeBlock = toBytes(block.length);
+					System.arraycopy(sizeBlock, 0, result, offset, sizeBlock.length);
+					offset += sizeBlock.length;
+					System.arraycopy(block, 0, result, offset, block.length);
+					offset += block.length;
+				}
+			}
+		}
+
+		return result;
+	}
+
+	public static EncryptedStashesAndPaths deserializeEncryptedPathAndStash(ORAMContext oramContext,
+																		  byte[] serializedEncryptedPathSize) {
+		int offset = 0;
+		byte[] nStashesBytes = new byte[4];
+		System.arraycopy(serializedEncryptedPathSize, offset, nStashesBytes, 0, nStashesBytes.length);
+		offset += nStashesBytes.length;
+		int nStashes = toNumber(nStashesBytes);
+		EncryptedStash[] encryptedStashes = new EncryptedStash[nStashes];
+		for (int i = 0; i < nStashes; i++) {
+			byte[] sizeEncryptedStashBlocksBytes = new byte[4];
+			System.arraycopy(serializedEncryptedPathSize, offset, sizeEncryptedStashBlocksBytes, 0, sizeEncryptedStashBlocksBytes.length);
+			offset += sizeEncryptedStashBlocksBytes.length;
+			int sizeEncryptedStashBlocks = toNumber(sizeEncryptedStashBlocksBytes);
+			if (sizeEncryptedStashBlocks == -1) {
+				encryptedStashes[i] = new EncryptedStash();
+			} else {
+				byte[] encryptedStashBlocks = new byte[sizeEncryptedStashBlocks];
+				System.arraycopy(serializedEncryptedPathSize, offset, encryptedStashBlocks, 0, encryptedStashBlocks.length);
+				offset += encryptedStashBlocks.length;
+				encryptedStashes[i] = new EncryptedStash(encryptedStashBlocks);
+			}
+		}
+
+		byte[] nPathsBytes = new byte[4];
+		System.arraycopy(serializedEncryptedPathSize, offset, nPathsBytes, 0, nPathsBytes.length);
+		offset += nPathsBytes.length;
+		int nPaths = toNumber(nPathsBytes);
+		EncryptedBucket[] encryptedPaths = new EncryptedBucket[nPaths];
+		for (int i = 0; i < nPaths; i++) {
+			byte[] isNullBytes = new byte[1];
+			System.arraycopy(serializedEncryptedPathSize, offset, isNullBytes, 0, isNullBytes.length);
+			offset += isNullBytes.length;
+			if (isNullBytes[0] == 0) {
+				encryptedPaths[i] = null;
+			} else {
+				byte[][] blocks = new byte[oramContext.getBucketSize()][];
+				for (int j = 0; j < blocks.length; j++) {
+					byte[] sizeBlockBytes = new byte[4];
+					System.arraycopy(serializedEncryptedPathSize, offset, sizeBlockBytes, 0, sizeBlockBytes.length);
+					offset += sizeBlockBytes.length;
+					int sizeBlock = toNumber(sizeBlockBytes);
+					byte[] block = new byte[sizeBlock];
+					System.arraycopy(serializedEncryptedPathSize, offset, block, 0, block.length);
+					offset += block.length;
+					blocks[j] = block;
+				}
+				encryptedPaths[i] = new EncryptedBucket(blocks);
+			}
+		}
+
+		return new EncryptedStashesAndPaths(encryptedStashes, encryptedPaths);
+	}
+
+	public static byte[] serializeEncryptedPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
+		int dataSize = encryptedPositionMaps.getSerializedSize();
+		byte[] result = new byte[dataSize];
+		int newVersionId = encryptedPositionMaps.getNewVersionId();
+		Map<Integer, EncryptedPositionMap> encryptedPositionMapsMap = encryptedPositionMaps.getEncryptedPositionMaps();
+
+		int offset = 0;
+
+		//Serialize new version id
+		byte[] newVersionIdBytes = toBytes(newVersionId);
+		System.arraycopy(newVersionIdBytes, 0, result, offset, newVersionIdBytes.length);
+		offset += newVersionIdBytes.length;
+
+		//Serialize encrypted position maps
+		byte[] nPositionMapsBytes = toBytes(encryptedPositionMapsMap.size());
+		System.arraycopy(nPositionMapsBytes, 0, result, offset, nPositionMapsBytes.length);
+		offset += nPositionMapsBytes.length;
+
+		//Sort keys
+		int[] keys = new int[encryptedPositionMapsMap.size()];
+		int k = 0;
+		for (Integer i : encryptedPositionMapsMap.keySet()) {
+			keys[k++] = i;
+		}
+		Arrays.sort(keys);
+
+		for (int key : keys) {
+			byte[] keyBytes = toBytes(key);
+			System.arraycopy(keyBytes, 0, result, offset, keyBytes.length);
+			offset += keyBytes.length;
+			EncryptedPositionMap encryptedPositionMap = encryptedPositionMapsMap.get(key);
+			byte[] encryptedPositionMapBytes = encryptedPositionMap.getEncryptedPositionMap();
+			byte[] sizeEncryptedPositionMapBytes = toBytes(encryptedPositionMapBytes.length);
+			System.arraycopy(sizeEncryptedPositionMapBytes, 0, result, offset, sizeEncryptedPositionMapBytes.length);
+			offset += sizeEncryptedPositionMapBytes.length;
+			System.arraycopy(encryptedPositionMapBytes, 0, result, offset, encryptedPositionMapBytes.length);
+			offset += encryptedPositionMapBytes.length;
+		}
+
+		return result;
+	}
+
+	public static EncryptedPositionMaps deserializeEncryptedPositionMaps(byte[] serializedEncryptedPositionMaps) {
+		int offset = 0;
+		byte[] newVersionIdBytes = new byte[4];
+		System.arraycopy(serializedEncryptedPositionMaps, offset, newVersionIdBytes, 0, newVersionIdBytes.length);
+		offset += newVersionIdBytes.length;
+		int newVersionId = toNumber(newVersionIdBytes);
+
+		byte[] nPositionMapsBytes = new byte[4];
+		System.arraycopy(serializedEncryptedPositionMaps, offset, nPositionMapsBytes, 0, nPositionMapsBytes.length);
+		offset += nPositionMapsBytes.length;
+		int nPositionMaps = toNumber(nPositionMapsBytes);
+		Map<Integer, EncryptedPositionMap> encryptedPositionMaps = new HashMap<>(nPositionMaps);
+		while (nPositionMaps-- > 0) {
+			byte[] keyBytes = new byte[4];
+			System.arraycopy(serializedEncryptedPositionMaps, offset, keyBytes, 0, keyBytes.length);
+			offset += keyBytes.length;
+			int key = toNumber(keyBytes);
+			byte[] sizeEncryptedPositionMapBytes = new byte[4];
+			System.arraycopy(serializedEncryptedPositionMaps, offset, sizeEncryptedPositionMapBytes, 0, sizeEncryptedPositionMapBytes.length);
+			offset += sizeEncryptedPositionMapBytes.length;
+			int sizeEncryptedPositionMap = toNumber(sizeEncryptedPositionMapBytes);
+			byte[] encryptedPositionMapBytes = new byte[sizeEncryptedPositionMap];
+			System.arraycopy(serializedEncryptedPositionMaps, offset, encryptedPositionMapBytes, 0, encryptedPositionMapBytes.length);
+			offset += encryptedPositionMapBytes.length;
+			encryptedPositionMaps.put(key, new EncryptedPositionMap(encryptedPositionMapBytes));
+		}
+
+		return new EncryptedPositionMaps(newVersionId, encryptedPositionMaps);
 	}
 }
