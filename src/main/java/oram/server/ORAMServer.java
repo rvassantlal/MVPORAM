@@ -23,11 +23,14 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	private final TreeMap<Integer, ORAM> orams;
 	private final TreeSet<Integer> senders;
-	private int getPMCounter = 0;
+	private int getPMCounter;
 	private final ArrayList<Long> getPMLatencies;
-	private int getPSCounter = 0;
+	private int getPSCounter;
 	private final ArrayList<Long> getPSLatencies;
-	private int evictCounter = 0;
+	private long getPMBytesSent;
+	private long getPSBytesSent;
+	private long evictionBytesReceived;
+	private int evictCounter;
 	private final ArrayList<Long> evictionLatencies;
 	private long lastPrint;
 	private int nOutstandingTreeObjects;
@@ -95,7 +98,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 						}
 					} while (request == null);
 					evictionLock.unlock();
-
+					evictionBytesReceived += plainData.length;
 					return performEviction((EvictionORAMMessage) request, msgCtx);
 			}
 		} catch (IOException e) {
@@ -145,7 +148,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		evictionLatencies.add(delay);
-		measurementLogger.debug("eviction[ns]: {}", delay);
+		//measurementLogger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
 
 		nOutstandingTreeObjects = oram.getNOutstandingTreeObjects();
@@ -163,30 +166,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 		long start = System.nanoTime();
 		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
-		/*int encryptedStashesAndPathsSize = 0;
-		if (encryptedStashesAndPaths != null) {
-			encryptedStashesAndPathsSize = encryptedStashesAndPaths.getSerializedSize();
-		}
-		long start = System.nanoTime();
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream(encryptedStashesAndPathsSize);
-			 DataOutputStream out = new DataOutputStream(bos)) {
-			if (encryptedStashesAndPaths != null)
-				encryptedStashesAndPaths.writeExternal(out);
-			out.flush();
-			bos.flush();
-			return new ConfidentialMessage(bos.toByteArray());
-		} catch (IOException e) {
-			logger.error("Failed to serialize encrypted stashes and paths: {}", e.getMessage());
-			return new ConfidentialMessage();
-		} finally {
-			long end = System.nanoTime();
-			long delay = end - start;
-			System.out.println(delay);
-			getPSLatencies.add(delay);
-			measurementLogger.debug("getPathStash[ns]: {}", delay);
-			getPSCounter++;
-
-		}*/
 		byte[] serializedPathAndStash = null;
 		if (encryptedStashesAndPaths != null) {
 			serializedPathAndStash = ORAMUtils.serializeEncryptedPathAndStash(encryptedStashesAndPaths);
@@ -194,10 +173,12 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		getPSLatencies.add(delay);
-		measurementLogger.debug("getPathStash[ns]: {}", delay);
+		//measurementLogger.debug("getPathStash[ns]: {}", delay);
 		getPSCounter++;
+
 		if (serializedPathAndStash == null)
 			return new ConfidentialMessage();
+		getPSBytesSent += serializedPathAndStash.length;
 		return new ConfidentialMessage(serializedPathAndStash);
 	}
 
@@ -242,9 +223,9 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		getPMLatencies.add(delay);
-		measurementLogger.debug("getPositionMap[ns]: {}", delay);
+		//measurementLogger.debug("getPositionMap[ns]: {}", delay);
 		getPMCounter++;
-
+		getPMBytesSent += serializedPositionMaps.length;
 		return new ConfidentialMessage(serializedPositionMaps);
 	}
 
@@ -288,16 +269,32 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			long getPMAvgLatency = computeAverage(getPMLatencies);
 			long getPSAvgLatency = computeAverage(getPSLatencies);
 			long evictionAvgLatency = computeAverage(evictionLatencies);
-			measurementLogger.info("M:(clients[#]|delta[ns]|requestsGetPM[#]|requestsGetPS[#]|requestsEvict[#]|outstanding[#]|" +
-							"getPMAvg[ns]|getPSAvg[ns]|evictionAvg[ns])>({}|{}|{}|{}|{}|{}|{}|{}|{})",
-					senders.size(), delay, getPMCounter, getPSCounter, evictCounter, nOutstandingTreeObjects,
-					getPMAvgLatency, getPSAvgLatency, evictionAvgLatency);
+			long getPMBandwidth = (long)(getPMBytesSent / (delay / 1_000_000_000.0));
+			long getPSBandwidth = (long)(getPSBytesSent / (delay / 1_000_000_000.0));
+			long evictionBandwidth = (long)(evictionBytesReceived / (delay / 1_000_000_000.0));
+
+			measurementLogger.info("M-clients: {}", senders.size());
+			measurementLogger.info("M-delta: {}", delay);
+			measurementLogger.info("M-getPMRequests: {}", getPMCounter);
+			measurementLogger.info("M-getPMAvgLatency: {}", getPMAvgLatency);
+			measurementLogger.info("M-getPMBandwidth: {}", getPMBandwidth);
+			measurementLogger.info("M-getPSRequests: {}", getPSCounter);
+			measurementLogger.info("M-getPSAvgLatency: {}", getPSAvgLatency);
+			measurementLogger.info("M-getPSBandwidth: {}", getPSBandwidth);
+			measurementLogger.info("M-evictionRequests: {}", evictCounter);
+			measurementLogger.info("M-evictionAvgLatency: {}", evictionAvgLatency);
+			measurementLogger.info("M-evictionBandwidth: {}", evictionBandwidth);
+			measurementLogger.info("M-outstanding: {}", nOutstandingTreeObjects);
+
 			getPMCounter = 0;
 			getPSCounter = 0;
 			evictCounter = 0;
 			getPMLatencies.clear();
 			getPSLatencies.clear();
 			evictionLatencies.clear();
+			getPMBytesSent = 0;
+			getPSBytesSent = 0;
+			evictionBytesReceived = 0;
 			lastPrint = end;
 		}
 	}

@@ -9,7 +9,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ResourcesMeasurementEventProcessor implements IMeasurementEventProcessor {
-	private static final String SAR_READY_PATTERN = "%";
 	private final Pattern timePattern;
 
 	private final LinkedList<String[]> resourcesMeasurements;

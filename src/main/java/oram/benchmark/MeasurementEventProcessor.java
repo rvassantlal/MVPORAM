@@ -1,9 +1,6 @@
 package oram.benchmark;
 
-import oram.benchmark.measurements.ClientMeasurementEventProcessor;
-import oram.benchmark.measurements.IMeasurementEventProcessor;
-import oram.benchmark.measurements.ResourcesMeasurementEventProcessor;
-import oram.benchmark.measurements.ServerMeasurementEventProcessor;
+import oram.benchmark.measurements.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import worker.IProcessingResult;
@@ -27,10 +24,10 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 		if (!isReady) {
 			if (line.contains(SERVER_READY_PATTERN)) {
 				isReady = true;
-				measurementEventProcessor = new ServerMeasurementEventProcessor();
+				measurementEventProcessor = new DefaultMeasurementEventProcessor();
 			} else if (line.contains(CLIENT_READY_PATTERN)) {
 				isReady = true;
-				measurementEventProcessor = new ClientMeasurementEventProcessor();
+				measurementEventProcessor = new DefaultMeasurementEventProcessor();
 			} else if (line.contains(SAR_READY_PATTERN)) {
 				isReady = true;
 				measurementEventProcessor = new ResourcesMeasurementEventProcessor();

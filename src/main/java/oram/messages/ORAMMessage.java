@@ -26,4 +26,8 @@ public class ORAMMessage implements CustomExternalizable {
 	public void readExternal(DataInput in) throws IOException {
 		oramId = in.readInt();
 	}
+
+	public int getSerializedSize() {
+		return 4;
+	}
 }

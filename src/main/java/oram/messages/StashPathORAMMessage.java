@@ -28,4 +28,9 @@ public class StashPathORAMMessage extends ORAMMessage {
 		super.readExternal(in);
 		pathId = in.readInt();
 	}
+
+	@Override
+	public int getSerializedSize() {
+		return super.getSerializedSize() + 4;
+	}
 }

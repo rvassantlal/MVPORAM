@@ -69,4 +69,15 @@ public class EvictionORAMMessage extends ORAMMessage {
 		}
 
 	}
+
+	public int getSerializedSize() {
+		int size = super.getSerializedSize();
+		size += encryptedStash.getSerializedSize();
+		size += encryptedPositionMap.getSerializedSize();
+		size += 8;
+		for (EncryptedBucket value : encryptedPath.values()) {
+			size += 4 + value.getSerializedSize();
+		}
+		return size;
+	}
 }

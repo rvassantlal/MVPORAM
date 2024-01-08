@@ -83,4 +83,10 @@ public class CreateORAMMessage extends ORAMMessage {
 		encryptedStash = new EncryptedStash();
 		encryptedStash.readExternal(in);
 	}
+
+	@Override
+	public int getSerializedSize() {
+		return super.getSerializedSize() + 1 + 4 * 4 + encryptedPositionMap.getSerializedSize()
+				+ encryptedStash.getSerializedSize();
+	}
 }

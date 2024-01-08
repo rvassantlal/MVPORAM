@@ -38,8 +38,10 @@ public class EncryptionManager {
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
+
 		EncryptedStashesAndPaths encryptedStashesAndPaths = ORAMUtils.deserializeEncryptedPathAndStash(oramContext,
 				serializedEncryptedStashesAndPaths);
+
 		return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
 	}
 
@@ -52,20 +54,20 @@ public class EncryptionManager {
 
 	private Stash[] decryptStashes(int blockSize, EncryptedStash[] encryptedStashes) {
 		Stash[] stashes = new Stash[encryptedStashes.length];
-		measurementLogger.info("MReceivedStashes: {}", stashes.length);
+		measurementLogger.info("M-receivedStashes: {}", stashes.length);
 		long nBlocks = 0;
 		for (int i = 0; i < encryptedStashes.length; i++) {
 			stashes[i] = decryptStash(blockSize, encryptedStashes[i]);
 			nBlocks += stashes[i].getBlocks().size();
 		}
-		measurementLogger.info("MReceivedStashBlocks: {}", nBlocks);
+		measurementLogger.info("M-receivedStashBlocks: {}", nBlocks);
 
 		return stashes;
 	}
 
 	private Bucket[] decryptPaths(ORAMContext oramContext, EncryptedBucket[] encryptedPaths) {
 		Bucket[] paths = new Bucket[encryptedPaths.length];
-		measurementLogger.info("MReceivedPathSize: {}", encryptedPaths.length);
+		measurementLogger.info("M-receivedPathSize: {}", encryptedPaths.length);
 		for (int i = 0; i < encryptedPaths.length; i++) {
 			paths[i] = decryptBucket(oramContext, encryptedPaths[i]);
 		}
@@ -103,31 +105,17 @@ public class EncryptionManager {
 	}
 
 	public EncryptedStash encryptStash(Stash stash) {
-		measurementLogger.info("MSentStashBlocks: {}", stash.getBlocks().size());
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 DataOutputStream out = new DataOutputStream(bos)) {
-			stash.writeExternal(out);
-			out.flush();
-			bos.flush();
-			return new EncryptedStash(encryptionAbstraction.encrypt(bos.toByteArray()));
-		} catch (IOException e) {
-			logger.error("Failed to encrypt stash", e);
-			return null;
-		}
+		measurementLogger.info("M-sentStashBlocks: {}", stash.getBlocks().size());
+		int dataSize = stash.getSerializedSize();
+		byte[] serializedStash = new byte[dataSize];
+		stash.writeExternal(serializedStash, 0);
+		return new EncryptedStash(encryptionAbstraction.encrypt(serializedStash));
 	}
 
 	public Stash decryptStash(int blockSize, EncryptedStash encryptedStash) {
 		byte[] serializedStash = encryptionAbstraction.decrypt(encryptedStash.getEncryptedStash());
 		Stash deserializedStash = new Stash(blockSize);
-		if(serializedStash != null) {
-			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedStash);
-				 DataInputStream in = new DataInputStream(bis)) {
-				deserializedStash.readExternal(in);
-			} catch (IOException e) {
-				logger.error("Failed to decrypt stash", e);
-				return null;
-			}
-		}
+		deserializedStash.readExternal(serializedStash, 0);
 		return deserializedStash;
 	}
 
@@ -136,16 +124,10 @@ public class EncryptionManager {
 		Block[] bucketContents = bucket.readBucket();
 		byte[][] encryptedBlocks = new byte[bucketContents.length][];
 		for (int i = 0; i < bucketContents.length; i++) {
-			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-				 DataOutputStream out = new DataOutputStream(bos)) {
-				bucketContents[i].writeExternal(out);
-				out.flush();
-				bos.flush();
-				encryptedBlocks[i] = encryptionAbstraction.encrypt(bos.toByteArray());
-			} catch (IOException e) {
-				logger.error("Failed to encrypt bucket", e);
-				return null;
-			}
+			Block block = bucketContents[i];
+			byte[] serializedBlock = new byte[block.getSerializedSize()];
+			block.writeExternal(serializedBlock, 0);
+			encryptedBlocks[i] = encryptionAbstraction.encrypt(serializedBlock);
 		}
 		return new EncryptedBucket(encryptedBlocks);
 	}
@@ -159,13 +141,7 @@ public class EncryptionManager {
 		for (byte[] block : blocks) {
 			byte[] serializedBlock = encryptionAbstraction.decrypt(block);
 			Block deserializedBlock = new Block(oramContext.getBlockSize());
-			try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedBlock);
-				 DataInputStream in = new DataInputStream(bis)) {
-				deserializedBlock.readExternal(in);
-			} catch (IOException e) {
-				logger.error("Failed to decrypt block", e);
-				return null;
-			}
+			deserializedBlock.readExternal(serializedBlock, 0);
 			if (deserializedBlock.getAddress() != ORAMUtils.DUMMY_ADDRESS
 					&& !Arrays.equals(deserializedBlock.getContent(), ORAMUtils.DUMMY_BLOCK)) {
 				newBucket.putBlock(deserializedBlock);
@@ -176,7 +152,7 @@ public class EncryptionManager {
 
 	public Map<Integer, EncryptedBucket> encryptPath(ORAMContext oramContext, Map<Integer, Bucket> path) {
 		Map<Integer, EncryptedBucket> encryptedPath = new HashMap<>(path.size());
-		measurementLogger.info("MSentPathSize: {}", path.size());
+		measurementLogger.info("M-sentPathSize: {}", path.size());
 		for (Map.Entry<Integer, Bucket> entry : path.entrySet()) {
 			Bucket bucket = entry.getValue();
 			EncryptedBucket encryptedBucket = encryptBucket(oramContext, bucket);

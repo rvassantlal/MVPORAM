@@ -29,4 +29,9 @@ public class GetPositionMap extends ORAMMessage {
 		super.readExternal(in);
 		lastVersion = in.readInt();
 	}
+
+	@Override
+	public int getSerializedSize() {
+		return super.getSerializedSize() + 4;
+	}
 }
