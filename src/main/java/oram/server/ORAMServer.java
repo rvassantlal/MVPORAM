@@ -1,9 +1,10 @@
 package oram.server;
 
 import bftsmart.tom.MessageContext;
+import bftsmart.tom.ServiceReplica;
 import confidential.ConfidentialMessage;
-import confidential.facade.server.ConfidentialServerFacade;
 import confidential.facade.server.ConfidentialSingleExecutable;
+import confidential.server.ConfidentialRecoverable;
 import confidential.statemanagement.ConfidentialSnapshot;
 import oram.messages.*;
 import oram.server.structure.*;
@@ -34,20 +35,29 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ArrayList<Long> evictionLatencies;
 	private long lastPrint;
 	private int nOutstandingTreeObjects;
-	private final HashMap<Integer, EvictionORAMMessage> evictionRequests = new HashMap<>();
+	private final HashMap<Integer, EvictionORAMMessage> evictionRequests;
 	private final Lock evictionLock = new ReentrantLock();
 	private final Condition evictionCondition = evictionLock.newCondition();
 
+	private final ArrayDeque<MessageContext> clientsQueue;
+	private final Map<Integer, ORAMMessage> clientsRequests;
+	private int activeClients;
+	private static final int MAX_N_CLIENTS = 2;
+	private final ConfidentialRecoverable confidentialRecoverable;
 
 	public ORAMServer(int processId) {
 		this.orams = new TreeMap<>();
-		senders = new TreeSet<>();
-		getPMLatencies = new ArrayList<>();
-		getPSLatencies = new ArrayList<>();
-		evictionLatencies = new ArrayList<>();
-		//Starting server
-		new ConfidentialServerFacade(processId, this);
+		this.senders = new TreeSet<>();
+		this.getPMLatencies = new ArrayList<>();
+		this.getPSLatencies = new ArrayList<>();
+		this.evictionLatencies = new ArrayList<>();
+		this.evictionRequests = new HashMap<>();
+		this.clientsRequests = new HashMap<>();
+		this.clientsQueue = new ArrayDeque<>();
 
+		//Starting server
+		confidentialRecoverable = new ConfidentialRecoverable(processId, this);
+		new ServiceReplica(processId, "", confidentialRecoverable, confidentialRecoverable, null, null, null, confidentialRecoverable, confidentialRecoverable);
 	}
 
 	public static void main(String[] args) {
@@ -72,14 +82,36 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request.readExternal(in);
 					return getORAM(request);
 				case GET_POSITION_MAP:
+					logger.debug("Received getPM request from {}", msgCtx.getSender());
 					request = new GetPositionMap();
 					request.readExternal(in);
-					return getPositionMap((GetPositionMap) request, msgCtx);
+
+					clientsQueue.addLast(msgCtx);
+					clientsRequests.put(msgCtx.getSender(), request);
+					if (activeClients < MAX_N_CLIENTS) {
+						activeClients++;
+						MessageContext nextClientMsgCtx = clientsQueue.pollFirst();
+						if (nextClientMsgCtx == null) {
+							logger.error("Something went wrong. There should be a getPM request in the queue");
+							return null;
+						}
+						logger.debug("Processing getPM request from {} | active clients: {}", nextClientMsgCtx.getSender(),
+								activeClients);
+						ORAMMessage nextRequest = clientsRequests.remove(nextClientMsgCtx.getSender());
+						ConfidentialMessage response = getPositionMap((GetPositionMap) nextRequest, nextClientMsgCtx);
+						confidentialRecoverable.sendMessageToClient(nextClientMsgCtx, response);
+						return null;
+					}
+					logger.debug("Added getPM request from {} to the queue (queue size: {}) | active clients: {}",
+							msgCtx.getSender(), clientsQueue.size(), activeClients);
+					return null;
 				case GET_STASH_AND_PATH:
+					logger.debug("Received getPS request from {}", msgCtx.getSender());
 					request = new StashPathORAMMessage();
 					request.readExternal(in);
 					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
 				case EVICTION:
+					logger.debug("Received eviction request from {}", msgCtx.getSender());
 					evictionLock.lock();
 					request = new ORAMMessage();
 					request.readExternal(in);
@@ -99,7 +131,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					} while (request == null);
 					evictionLock.unlock();
 					evictionBytesReceived += plainData.length;
-					return performEviction((EvictionORAMMessage) request, msgCtx);
+					ConfidentialMessage evictionResponse = performEviction((EvictionORAMMessage) request, msgCtx);
+					activeClients--;
+					//process requests from the queue
+					//processQueuedGetPMRequests();
+					return evictionResponse;
 			}
 		} catch (IOException e) {
 			logger.error("Failed to attend ordered request from {}", msgCtx.getSender(), e);
@@ -107,6 +143,26 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			printReport();
 		}
 		return null;
+	}
+
+	private void processQueuedGetPMRequests() {
+		while (activeClients < MAX_N_CLIENTS && !clientsQueue.isEmpty()) {
+			activeClients++;
+			MessageContext nextClientMsgCtx = clientsQueue.poll();
+			if (nextClientMsgCtx == null) {
+				logger.debug("No more requests in the queue");
+				break;
+			}
+			logger.info("Processing getPM request from queue from {} | active clients: {}", nextClientMsgCtx.getSender(),
+					activeClients);
+			ORAMMessage nextRequest = clientsRequests.remove(nextClientMsgCtx.getSender());
+			ConfidentialMessage pmResponse = getPositionMap((GetPositionMap) nextRequest, nextClientMsgCtx);
+			if (pmResponse == null) {
+				logger.error("Failed to process getPM request from {}", nextClientMsgCtx.getSender());
+				break;
+			}
+			confidentialRecoverable.sendMessageToClient(nextClientMsgCtx, pmResponse);
+		}
 	}
 
 	@Override
