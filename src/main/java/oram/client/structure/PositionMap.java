@@ -103,8 +103,12 @@ public class PositionMap implements CustomExternalizable {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < pathIds.length; i++) {
-			sb.append("( ").append(i).append(", ").append(pathIds[i]).append(", ").append(versionIds[i]).append(") ");
+		if (versionIds.length == 1) {
+			sb.append(address).append(", ").append(pathIds[0]).append(", ").append(versionIds[0]).append("\n");
+		} else {
+			for (int i = 0; i < pathIds.length; i++) {
+				sb.append(i).append(", ").append(pathIds[i]).append(", ").append(versionIds[i]).append("\n");
+			}
 		}
 		return sb.toString();
 	}

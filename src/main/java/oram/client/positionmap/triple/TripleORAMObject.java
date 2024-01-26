@@ -24,7 +24,7 @@ public class TripleORAMObject extends ORAMObject {
 							EncryptionManager encryptionManager) throws SecretSharingException {
 		super(serviceProxy, oramId, oramContext, encryptionManager);
 		this.mergedPositionMap = new PositionMap(oramContext.getTreeSize());
-		this.latestSequenceNumber = ORAMUtils.DUMMY_VERSION;
+		this.latestSequenceNumber = 1; //server stores the initial position map and stash with version 1
 	}
 
 	@Override

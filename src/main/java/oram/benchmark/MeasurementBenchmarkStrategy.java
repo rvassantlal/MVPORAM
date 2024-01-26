@@ -52,6 +52,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private double[] maxLatency;
 	private double[] maxThroughput;
 	private boolean measureResources;
+	private int queueSize;
 	private String storageFileNamePrefix;
 	private String positionMapType;
 
@@ -74,7 +75,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		int f = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
 		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
-		measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));;
+		measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
 
 		int nServerWorkers = 3 * f + 1;
 		int nClientWorkers = workers.length - nServerWorkers;
@@ -89,15 +90,18 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
+		String[] queueSizeTokens = benchmarkParameters.getProperty("experiment.queue_sizes").split(" ");
 
 		//Parse parameters
 		int[] treeHeights = new int[treeHeightTokens.length];
 		int[] bucketSizes = new int[bucketSizeTokens.length];
 		int[] blockSizes = new int[blockSizeTokens.length];
+		int[] queueSizes = new int[queueSizeTokens.length];
 		for (int i = 0; i < treeHeightTokens.length; i++) {
 			treeHeights[i] = Integer.parseInt(treeHeightTokens[i]);
 			bucketSizes[i] = Integer.parseInt(bucketSizeTokens[i]);
 			blockSizes[i] = Integer.parseInt(blockSizeTokens[i]);
+			queueSizes[i] = Integer.parseInt(queueSizeTokens[i]);
 		}
 
 		//Separate workers
@@ -128,6 +132,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];
 			blockSize = blockSizes[i];
+			queueSize = queueSizes[i];
 
 			logger.info("Tree height: {}", treeHeight);
 			logger.info("Bucket size: {}", bucketSize);
@@ -138,6 +143,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, bucketSize, blockSize));
 			logger.info("Path length: {} blocks", ORAMUtils.computePathLength(treeHeight, bucketSize));
 			logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
+			logger.info("Queue size: {} clients", queueSize);
 
 			nRounds = clientsPerRound.length;
 			numMaxRealClients = new int[nRounds];
@@ -226,7 +232,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		if (measureResources)
 			measurementWorkers.put(serverWorkers[1].getWorkerId(), serverWorkers[1]);
 		for (int i = 0; i < serverWorkers.length; i++) {
-			String command = serverCommand + i;
+			String command = serverCommand + queueSize + " " + i;
 			int nCommands = measureResources && i < 2 ? 2 : 1;
 			ProcessInformation[] commands = new ProcessInformation[nCommands];
 			commands[0] = new ProcessInformation(command, ".");

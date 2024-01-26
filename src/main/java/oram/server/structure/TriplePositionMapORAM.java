@@ -21,7 +21,7 @@ public class TriplePositionMapORAM extends ORAM {
 		OutstandingTree outstandingTree = oramTreeManager.getOutstandingTree();
 		Set<Integer> outstandingVersions = outstandingTree.getOutstandingVersions();
 		Map<Integer, EncryptedPositionMap> resultedPositionMap = new HashMap<>(sequenceNumber - lastVersion);
-		for (int i = lastVersion; i < sequenceNumber; i++) {
+		for (int i = lastVersion; i <= sequenceNumber; i++) {
 			EncryptedPositionMap encryptedPositionMap = positionMaps.get(i);
 			if (encryptedPositionMap != null) {
 				resultedPositionMap.put(i, encryptedPositionMap);
