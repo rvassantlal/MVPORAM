@@ -23,7 +23,8 @@ public class MeasurementSetup implements ISetupWorker {
 
 		String[] args = setupInformation.split("\t");
 		int f = Integer.parseInt(args[1]);
-		int nServers = (Boolean.parseBoolean(args[0]) ? 3*f+1 : 2*f+1);
+		boolean isBFT = f != 0 && Boolean.parseBoolean(args[0]);
+		int nServers = (isBFT ? 3*f+1 : 2*f+1);
 		String hosts = args[2];
 
 		logger.debug("Creating hosts.config");
@@ -32,7 +33,7 @@ public class MeasurementSetup implements ISetupWorker {
 
 		logger.debug("Creating system.config");
 		fname="config/system.config";
-		String ctx=createSystemConf(nServers, args[1], args[0]);
+		String ctx=createSystemConf(nServers, f, isBFT);
 		writeF(fname, ctx);
 
 	}
@@ -46,12 +47,13 @@ public class MeasurementSetup implements ISetupWorker {
 		}
 	}
 
-	private String createSystemConf(int nServers, String f, String bft){
-		String iview= "";
+	private String createSystemConf(int nServers, int f, boolean bft){
+		StringBuilder viewBuilder= new StringBuilder();
 		for(int i=0; i<nServers;i++){
-			iview+=i+",";
+			viewBuilder.append(i).append(",");
 		}
-		iview=iview.substring(0, iview.length()-1);
+
+		String view = viewBuilder.substring(0, viewBuilder.length() - 1);
 
 		StringBuilder ctx = new StringBuilder();
 		ctx.append("system.communication.secretKeyAlgorithm = PBKDF2WithHmacSHA1\n");
@@ -93,7 +95,7 @@ public class MeasurementSetup implements ISetupWorker {
 		ctx.append("system.totalordermulticast.global_checkpoint_period = 1200\n");
 		ctx.append("system.totalordermulticast.checkpoint_to_disk = false\n");
 		ctx.append("system.totalordermulticast.sync_ckp = false\n");
-		ctx.append("system.initial.view = " + iview + "\n");
+		ctx.append("system.initial.view = " + view + "\n");
 		ctx.append("system.ttp.id = 7002\n");
 		ctx.append("system.bft = " + bft + "\n");
 		ctx.append("system.ssltls.protocol_version = TLSv1.2\n");

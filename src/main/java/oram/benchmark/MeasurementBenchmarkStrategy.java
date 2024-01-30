@@ -229,7 +229,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		logger.info("Starting servers...");
 		serversReadyCounter = new CountDownLatch(nServerWorkers);
 		measurementWorkers.put(serverWorkers[0].getWorkerId(), serverWorkers[0]);
-		if (measureResources)
+		if (measureResources && serverWorkers.length > 1)
 			measurementWorkers.put(serverWorkers[1].getWorkerId(), serverWorkers[1]);
 		for (int i = 0; i < serverWorkers.length; i++) {
 			String command = serverCommand + queueSize + " " + i;
@@ -319,11 +319,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		//Get measurement results
 		int nMeasurements;
 		if (measureResources) {
-			if (measurementWorkers.size() == 3) {
-				nMeasurements = 5;
-			} else {
-				nMeasurements = 6;
-			}
+			//servers: 2 + 1 + 1 ...
+			//clients: 2 + 1 + 1 ...
+			nMeasurements = measurementWorkers.size() + 2;
 		} else {
 			nMeasurements = 2;
 		}
@@ -425,13 +423,13 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			if (workerId == serverWorkers[0].getWorkerId()) {
 				logger.debug("Received leader server resources usage results");
 				tag = "leader_server";
-			} else if (workerId == serverWorkers[1].getWorkerId()) {
+			} else if (serverWorkers.length > 1 && workerId == serverWorkers[1].getWorkerId()) {
 				logger.debug("Received follower server resources usage results");
 				tag = "follower_server";
 			} else if (workerId == clientWorkers[0].getWorkerId()) {
 				logger.debug("Received measurement client resources usage results");
 				tag = "measurement_client";
-			} else if (workerId == clientWorkers[1].getWorkerId()) {
+			} else if (clientWorkers.length > 1 && workerId == clientWorkers[1].getWorkerId()) {
 				logger.debug("Received load client resources usage results");
 				tag = "load_client";
 			}
