@@ -90,7 +90,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
-		String[] queueSizeTokens = benchmarkParameters.getProperty("experiment.queue_sizes").split(" ");
+		String[] queueSizeTokens = benchmarkParameters.getProperty("experiment.concurrent_clients").split(" ");
 
 		//Parse parameters
 		int[] treeHeights = new int[treeHeightTokens.length];

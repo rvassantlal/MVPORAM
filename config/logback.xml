@@ -75,6 +75,6 @@
 
 	<logger name="benchmark.oram" level="INFO"/>
 
-	<logger name="measurement" level="OFF"/>
+	<logger name="measurement" level="INFO"/>
 
 </configuration>
