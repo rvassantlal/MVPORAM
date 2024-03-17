@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 public class ORAMBenchmarkClient {
-	private final static Logger logger = LoggerFactory.getLogger("benchmark.oram");
+	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		if (args.length != 8) {
 			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
@@ -59,7 +59,7 @@ public class ORAMBenchmarkClient {
 	}
 
 	private static class Client extends Thread {
-		private final Logger logger = LoggerFactory.getLogger("benchmark.oram");
+		private final Logger logger = LoggerFactory.getLogger("measurement");
 		private final int initialClientId;
 		private final ORAMManager oramManager;
 		private final int clientId;

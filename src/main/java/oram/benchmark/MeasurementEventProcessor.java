@@ -1,13 +1,16 @@
 package oram.benchmark;
 
-import oram.benchmark.measurements.*;
+
+import generic.DefaultMeasurementEventProcessor;
+import generic.IMeasurementEventProcessor;
+import generic.ResourcesMeasurementEventProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import worker.IProcessingResult;
 import worker.IWorkerEventProcessor;
 
 public class MeasurementEventProcessor implements IWorkerEventProcessor {
-	private final Logger logger = LoggerFactory.getLogger("benchmark.oram");
+	private final Logger logger = LoggerFactory.getLogger("benchmarking");
 	private static final String SERVER_READY_PATTERN = "Ready to process operations";
 	private static final String CLIENT_READY_PATTERN = "Executing experiment";
 	private static final String SAR_READY_PATTERN = "%";
