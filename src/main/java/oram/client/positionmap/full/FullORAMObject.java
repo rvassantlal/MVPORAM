@@ -41,7 +41,7 @@ public class FullORAMObject extends ORAMObject {
 			}
 			long start, end, delay;
 			start = System.nanoTime();
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
 			end = System.nanoTime();
 			delay = end - start;
 			measurementLogger.info("M-getPM: {}", delay);

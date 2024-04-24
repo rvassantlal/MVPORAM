@@ -350,7 +350,7 @@ public abstract class ORAMObject {
 
 			long start, end, delay;
 			start = System.nanoTime();
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
 			end = System.nanoTime();
 			if (response == null || response.getPlainData() == null) {
 				return null;
