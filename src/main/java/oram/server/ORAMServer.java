@@ -338,11 +338,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			double getPSThroughput = getPSCounter / (delay / 1_000_000_000.0);
 			double evictionThroughput = evictCounter / (delay / 1_000_000_000.0);
 
-			/*if (evictionThroughput >= throughput) {
-				MAX_N_CLIENTS++;
-			} else {
-				MAX_N_CLIENTS--;
-			}*/
 			logger.info("Throughput: {} getPM/s, {} getPS/s, {} eviction/s | maxClients: {}", getPMThroughput,
 					getPSThroughput, evictionThroughput, MAX_N_CLIENTS);
 
