@@ -2,6 +2,7 @@ package oram.server.structure;
 
 import oram.messages.GetPositionMap;
 import oram.utils.PositionMapType;
+import vss.secretsharing.VerifiableShare;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -9,10 +10,10 @@ import java.util.Set;
 
 public class TriplePositionMapORAM extends ORAM {
 
-	public TriplePositionMapORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
+	public TriplePositionMapORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType, int garbageCollectionFrequency,
 								 int treeHeight, int bucketSize, int blockSize,
 								 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
-		super(oramId, positionMapType, garbageCollectionFrequency, treeHeight, bucketSize, blockSize,
+		super(oramId, encryptionKeyShare, positionMapType, garbageCollectionFrequency, treeHeight, bucketSize, blockSize,
 				encryptedPositionMap, encryptedStash);
 	}
 

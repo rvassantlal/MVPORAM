@@ -31,6 +31,9 @@ public class ORAMManager {
 	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
 								 int treeHeight, int bucketSize, int blockSize) {
 		try {
+			String password = encryptionManager.generatePassword();
+			encryptionManager.createSecretKey(password);
+
 			EncryptedPositionMap encryptedPositionMap;
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
 				encryptedPositionMap = initializeEmptyFullPositionMap();
@@ -43,7 +46,7 @@ public class ORAMManager {
 			if (serializedRequest == null) {
 				return null;
 			}
-			Response response = serviceProxy.invokeOrdered(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest, password.getBytes());
 			if (response == null || response.getPlainData() == null) {
 				return null;
 			}
@@ -72,7 +75,7 @@ public class ORAMManager {
 				return null;
 			}
 			Response response = serviceProxy.invokeUnordered(serializedRequest);
-			if (response == null || response.getPlainData() == null) {
+			if (response == null || response.getPlainData() == null || response.getConfidentialData() == null) {
 				return null;
 			}
 
@@ -89,6 +92,8 @@ public class ORAMManager {
 				int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 				ORAMContext oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight,
 						treeSize, bucketSize, blockSize);
+				String password = new String(response.getConfidentialData()[0]);
+				encryptionManager.createSecretKey(password);
 				if (oramContext.getPositionMapType() == PositionMapType.FULL_POSITION_MAP)
 					return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 				else

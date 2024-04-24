@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,15 +17,25 @@ public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	private final EncryptionAbstraction encryptionAbstraction;
+	private final SecureRandom rndGenerator;
 
 	public EncryptionManager() {
-		this.encryptionAbstraction = new EncryptionAbstraction("oram");
+		this.rndGenerator = new SecureRandom("oram".getBytes());
+		this.encryptionAbstraction = new EncryptionAbstraction();
 	}
 
 	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
 		EncryptedPositionMaps encryptedPositionMaps =
 				ORAMUtils.deserializeEncryptedPositionMaps(serializedEncryptedPositionMaps);
 		return decryptPositionMaps(encryptedPositionMaps);
+	}
+
+	public String generatePassword() {
+		return ORAMUtils.generateRandomPassword(rndGenerator);
+	}
+
+	public void createSecretKey(String password) {
+		encryptionAbstraction.createSecretKey(password.toCharArray());
 	}
 
 	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {

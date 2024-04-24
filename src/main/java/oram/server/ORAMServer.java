@@ -42,8 +42,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ArrayDeque<MessageContext> clientsQueue;
 	private final Map<Integer, ORAMMessage> clientsRequests;
 	private int activeClients;
-	private int MAX_N_CLIENTS;
-	private double throughput;
+	private final int MAX_N_CLIENTS;
 	private final ConfidentialRecoverable confidentialRecoverable;
 
 	public ORAMServer(int max_clients, int processId) {
@@ -59,7 +58,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 		//Starting server
 		confidentialRecoverable = new ConfidentialRecoverable(processId, this);
-		new ServiceReplica(processId, "", confidentialRecoverable, confidentialRecoverable, null, null, null, confidentialRecoverable, confidentialRecoverable);
+		new ServiceReplica(processId, confidentialRecoverable, confidentialRecoverable, confidentialRecoverable, confidentialRecoverable);
 	}
 
 	public static void main(String[] args) {
@@ -78,7 +77,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				case CREATE_ORAM:
 					request = new CreateORAMMessage();
 					request.readExternal(in);
-					return createORAM((CreateORAMMessage) request);
+					VerifiableShare encryptionKeyShare = shares.length > 0 ? shares[0] : null;
+					return createORAM((CreateORAMMessage) request, encryptionKeyShare);
 				case GET_ORAM:
 					request = new ORAMMessage();
 					request.readExternal(in);
@@ -233,6 +233,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{-1});
 		} else {
 			ORAMContext oramContext = oram.getOramContext();
+			VerifiableShare encryptionKeyShare = oram.getEncryptionKeyShare();
 			PositionMapType positionMapType = oramContext.getPositionMapType();
 			int garbageCollectionFrequency = oramContext.getGarbageCollectionFrequency();
 			int treeHeight = oramContext.getTreeHeight();
@@ -247,7 +248,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				out.writeInt(blockSize);
 				out.flush();
 				bos.flush();
-				return new ConfidentialMessage(bos.toByteArray());
+				return new ConfidentialMessage(bos.toByteArray(), encryptionKeyShare);
 			} catch (IOException e) {
 				logger.error("Failed to serialize oram context: {}", e.getMessage());
 				return new ConfidentialMessage();
@@ -275,7 +276,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		return new ConfidentialMessage(serializedPositionMaps);
 	}
 
-	private ConfidentialMessage createORAM(CreateORAMMessage request) {
+	private ConfidentialMessage createORAM(CreateORAMMessage request, VerifiableShare encryptionKeyShare) {
 		int oramId = request.getOramId();
 		PositionMapType positionMapType = request.getPositionMapType();
 		int garbageCollectionFrequency = request.getGarbageCollectionFrequency();
@@ -292,11 +293,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			ORAM oram;
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP) {
 				logger.debug("Using full position map");
-				oram = new FullPositionMapORAM(oramId, positionMapType, garbageCollectionFrequency, treeHeight,
+				oram = new FullPositionMapORAM(oramId, encryptionKeyShare, positionMapType, garbageCollectionFrequency, treeHeight,
 						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
 			} else if (positionMapType == PositionMapType.TRIPLE_POSITION_MAP) {
 				logger.debug("Using triple position map");
-				oram = new TriplePositionMapORAM(oramId, positionMapType, garbageCollectionFrequency, treeHeight,
+				oram = new TriplePositionMapORAM(oramId, encryptionKeyShare, positionMapType, garbageCollectionFrequency, treeHeight,
 						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
 			} else {
 				logger.error("Unknown position map type");
@@ -342,7 +343,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			} else {
 				MAX_N_CLIENTS--;
 			}*/
-			throughput = evictionThroughput;
 			logger.info("Throughput: {} getPM/s, {} getPS/s, {} eviction/s | maxClients: {}", getPMThroughput,
 					getPSThroughput, evictionThroughput, MAX_N_CLIENTS);
 

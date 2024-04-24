@@ -6,12 +6,14 @@ import oram.utils.ORAMUtils;
 import oram.utils.PositionMapType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import vss.secretsharing.VerifiableShare;
 
 import java.util.*;
 
 public abstract class ORAM {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final int oramId;
+	private final VerifiableShare encryptionKeyShare;
 	private final ORAMContext oramContext;
 	protected final Map<Integer, EncryptedPositionMap> positionMaps;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
@@ -19,10 +21,11 @@ public abstract class ORAM {
 	protected final ORAMTreeManager oramTreeManager;
 	private final Map<Integer, int[]> preComputedPathLocations;
 
-	public ORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
+	public ORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType, int garbageCollectionFrequency, int treeHeight,
 				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
 				EncryptedStash encryptedStash) {
 		this.oramId = oramId;
+		this.encryptionKeyShare = encryptionKeyShare;
 		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 		int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
 		this.oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight, treeSize,
@@ -38,6 +41,10 @@ public abstract class ORAM {
 		int versionId = ++sequenceNumber;
 		this.oramTreeManager = new ORAMTreeManager(oramContext, versionId, encryptedStash);
 		this.positionMaps.put(versionId, encryptedPositionMap);
+	}
+
+	public VerifiableShare getEncryptionKeyShare() {
+		return encryptionKeyShare;
 	}
 
 	public ORAMContext getOramContext() {

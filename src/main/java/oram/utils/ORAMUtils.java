@@ -6,13 +6,25 @@ import oram.server.structure.*;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.*;
 
 public class ORAMUtils {
+	public static final int PASSWORD_LENGTH = 24;
 	public static final int DUMMY_VERSION = 0;
 	public static final int DUMMY_PATH = -1;
 	public static final int DUMMY_ADDRESS = -1;
 	public static final byte[] DUMMY_BLOCK = new byte[0];
+
+	public static String generateRandomPassword(SecureRandom rndGenerator) {
+		int delta = '~' - '!';
+		StringBuilder pwd = new StringBuilder(PASSWORD_LENGTH);
+		for (int i = 0; i < PASSWORD_LENGTH; i++) {
+			char c = (char) (rndGenerator.nextInt(delta) + '!');
+			pwd.append(c);
+		}
+		return pwd.toString();
+	}
 
 	public static int computeTreeSize(int treeHeight, int bucketSize) {
 		return computeNumberOfNodes(treeHeight) * bucketSize;
