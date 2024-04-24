@@ -221,10 +221,9 @@ public abstract class ORAMObject {
 		try {
 			EvictionORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPositionMap, encryptedPath);
 			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
-
-			long start, end, delay;
+			long start, end, delay = 0;
 			start = System.nanoTime();
-			boolean isSuccessful = sendRequestData(serializedDataRequest);
+			/*boolean isSuccessful = sendRequestData(serializedDataRequest);
 			end = System.nanoTime();
 			delay = end - start;
 			if (!isSuccessful) {
@@ -236,10 +235,10 @@ public abstract class ORAMObject {
 			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, dataHashRequest);
 			if (serializedEvictionRequest == null) {
 				return false;
-			}
+			}*/
 
 			start = System.nanoTime();
-			Response response = serviceProxy.invokeOrdered(serializedEvictionRequest);
+			Response response = serviceProxy.invokeOrdered(serializedDataRequest);
 			end = System.nanoTime();
 			delay += end - start;
 
@@ -350,7 +349,7 @@ public abstract class ORAMObject {
 
 			long start, end, delay;
 			start = System.nanoTime();
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			Response response = serviceProxy.invokeOrdered(serializedRequest);
 			end = System.nanoTime();
 			if (response == null || response.getPlainData() == null) {
 				return null;

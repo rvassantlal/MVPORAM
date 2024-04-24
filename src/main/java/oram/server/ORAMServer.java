@@ -99,10 +99,10 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
 				case EVICTION:
 					logger.debug("Received eviction request from {}", msgCtx.getSender());
-					evictionLock.lock();
-					request = new ORAMMessage();
+					//evictionLock.lock();
+					request = new EvictionORAMMessage();
 					request.readExternal(in);
-					int hash = request.getOramId();
+					/*int hash = request.getOramId();
 
 					do {
 						logger.debug("Received eviction request from {} in {} ({})", msgCtx.getSender(), msgCtx.getSequence(), hash);
@@ -116,7 +116,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 							}
 						}
 					} while (request == null);
-					evictionLock.unlock();
+					evictionLock.unlock();*/
 					evictionBytesReceived += plainData.length;
 					ConfidentialMessage evictionResponse = performEviction((EvictionORAMMessage) request, msgCtx);
 					activeClients--;
