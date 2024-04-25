@@ -65,9 +65,9 @@ MVP-ORAM integrates the following optimizations:
 - Optimization 4 (Multiple versions): bounds the number of concurrent clients that can perform ``access``.
 
 You can test individual optimizations using the following branches:
-- ``no_and_pm_optimization``: code without any optimizations when clients are started with ``full`` position map and can be used to check the impact of Optimization 1 by starting clients giving ``triple`` as position map type parameter.
-- ``evict_optimization``: code with Optimization 1.
-- ``response_optimization``: code with Optimization 3.
+- [no_and_pm_optimization](https://anonymous.4open.science/r/MVPORAM-NO-AND-PM): code without any optimizations when clients are started with ``full`` position map and can be used to check the impact of Optimization 1 by starting clients giving ``triple`` as position map type parameter.
+- [evict_optimization](https://anonymous.4open.science/r/MVPORAM-EVICT): code with Optimization 1.
+- [response_optimization](https://anonymous.4open.science/r/MVPORAM-RESPONSE): code with Optimization 3.
 
 In all branches Optimization 1 can be disabled by setting the ``position map type`` parameter as ``full`` and Optimization 4 can be disabled by setting the ``max concurrent clients`` parameter grater than number of clients performing operations.
 
