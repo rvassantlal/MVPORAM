@@ -2,9 +2,6 @@
 MVP-ORAM is an implementation of tree-based ORAM protocol that supports multiple clients and Byzantine servers.
 This protocol is implemented as a service on top of [COBRA](https://github.com/bft-smart/cobra) and [BFT-SMaRt](https://github.com/bft-smart/library) library.
 
-## Limitations
-The current implementation does not use the capabilities of COBRA to securely store encryption keys among servers.
-
 ## Requirements
 The MVP-ORAM library is implemented in Java and uses Gradle to compile and package the code.
 The current version of the library was tested using Java 11.
