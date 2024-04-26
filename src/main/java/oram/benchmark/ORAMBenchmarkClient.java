@@ -59,7 +59,7 @@ public class ORAMBenchmarkClient {
 	}
 
 	private static class Client extends Thread {
-		private final Logger logger = LoggerFactory.getLogger("measurement");
+		private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 		private final int initialClientId;
 		private final ORAMManager oramManager;
 		private final int clientId;
@@ -108,11 +108,12 @@ public class ORAMBenchmarkClient {
 					t2 = System.nanoTime();
 					delay = t2 - t1;
 					if (!Arrays.equals(blockContent, oldContent)) {
-						logger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
+						measurementLogger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
 						//break;
 					}
 					if (initialClientId == clientId && measurementLeader) {
-						logger.info("M-global: {}", delay);
+						measurementLogger.info("M-global: {}", delay);
+						logger.info("Access latency: {} ms", delay / 1_000_000.0);
 					}
 				}
 			} finally {
