@@ -31,7 +31,7 @@ Execute the following command across all servers from within the ``MVPORAM`` fol
 ```
 ./smartrun.sh oram.server.ORAMServer <max concurrent clients> <process id>
 ```
-Where ``<process id>`` is the maximum number concurrent clients that can perform ``access`` (see Optimizations section) and ``<process id>`` is a unique identifier for each server starting from 0.
+Where ``<max concurrent clients>`` is the maximum number concurrent clients that can perform ``access`` (see Optimizations section) and ``<process id>`` is a unique identifier for each server starting from 0.
 Once all servers are ready, i.e., they print ``Ready to process operations``, the clients can be launched by executing the following command.
 
 ```
@@ -42,7 +42,7 @@ Where:
 - ``<nClients>`` is the number of clients, e.g., 10;
 - ``<nRequests>`` is the number of requests per client, e.g., 10000;
 - ``<position map type>`` is the type of position map used by the ORAM protocol. Use ``full`` for full position map and ``triple`` for triple position map.
-- ``<treeHeight>`` is the height of the ORAM tree, e.g., 14;
+- ``<treeHeight>`` is the height of the ORAM tree, e.g., 15;
 - ``<bucketSize>`` is the size of the ORAM tree's bucket, e.g., 4;
 - ``<blockSize>`` is the size of the blocks stored in the ORAM tree, e.g., 4096;
 - ``<isMeasurementLeader>`` is a boolean value that indicates if the client should print the latency values. Use ``true`` to print the latency values and ``false`` otherwise.
@@ -50,9 +50,7 @@ Where:
 ***Interpreting the throughput and latency results***
 
 When clients continuously send the requests, servers will print the throughput information
-every two seconds.
-When a client finishes sending the requests, it will print a string containing space-separated
-latencies of each request in nanoseconds. For example, you can use this result to compute average latency.
+every two seconds and client will print the access latency of each request in ms.
 
 ## Optimizations
 MVP-ORAM integrates the following optimizations:

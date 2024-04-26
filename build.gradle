@@ -4,8 +4,8 @@ plugins {
     id 'org.hidetake.ssh' version '2.10.1'
 }
 
-group 'myPathORAM'
-version '0.3'
+group 'MVPORAM'
+version '1.0'
 
 compileJava {
     sourceCompatibility = 8
@@ -17,7 +17,7 @@ repositories {
 }
 
 jar {
-    archivesBaseName='myPathORAM'
+    archivesBaseName='MVPORAM'
     project.version=""
 }
 
