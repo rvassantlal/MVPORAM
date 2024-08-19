@@ -29,6 +29,8 @@ public abstract class ORAMObject {
 	byte[] oldContent = null;
 	private boolean isRealAccess;
 	protected boolean isMeasure;
+	private Map<Integer, int[]> allPaths;
+	private Map<Integer, int[]> bucketToPaths;
 
 	protected long globalDelayRemoteInvocation;
 
@@ -39,6 +41,31 @@ public abstract class ORAMObject {
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
 		this.rndGenerator = new SecureRandom("oram".getBytes());
+		preComputeTreeLocations(oramContext.getTreeHeight());
+	}
+
+	private void preComputeTreeLocations(int treeHeight) {
+		int nPaths = 1 << treeHeight;
+		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+		allPaths = new HashMap<>(nPaths);
+		Map<Integer, Set<Integer>> tempBucketToPaths = new HashMap<>(treeSize);
+		for (int pathId = 0; pathId < nPaths; pathId++) {
+			int[] pathLocations = ORAMUtils.computePathLocations(pathId, treeHeight);
+			allPaths.put(pathId, pathLocations);
+			for (int pathLocation : pathLocations) {
+				tempBucketToPaths.computeIfAbsent(pathLocation, k -> new HashSet<>()).add(pathId);
+			}
+		}
+		bucketToPaths = new HashMap<>(treeSize);
+		for (int i = 0; i < treeSize; i++) {
+			Set<Integer> possiblePaths = tempBucketToPaths.get(i);
+			int[] possiblePathsArray = new int[possiblePaths.size()];
+			int j = 0;
+			for (int possiblePath : possiblePaths) {
+				possiblePathsArray[j++] = possiblePath;
+			}
+			bucketToPaths.put(i, possiblePathsArray);
+		}
 	}
 
 	public void measure() {
@@ -100,7 +127,8 @@ public abstract class ORAMObject {
 		measurementLogger.info("M-ps: {}", delay);
 
 		start = System.nanoTime();
-		boolean isEvicted = evict(mergedPositionMap, mergedStash, pathId, op, address, oldPositionMaps.getNewVersionId());
+		PositionMap updatedPositionMap = updateLocations(address, op, pathId, mergedPositionMap, oldPositionMaps.getNewVersionId());
+		boolean isEvicted = evict(updatedPositionMap, mergedStash, pathId);
 		end = System.nanoTime();
 		delay = end - start;
 		measurementLogger.info("M-eviction: {}", delay);
@@ -118,14 +146,15 @@ public abstract class ORAMObject {
 	}
 
 	public int getPathId(PositionMap mergedPositionMap, int address) {
-		int pathId = mergedPositionMap.getPathAt(address);
-		logger.debug("Getting pathId {} for address {} and version {}", pathId, address,
+		int bucketId = mergedPositionMap.getPathAt(address);
+		logger.debug("Getting pathId {} for address {} and version {}", bucketId, address,
 				mergedPositionMap.getVersionIdAt(address));
-		if (pathId == ORAMUtils.DUMMY_PATH) {
-			pathId = generateRandomPathId();
+		if (bucketId == ORAMUtils.DUMMY_PATH) {
 			this.isRealAccess = false;
+			return generateRandomPathId();
 		}
-		return pathId;
+		int[] possiblePaths = bucketToPaths.get(bucketId);
+		return possiblePaths[rndGenerator.nextInt(possiblePaths.length)];
 	}
 
 	public Stash getPS(int pathId, Operation op, int address, byte[] newContent,
@@ -166,15 +195,38 @@ public abstract class ORAMObject {
 		return mergedStash;
 	}
 
-	public boolean evict(PositionMap mergedPositionMap, Stash stash, int oldPathId,
-						 Operation op, int changedAddress, int newVersionId) {
-		int newPathId = generateRandomPathId();
+	private PositionMap updateLocations(int address, Operation op, int oldPathId, PositionMap mergedPositionMap,
+										int newVersionId) {
+		int currentBucket = mergedPositionMap.getPathAt(address);
+		int[] oldPathLocations = allPaths.get(oldPathId);
+		int currentBucketIndex = -1;
+		if (currentBucket == ORAMUtils.DUMMY_PATH) {
+			currentBucketIndex = rndGenerator.nextInt(oramContext.getTreeLevels());
+			currentBucket = oldPathLocations[currentBucketIndex];
+		} else {
+			for (int i = 0; i < oldPathLocations.length; i++) {
+				if (oldPathLocations[i] == currentBucket) {
+					currentBucketIndex = i;
+					break;
+				}
+			}
+		}
+		if (currentBucketIndex == -1) {
+			logger.error("Current bucket {} is not in the old path {}", currentBucket, oldPathId);
+			throw new IllegalStateException("Current bucket is not in the old path");
+		}
+		int newBucketLocation = allPaths.get(oldPathId)[
+				rndGenerator.nextInt(oramContext.getTreeLevels() - currentBucketIndex) + currentBucketIndex];
+		logger.debug("Block {} was moved from bucket {} to bucket {} in path {}", address, currentBucket,
+				newBucketLocation, oldPathId);
 
-		PositionMap updatedPositionMap = updatePositionMap(op, mergedPositionMap, isRealAccess, changedAddress,
-				newPathId, newVersionId);
+		return updatePositionMap(op, mergedPositionMap, isRealAccess, address,
+				newBucketLocation, newVersionId);
+	}
 
+	public boolean evict(PositionMap updatedPositionMap, Stash stash, int oldPathId) {
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
-		Stash remainingBlocks = populatePath(mergedPositionMap, stash, oldPathId, path);
+		Stash remainingBlocks = populatePath(updatedPositionMap, stash, oldPathId, path);
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(updatedPositionMap);
@@ -183,30 +235,27 @@ public abstract class ORAMObject {
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private Stash populatePath(PositionMap positionMap, Stash stash, int oldPathId,
-							   Map<Integer, Bucket> pathToPopulate) {
-		int[] oldPathLocations = ORAMUtils.computePathLocations(oldPathId, oramContext.getTreeHeight());
-		Map<Integer, List<Integer>> commonPaths = new HashMap<>();
+	private Stash populatePath(PositionMap positionMap, Stash stash, int oldPathId, Map<Integer, Bucket> pathToPopulate) {
+		int[] oldPathLocations = allPaths.get(oldPathId);
 		for (int pathLocation : oldPathLocations) {
 			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
 		}
 		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
 		for (Block block : stash.getBlocks()) {
 			int address = block.getAddress();
-			int pathId = positionMap.getPathAt(address);
-			List<Integer> commonPath = commonPaths.get(pathId);
-			if (commonPath == null) {
-				int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
-				commonPath = ORAMUtils.computePathIntersection(oramContext.getTreeLevels(), oldPathLocations,
-						pathLocations);
-				commonPaths.put(pathId, commonPath);
-			}
+			int bucketId = positionMap.getPathAt(address);
+
+			int pathIdForBucket = bucketToPaths.get(bucketId)[0];
+			int[] pathForBucket = allPaths.get(pathIdForBucket);
+
 			boolean isPathEmpty = false;
-			for (int pathLocation : commonPath) {
-				Bucket bucket = pathToPopulate.get(pathLocation);
-				if (bucket.putBlock(block)) {
-					isPathEmpty = true;
-					break;
+			for (int i = 0; i < oramContext.getTreeLevels(); i++) {
+				if (oldPathLocations[i] == pathForBucket[i] && bucketId >= oldPathLocations[i]) {
+					Bucket bucket = pathToPopulate.get(oldPathLocations[i]);
+					if (bucket.putBlock(block)) {
+						isPathEmpty = true;
+						break;
+					}
 				}
 			}
 			if (!isPathEmpty) {
@@ -269,28 +318,6 @@ public abstract class ORAMObject {
 
 	private int generateRandomPathId() {
 		return rndGenerator.nextInt(1 << oramContext.getTreeHeight()); //2^height
-	}
-
-	private int generateRandomPathIdByBucket(int oldPathId) {
-		int bucketId = rndGenerator.nextInt(oramContext.getTreeLevels());
-		List<Integer> myPath = ORAMUtils.computePathLocationsList(oldPathId,oramContext.getTreeHeight());
-		int location = myPath.get(bucketId);
-		ArrayList<Integer> possiblePaths = new ArrayList<>();
-		for (int i = 0; i < (1 << oramContext.getTreeHeight()); i++) {
-			List<Integer> toAdd = ORAMUtils.computePathLocationsList(i, oramContext.getTreeHeight());
-			if(toAdd.contains(location)) {
-				boolean possible = true;
-				for (int j = bucketId-1; j >= 0; j--){
-					if(myPath.contains(toAdd.get(j))) {
-						possible = false;
-						break;
-					}
-				}
-				if(possible)
-					possiblePaths.add(i);
-			}
-		}
-		return possiblePaths.get(rndGenerator.nextInt(possiblePaths.size()));
 	}
 
 	private Stash mergeStashesAndPaths(Stash[] stashes, Bucket[] paths, PositionMap mergedPositionMap) {
