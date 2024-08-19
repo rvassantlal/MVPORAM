@@ -225,7 +225,7 @@ public abstract class ORAMObject {
 		for (Block stashBlock : stash.getBlocks()) {
 			if (positionMap.getPathAt(stashBlock.getAddress()) == newBucketLocation && stashBlock.getAddress() != address) {
 				// System.out.printf("Item %d moved down from %d to %d\n", stashBlock.getAddress(), newItemLocation, newDownLocation);
-				logger.info("Block {} was moved down from bucket {} to bucket {}", stashBlock.getAddress(),
+				logger.debug("Block {} was moved down from bucket {} to bucket {}", stashBlock.getAddress(),
 						newBucketLocation, substitutionNewBucketLocation);
 				positionMap.setPathAt(stashBlock.getAddress(), substitutionNewBucketLocation);
 				break;
