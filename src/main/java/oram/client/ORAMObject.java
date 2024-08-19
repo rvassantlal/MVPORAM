@@ -127,7 +127,7 @@ public abstract class ORAMObject {
 		measurementLogger.info("M-ps: {}", delay);
 
 		start = System.nanoTime();
-		PositionMap updatedPositionMap = updateLocations(address, op, pathId, mergedPositionMap, oldPositionMaps.getNewVersionId());
+		PositionMap updatedPositionMap = updateLocations(address, op, pathId, mergedPositionMap, oldPositionMaps.getNewVersionId(), mergedStash);
 		boolean isEvicted = evict(updatedPositionMap, mergedStash, pathId);
 		end = System.nanoTime();
 		delay = end - start;
@@ -195,9 +195,9 @@ public abstract class ORAMObject {
 		return mergedStash;
 	}
 
-	private PositionMap updateLocations(int address, Operation op, int oldPathId, PositionMap mergedPositionMap,
-										int newVersionId) {
-		int currentBucket = mergedPositionMap.getPathAt(address);
+	private PositionMap updateLocations(int address, Operation op, int oldPathId, PositionMap positionMap,
+										int newVersionId, Stash stash) {
+		int currentBucket = positionMap.getPathAt(address);
 		int[] oldPathLocations = allPaths.get(oldPathId);
 		int currentBucketIndex = -1;
 		if (currentBucket == ORAMUtils.DUMMY_PATH) {
@@ -217,10 +217,22 @@ public abstract class ORAMObject {
 		}
 		int newBucketLocation = allPaths.get(oldPathId)[
 				rndGenerator.nextInt(oramContext.getTreeLevels() - currentBucketIndex) + currentBucketIndex];
-		logger.debug("Block {} was moved from bucket {} to bucket {} in path {}", address, currentBucket,
+		logger.debug("Block {} was moved up from bucket {} to bucket {} in path {}", address, currentBucket,
 				newBucketLocation, oldPathId);
+		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
+		int substitutionNewBucketLocation = rndGenerator.nextInt(treeSize - newBucketLocation) + newBucketLocation;
 
-		return updatePositionMap(op, mergedPositionMap, isRealAccess, address,
+		for (Block stashBlock : stash.getBlocks()) {
+			if (positionMap.getPathAt(stashBlock.getAddress()) == newBucketLocation && stashBlock.getAddress() != address) {
+				// System.out.printf("Item %d moved down from %d to %d\n", stashBlock.getAddress(), newItemLocation, newDownLocation);
+				logger.info("Block {} was moved down from bucket {} to bucket {}", stashBlock.getAddress(),
+						newBucketLocation, substitutionNewBucketLocation);
+				positionMap.setPathAt(stashBlock.getAddress(), substitutionNewBucketLocation);
+				break;
+			}
+		}
+
+		return updatePositionMap(op, positionMap, isRealAccess, address,
 				newBucketLocation, newVersionId);
 	}
 
