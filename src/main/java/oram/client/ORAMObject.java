@@ -26,11 +26,10 @@ public abstract class ORAMObject {
 	protected final ORAMContext oramContext;
 	protected final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
-	byte[] oldContent = null;
-	private boolean isRealAccess;
 	protected boolean isMeasure;
 	private Map<Integer, int[]> allPaths;
 	private Map<Integer, int[]> bucketToPaths;
+	private OngoingAccessContext ongoingAccessContext;
 
 	protected long globalDelayRemoteInvocation;
 
@@ -99,6 +98,8 @@ public abstract class ORAMObject {
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
+		ongoingAccessContext = new OngoingAccessContext(address, op, newContent);
+
 		long start, end, delay;
 		start = System.nanoTime();
 		PositionMaps oldPositionMaps = getPositionMaps();
@@ -114,21 +115,27 @@ public abstract class ORAMObject {
 			return null;
 		}
 
+		ongoingAccessContext.setMergedPositionMap(mergedPositionMap);
+		ongoingAccessContext.setNewVersionId(oldPositionMaps.getNewVersionId());
+
 		int pathId = getPathId(mergedPositionMap, address);
+
+		ongoingAccessContext.setAccessedPathId(pathId);
 
 		end = System.nanoTime();
 		delay = end - start;
 		measurementLogger.info("M-map: {}", delay);
 
 		start = System.nanoTime();
-		Stash mergedStash = getPS(pathId, op, address, newContent, oldPositionMaps.getNewVersionId(), mergedPositionMap);
+		Stash mergedStash = getPS();
+		ongoingAccessContext.setMergedStash(mergedStash);
 		end = System.nanoTime();
 		delay = end - start;
 		measurementLogger.info("M-ps: {}", delay);
 
 		start = System.nanoTime();
-		PositionMap updatedPositionMap = updateLocations(address, op, pathId, mergedPositionMap, oldPositionMaps.getNewVersionId(), mergedStash);
-		boolean isEvicted = evict(updatedPositionMap, mergedStash, pathId);
+		computeNewLocations();
+		boolean isEvicted = evict();
 		end = System.nanoTime();
 		delay = end - start;
 		measurementLogger.info("M-eviction: {}", delay);
@@ -136,13 +143,12 @@ public abstract class ORAMObject {
 		if (!isEvicted) {
 			logger.error("Failed to do eviction on oram {}", oramId);
 		}
-		return oldContent;
+		return ongoingAccessContext.getOldContent();
 	}
 
 	protected void reset() {
-		oldContent = null;
-		isRealAccess = true;
 		globalDelayRemoteInvocation = 0;
+		ongoingAccessContext = null;
 	}
 
 	public int getPathId(PositionMap mergedPositionMap, int address) {
@@ -150,15 +156,21 @@ public abstract class ORAMObject {
 		logger.debug("Getting pathId {} for address {} and version {}", bucketId, address,
 				mergedPositionMap.getVersionIdAt(address));
 		if (bucketId == ORAMUtils.DUMMY_PATH) {
-			this.isRealAccess = false;
+			ongoingAccessContext.setIsRealAccess(false);
 			return generateRandomPathId();
 		}
 		int[] possiblePaths = bucketToPaths.get(bucketId);
 		return possiblePaths[rndGenerator.nextInt(possiblePaths.length)];
 	}
 
-	public Stash getPS(int pathId, Operation op, int address, byte[] newContent,
-					   int newVersionId, PositionMap mergedPositionMap) {
+	public Stash getPS() {
+		int pathId = ongoingAccessContext.getAccessedPathId();
+		Operation op = ongoingAccessContext.getOperation();
+		int accessedAddress = ongoingAccessContext.getAddress();
+		byte[] newContent = ongoingAccessContext.getNewContent();
+		int newVersionId = ongoingAccessContext.getNewVersionId();
+		PositionMap mergedPositionMap = ongoingAccessContext.getMergedPositionMap();
+
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
 			logger.error("States and paths of oram {} are null", oramId);
@@ -168,25 +180,25 @@ public abstract class ORAMObject {
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(),
 				mergedPositionMap);
 
-		Block block = mergedStash.getBlock(address);
+		Block block = mergedStash.getBlock(accessedAddress);
 
-		if (this.isRealAccess && op == Operation.READ) {
+		if (ongoingAccessContext.isRealAccess() && op == Operation.READ) {
 			if (block == null) {
-				logger.error("[client {}] Reading address {} from pathId {}", serviceProxy.getProcessId(), address, pathId);
+				logger.error("[client {}] Reading address {} from pathId {}", serviceProxy.getProcessId(), accessedAddress, pathId);
 				logger.error("[client {}] {}", serviceProxy.getProcessId(), stashesAndPaths);
 				logger.error("[client {}] {}", serviceProxy.getProcessId(), mergedPositionMap.toString());
 				logger.error("[client {}] {}", serviceProxy.getProcessId(), mergedStash);
 				throw new IllegalStateException("Block is null");
 				//System.exit(-1);
 			} else {
-				oldContent = block.getContent();
+				ongoingAccessContext.setOldContent(block.getContent());
 			}
 		} else if (op == Operation.WRITE) {
 			if (block == null) {
-				block = new Block(oramContext.getBlockSize(), address, newVersionId, newContent);
+				block = new Block(oramContext.getBlockSize(), accessedAddress, newVersionId, newContent);
 				mergedStash.putBlock(block);
 			} else {
-				oldContent = block.getContent();
+				ongoingAccessContext.setOldContent(block.getContent());
 				block.setContent(newContent);
 				block.setVersionId(newVersionId);
 			}
@@ -195,50 +207,45 @@ public abstract class ORAMObject {
 		return mergedStash;
 	}
 
-	private PositionMap updateLocations(int address, Operation op, int oldPathId, PositionMap positionMap,
-										int newVersionId, Stash stash) {
+	private void computeNewLocations() {
+		int address = ongoingAccessContext.getAddress();
+		PositionMap positionMap = ongoingAccessContext.getMergedPositionMap();
+		int accessedPathId = ongoingAccessContext.getAccessedPathId();
+
 		int currentBucket = positionMap.getPathAt(address);
-		int[] oldPathLocations = allPaths.get(oldPathId);
+		int[] accessedPathLocations = allPaths.get(accessedPathId);
+
 		int currentBucketIndex = -1;
 		if (currentBucket == ORAMUtils.DUMMY_PATH) {
 			currentBucketIndex = rndGenerator.nextInt(oramContext.getTreeLevels());
-			currentBucket = oldPathLocations[currentBucketIndex];
+			currentBucket = accessedPathLocations[currentBucketIndex];
 		} else {
-			for (int i = 0; i < oldPathLocations.length; i++) {
-				if (oldPathLocations[i] == currentBucket) {
+			for (int i = 0; i < accessedPathLocations.length; i++) {
+				if (accessedPathLocations[i] == currentBucket) {
 					currentBucketIndex = i;
 					break;
 				}
 			}
 		}
 		if (currentBucketIndex == -1) {
-			logger.error("Current bucket {} is not in the old path {}", currentBucket, oldPathId);
-			throw new IllegalStateException("Current bucket is not in the old path");
+			logger.error("Current bucket {} is not in the accessed path {}", currentBucket, accessedPathId);
+			throw new IllegalStateException("Current bucket is not in the accessed path");
 		}
-		int newBucketLocation = allPaths.get(oldPathId)[
+		int newBucketLocation = allPaths.get(accessedPathId)[
 				rndGenerator.nextInt(oramContext.getTreeLevels() - currentBucketIndex) + currentBucketIndex];
-		logger.debug("Block {} was moved up from bucket {} to bucket {} in path {}", address, currentBucket,
-				newBucketLocation, oldPathId);
+		ongoingAccessContext.setAccessedAddressNewBucketLocation(newBucketLocation);
+
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 		int substitutionNewBucketLocation = rndGenerator.nextInt(treeSize - newBucketLocation) + newBucketLocation;
-
-		for (Block stashBlock : stash.getBlocks()) {
-			if (positionMap.getPathAt(stashBlock.getAddress()) == newBucketLocation && stashBlock.getAddress() != address) {
-				// System.out.printf("Item %d moved down from %d to %d\n", stashBlock.getAddress(), newItemLocation, newDownLocation);
-				logger.debug("Block {} was moved down from bucket {} to bucket {}", stashBlock.getAddress(),
-						newBucketLocation, substitutionNewBucketLocation);
-				positionMap.setPathAt(stashBlock.getAddress(), substitutionNewBucketLocation);
-				break;
-			}
-		}
-
-		return updatePositionMap(op, positionMap, isRealAccess, address,
-				newBucketLocation, newVersionId);
+		ongoingAccessContext.setSubstitutedBlockNewBucketLocation(substitutionNewBucketLocation);
 	}
 
-	public boolean evict(PositionMap updatedPositionMap, Stash stash, int oldPathId) {
+	public boolean evict() {
 		Map<Integer, Bucket> path = new HashMap<>(oramContext.getTreeLevels());
-		Stash remainingBlocks = populatePath(updatedPositionMap, stash, oldPathId, path);
+		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
+		populatePath(path, remainingBlocks);
+
+		PositionMap updatedPositionMap = ongoingAccessContext.getUpdatedPositionMap();
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(remainingBlocks);
 		EncryptedPositionMap encryptedPositionMap = encryptionManager.encryptPositionMap(updatedPositionMap);
@@ -247,23 +254,49 @@ public abstract class ORAMObject {
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private Stash populatePath(PositionMap positionMap, Stash stash, int oldPathId, Map<Integer, Bucket> pathToPopulate) {
-		int[] oldPathLocations = allPaths.get(oldPathId);
-		for (int pathLocation : oldPathLocations) {
+	private void populatePath(Map<Integer, Bucket> pathToPopulate, Stash remainingBlocks) {
+		Stash stash = ongoingAccessContext.getMergedStash();
+		PositionMap positionMap = ongoingAccessContext.getMergedPositionMap();
+		int[] accessedPathLocations = allPaths.get(ongoingAccessContext.getAccessedPathId());
+		int accessedBlockAddress = ongoingAccessContext.getAddress();
+		int accessedAddressNewBucketLocation = ongoingAccessContext.getAccessedAddressNewBucketLocation();
+
+		for (int pathLocation : accessedPathLocations) {
 			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize()));
 		}
-		Stash remainingBlocks = new Stash(oramContext.getBlockSize());
+
+		boolean isSubstituted = false;
+
 		for (Block block : stash.getBlocks()) {
 			int address = block.getAddress();
 			int bucketId = positionMap.getPathAt(address);
+			if (address == accessedBlockAddress) {
+				logger.debug("Block {} was moved up from bucket {} to bucket {} in path {}", address, bucketId,
+						accessedAddressNewBucketLocation, ongoingAccessContext.getAccessedPathId());
+				bucketId = accessedAddressNewBucketLocation;
+				positionMap = updatePositionMap(ongoingAccessContext.getOperation(), positionMap,
+						ongoingAccessContext.isRealAccess(), address, accessedAddressNewBucketLocation,
+						ongoingAccessContext.getNewVersionId());
+			} else if (bucketId == accessedAddressNewBucketLocation && !isSubstituted) {
+				logger.debug("Block {} was moved down from bucket {} to bucket {}", address,
+						bucketId, ongoingAccessContext.getSubstitutedBlockNewBucketLocation());
+				bucketId = ongoingAccessContext.getSubstitutedBlockNewBucketLocation();
+				positionMap = updatePositionMap(ongoingAccessContext.getOperation(), positionMap,
+						ongoingAccessContext.isRealAccess(), address,
+						ongoingAccessContext.getSubstitutedBlockNewBucketLocation(),
+						ongoingAccessContext.getNewVersionId());
+				isSubstituted = true;
+			}
+
+			ongoingAccessContext.setUpdatedPositionMap(positionMap);
 
 			int pathIdForBucket = bucketToPaths.get(bucketId)[0];
 			int[] pathForBucket = allPaths.get(pathIdForBucket);
 
 			boolean isPathEmpty = false;
 			for (int i = 0; i < oramContext.getTreeLevels(); i++) {
-				if (oldPathLocations[i] == pathForBucket[i] && bucketId >= oldPathLocations[i]) {
-					Bucket bucket = pathToPopulate.get(oldPathLocations[i]);
+				if (accessedPathLocations[i] == pathForBucket[i] && bucketId >= accessedPathLocations[i]) {
+					Bucket bucket = pathToPopulate.get(accessedPathLocations[i]);
 					if (bucket.putBlock(block)) {
 						isPathEmpty = true;
 						break;
@@ -274,7 +307,6 @@ public abstract class ORAMObject {
 				remainingBlocks.putBlock(block);
 			}
 		}
-		return remainingBlocks;
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
