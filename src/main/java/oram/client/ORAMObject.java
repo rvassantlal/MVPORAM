@@ -387,7 +387,8 @@ public abstract class ORAMObject {
 					continue;
 				int blockAddress = block.getAddress();
 				int blockVersionId = block.getVersionId();
-				if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
+				Block storedBlock = recentBlocks.get(blockAddress);
+				if (storedBlock == null || storedBlock.getVersionId() < blockVersionId) {
 					recentBlocks.put(blockAddress, block);
 				}
 			}
@@ -404,7 +405,8 @@ public abstract class ORAMObject {
 			for (Block block : stash.getBlocks()) {
 				int blockAddress = block.getAddress();
 				int blockVersionId = block.getVersionId();
-				if (blockVersionId == mergedPositionMap.getVersionIdAt(blockAddress)) {
+				Block storedBlock = recentBlocks.get(blockAddress);
+				if (storedBlock == null || storedBlock.getVersionId() < blockVersionId) {
 					recentBlocks.put(blockAddress, block);
 				}
 			}
