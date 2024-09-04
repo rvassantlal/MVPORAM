@@ -1,5 +1,6 @@
 package oram.client.structure;
 
+import oram.utils.ORAMUtils;
 import oram.utils.Operation;
 
 public class OngoingAccessContext {
@@ -15,12 +16,19 @@ public class OngoingAccessContext {
 	private int newVersionId;
 	private PositionMap updatedPositionMap;
 	private byte[] oldContent;
+	private int substitutedBlockAddress;
+	private int accessedAddressBucket;
 
 	public OngoingAccessContext(int address, Operation operation, byte[] newContent) {
 		this.address = address;
 		this.operation = operation;
 		this.newContent = newContent;
 		this.isRealAccess = true;
+		this.accessedPathId = ORAMUtils.DUMMY_LOCATION;
+		this.accessedAddressNewBucketLocation = ORAMUtils.DUMMY_LOCATION;
+		this.substitutedBlockNewBucketLocation = ORAMUtils.DUMMY_LOCATION;
+		this.newVersionId = ORAMUtils.DUMMY_VERSION;
+		this.substitutedBlockAddress = ORAMUtils.DUMMY_ADDRESS;
 	}
 
 	public void setMergedPositionMap(PositionMap mergedPositionMap) {
@@ -106,5 +114,21 @@ public class OngoingAccessContext {
 
 	public byte[] getOldContent() {
 		return oldContent;
+	}
+
+	public void setSubstitutedBlockAddress(int substitutedBlockAddress) {
+		this.substitutedBlockAddress = substitutedBlockAddress;
+	}
+
+	public int getSubstitutedBlockAddress() {
+		return substitutedBlockAddress;
+	}
+
+	public void setAccessedAddressBucket(int accessedAddressBucket) {
+		this.accessedAddressBucket = accessedAddressBucket;
+	}
+
+	public int getAccessedAddressBucket() {
+		return accessedAddressBucket;
 	}
 }

@@ -131,8 +131,9 @@ public class Block implements CustomExternalizable, RawCustomExternalizable {
 
 	@Override
 	public String toString() {
-		String contentString = content == null ? "null" : new String(content);
-		return "Block{" + address + ", " + contentString + ", " + versionId + '}';
+		//String contentString = content == null ? "null" : new String(content);
+		//return "Block{" + address + ", " + contentString + ", " + versionId + '}';
+		return "B(" + address + ", " + versionId + ')';
 	}
 
 	public int getSerializedSize() {

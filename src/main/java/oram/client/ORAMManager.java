@@ -117,10 +117,11 @@ public class ORAMManager {
 	}
 
 	private EncryptedPositionMap initializeEmptyTriplePositionMap() {
-		int pathId = ORAMUtils.DUMMY_PATH;
-		int versionId = ORAMUtils.DUMMY_VERSION;
-		int address = ORAMUtils.DUMMY_ADDRESS;
-		PositionMap pm = new PositionMap(versionId, pathId, address);
+		int[] pathId = new int[] {ORAMUtils.DUMMY_LOCATION, ORAMUtils.DUMMY_LOCATION};
+		int[] versionId = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
+		int[] address = new int[] {ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_ADDRESS};
+		int[] blockVersions = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
+		PositionMap pm = new PositionMap(versionId, pathId, address, blockVersions);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 

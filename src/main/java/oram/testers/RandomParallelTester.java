@@ -32,10 +32,10 @@ public class RandomParallelTester {
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		rnd = new SecureRandom("oram".getBytes());
 		int nClients = Integer.parseInt(args[0]);
-		int oramId = Integer.parseInt(args[1]);
-		testSize = Integer.parseInt(args[2]);
+		int oramId = 1;
+		testSize = Integer.parseInt(args[1]);
 		PositionMapType oramType;
-		switch (args[3]) {
+		switch (args[2]) {
 			case "full":
 				oramType = PositionMapType.FULL_POSITION_MAP;
 				break;
@@ -51,9 +51,9 @@ public class RandomParallelTester {
 			oramManagerList.add(new ORAMManager(i));
 		}
 		int garbageCollectionFrequency = 2001;
-		int treeHeight = 4;
+		int treeHeight = 15;
 		int nBlocksPerBucket = 4;
-		int blockSize = 256;
+		int blockSize = 20;
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
 
 		oramManagerList.get(0).createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, nBlocksPerBucket,

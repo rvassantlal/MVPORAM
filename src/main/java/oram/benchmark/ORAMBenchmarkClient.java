@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
@@ -47,7 +48,7 @@ public class ORAMBenchmarkClient {
 			clients[i] = new Client(oramId, initialClientId, initialClientId + i, positionMapType,
 					garbageCollectionFrequency, treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
 			clients[i].start();
-			Thread.sleep(1000);
+			Thread.sleep(10);
 		}
 
 		try {
@@ -67,8 +68,10 @@ public class ORAMBenchmarkClient {
 		private final int nRequests;
 		private ORAMObject oram;
 		private final byte[] blockContent;
-		private final int address;
+		private int address;
 		private final boolean measurementLeader;
+		private final int treeSize;
+		private final SecureRandom rndGenerator;
 
 		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType,
 					   int garbageCollectionFrequency, int treeHeight, int bucketSize, int blockSize,
@@ -85,14 +88,11 @@ public class ORAMBenchmarkClient {
 				oram = oramManager.getORAM(oramId);
 			}
 
-			if (initialClientId == clientId && measurementLeader) {
-				oram.measure();
-			}
-
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
+			treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 			this.address = clientId % treeSize;
+			this.rndGenerator = new SecureRandom();
 		}
 
 		@Override
@@ -102,15 +102,23 @@ public class ORAMBenchmarkClient {
 				oram.writeMemory(address, blockContent);
 				long t1, t2, delay;
 				byte[] oldContent;
+				boolean isWrite;
 				for (int i = 0; i < nRequests; i++) {
+					isWrite = rndGenerator.nextBoolean();
+					address = rndGenerator.nextInt(treeSize);
 					t1 = System.nanoTime();
-					oldContent = oram.writeMemory(address, blockContent);
+
+					if (isWrite) {
+						oldContent = oram.writeMemory(address, blockContent);
+					} else {
+						oldContent = oram.readMemory(address);
+					}
 					t2 = System.nanoTime();
 					delay = t2 - t1;
-					if (!Arrays.equals(blockContent, oldContent)) {
+					/*if (!Arrays.equals(blockContent, oldContent)) {
 						measurementLogger.error("[Client {}] Content at address {} is different ({})", clientId, address, Arrays.toString(oldContent));
 						//break;
-					}
+					}*/
 					if (initialClientId == clientId && measurementLeader) {
 						measurementLogger.info("M-global: {}", delay);
 						logger.info("Access latency: {} ms", delay / 1_000_000.0);

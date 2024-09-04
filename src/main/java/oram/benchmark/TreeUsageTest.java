@@ -152,7 +152,7 @@ public class TreeUsageTest {
 		for (int itemAddress = 0; itemAddress < nItems; itemAddress++) {
 			for (int t = 0; t < nTests; t++) {
 				int itemLocation = positionMap.getPathAt(itemAddress);
-				if (itemLocation == ORAMUtils.DUMMY_PATH) {
+				if (itemLocation == ORAMUtils.DUMMY_LOCATION) {
 					itemLocation = rndGenerator.nextInt(nPaths);
 				}
 
@@ -199,7 +199,7 @@ public class TreeUsageTest {
 			}
 			for (int t = 0; t < nTests; t++) {
 				int itemLocation = positionMap.getPathAt(itemAddress);
-				if (itemLocation == ORAMUtils.DUMMY_PATH) {
+				if (itemLocation == ORAMUtils.DUMMY_LOCATION) {
 					itemLocation = rndGenerator.nextInt(treeSize);
 				}
 				// System.out.printf("Item %d accessed at %d\n", itemAddress, itemLocation);
@@ -251,7 +251,7 @@ public class TreeUsageTest {
 			}
 			for (int t = 0; t < nTests; t++) {
 				int itemLocation = positionMap.getPathAt(itemAddress);
-				if (itemLocation == ORAMUtils.DUMMY_PATH) {
+				if (itemLocation == ORAMUtils.DUMMY_LOCATION) {
 					itemLocation = rndGenerator.nextInt(treeSize);
 					// System.out.printf("Reading dummy bucket for item %d\n", itemAddress);
 				}
@@ -332,7 +332,7 @@ public class TreeUsageTest {
 			}
 			for (int t = 0; t < nTests; t++) {
 				int itemLocation = positionMap.getPathAt(itemAddress);
-				if (itemLocation == ORAMUtils.DUMMY_PATH) {
+				if (itemLocation == ORAMUtils.DUMMY_LOCATION) {
 					itemLocation = rndGenerator.nextInt(treeSize);
 					// System.out.printf("Reading dummy bucket for item %d\n", itemAddress);
 				}

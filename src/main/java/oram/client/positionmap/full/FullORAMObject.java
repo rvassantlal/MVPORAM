@@ -22,12 +22,14 @@ public class FullORAMObject extends ORAMObject {
 
 	@Override
 	protected PositionMap updatePositionMap(Operation op, PositionMap mergedPositionMap, boolean isRealAccess,
-											int address, int newPathId, int newVersionId) {
-		if (op == Operation.WRITE) {
-			mergedPositionMap.setVersionIdAt(address, newVersionId);
-		}
+											int accessedAddress, int accessedAddressNewLocation,
+											int substitutedBlockAddress, int substitutedBlockNewLocation,
+											int newVersionId) {
 		if (op == Operation.WRITE || (op == Operation.READ && isRealAccess)) {
-			mergedPositionMap.setPathAt(address, newPathId);
+			mergedPositionMap.setPathAt(accessedAddress, accessedAddressNewLocation);
+			mergedPositionMap.setPathAt(substitutedBlockAddress, substitutedBlockNewLocation);
+			mergedPositionMap.setVersionIdAt(accessedAddress, newVersionId);
+			mergedPositionMap.setVersionIdAt(substitutedBlockAddress, newVersionId);
 		}
 		return mergedPositionMap;
 	}
@@ -61,10 +63,10 @@ public class FullORAMObject extends ORAMObject {
 		int[] versionIds = new int[treeSize];
 
 		for (int address = 0; address < treeSize; address++) {
-			int recentPathId = ORAMUtils.DUMMY_PATH;
+			int recentPathId = ORAMUtils.DUMMY_LOCATION;
 			int recentVersionId = ORAMUtils.DUMMY_VERSION;
 			for (PositionMap positionMap : oldPositionMaps.getPositionMaps().values()) {
-				if (positionMap.getPathIds().length == 0)
+				if (positionMap.getLocations().length == 0)
 					continue;
 				int pathId = positionMap.getPathAt(address);
 				int versionId = positionMap.getVersionIdAt(address);
