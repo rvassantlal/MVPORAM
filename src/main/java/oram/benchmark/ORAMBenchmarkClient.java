@@ -36,7 +36,6 @@ public class ORAMBenchmarkClient {
 			System.exit(-1);
 			return;
 		}
-		int garbageCollectionFrequency = 1;
 		int treeHeight = Integer.parseInt(args[4]);
 		int bucketSize = Integer.parseInt(args[5]);
 		int blockSize = Integer.parseInt(args[6]);
@@ -46,7 +45,7 @@ public class ORAMBenchmarkClient {
 		Client[] clients = new Client[nClients];
 		for (int i = 0; i < nClients; i++) {
 			clients[i] = new Client(oramId, initialClientId, initialClientId + i, positionMapType,
-					garbageCollectionFrequency, treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
+					treeHeight, bucketSize, blockSize, latch, nRequests, measurementLeader);
 			clients[i].start();
 			Thread.sleep(10);
 		}
@@ -74,7 +73,7 @@ public class ORAMBenchmarkClient {
 		private final SecureRandom rndGenerator;
 
 		private Client(int oramId, int initialClientId, int clientId, PositionMapType oramType,
-					   int garbageCollectionFrequency, int treeHeight, int bucketSize, int blockSize,
+					   int treeHeight, int bucketSize, int blockSize,
 					   CountDownLatch latch, int nRequests, boolean measurementLeader) throws SecretSharingException {
 			this.initialClientId = initialClientId;
 			this.oramManager = new ORAMManager(clientId);
@@ -82,8 +81,7 @@ public class ORAMBenchmarkClient {
 			this.latch = latch;
 			this.nRequests = nRequests;
 			this.measurementLeader = measurementLeader;
-			this.oram = oramManager.createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, bucketSize,
-					blockSize);
+			this.oram = oramManager.createORAM(oramId, oramType, treeHeight, bucketSize, blockSize);
 			if (oram == null) {
 				oram = oramManager.getORAM(oramId);
 			}

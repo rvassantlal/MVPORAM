@@ -28,8 +28,8 @@ public class ORAMManager {
 		this.encryptionManager = new EncryptionManager();
 	}
 
-	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
-								 int treeHeight, int bucketSize, int blockSize) {
+	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize,
+								 int blockSize) {
 		try {
 			String password = encryptionManager.generatePassword();
 			encryptionManager.createSecretKey(password);
@@ -40,12 +40,9 @@ public class ORAMManager {
 			else
 				encryptedPositionMap = initializeEmptyTriplePositionMap();
 			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
-			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType, garbageCollectionFrequency,
+			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType,
 					treeHeight, bucketSize, blockSize, encryptedPositionMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
-			if (serializedRequest == null) {
-				return null;
-			}
 			Response response = serviceProxy.invokeOrdered(serializedRequest, password.getBytes());
 			if (response == null || response.getPlainData() == null) {
 				return null;
@@ -56,7 +53,7 @@ public class ORAMManager {
 				return null;
 			}
 			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-			ORAMContext oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight,
+			ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight,
 					treeSize, bucketSize, blockSize);
 			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
 				return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
@@ -71,9 +68,6 @@ public class ORAMManager {
 		try {
 			ORAMMessage request = new ORAMMessage(oramId);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_ORAM, request);
-			if (serializedRequest == null) {
-				return null;
-			}
 			Response response = serviceProxy.invokeUnordered(serializedRequest);
 			if (response == null || response.getPlainData() == null || response.getConfidentialData() == null) {
 				return null;
@@ -82,7 +76,6 @@ public class ORAMManager {
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPlainData());
 				 DataInputStream in = new DataInputStream(bis)) {
 				PositionMapType positionMapType = PositionMapType.getPositionMapType(in.readByte());
-				int garbageCollectionFrequency = in.readInt();
 				int treeHeight = in.readInt();
 				if (treeHeight == -1) {
 					return null;
@@ -90,8 +83,7 @@ public class ORAMManager {
 				int bucketSize = in.readInt();
 				int blockSize = in.readInt();
 				int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-				ORAMContext oramContext = new ORAMContext(positionMapType, garbageCollectionFrequency, treeHeight,
-						treeSize, bucketSize, blockSize);
+				ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
 				String password = new String(response.getConfidentialData()[0]);
 				encryptionManager.createSecretKey(password);
 				if (oramContext.getPositionMapType() == PositionMapType.FULL_POSITION_MAP)
@@ -112,7 +104,7 @@ public class ORAMManager {
 	private EncryptedPositionMap initializeEmptyFullPositionMap() {
 		int[] positionMap = new int[0];
 		int[] versionIds = new int[0];
-		PositionMap pm = new PositionMap(versionIds, positionMap);
+		PositionMap pm = new PositionMap(positionMap, versionIds);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 
@@ -121,7 +113,7 @@ public class ORAMManager {
 		int[] versionId = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
 		int[] address = new int[] {ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_ADDRESS};
 		int[] blockVersions = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
-		PositionMap pm = new PositionMap(versionId, pathId, address, blockVersions);
+		PositionMap pm = new PositionMap(address, pathId, versionId, blockVersions);
 		return encryptionManager.encryptPositionMap(pm);
 	}
 

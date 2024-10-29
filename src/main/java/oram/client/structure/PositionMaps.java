@@ -1,53 +1,21 @@
 package oram.client.structure;
 
-import oram.utils.CustomExternalizable;
-
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 
-public class PositionMaps implements CustomExternalizable {
-	private int newVersionId;
-	private Map<Integer, PositionMap> positionMaps;
+public class PositionMaps {
+	private final int newVersionId;
+	private final Map<Integer, PositionMap> positionMaps;
+	private final Map<Integer, EvictionMap> evictionMap;
+	private final int[] outstandingVersions;
+	private final Map<Integer, int[]> allOutstandingVersions;
 
-	public PositionMaps() {}
-
-	public PositionMaps(int newVersionId, Map<Integer, PositionMap> positionMaps) {
+	public PositionMaps(int newVersionId, Map<Integer, PositionMap> positionMaps, Map<Integer, EvictionMap> evictionMap,
+						int[] outstandingVersions, Map<Integer, int[]> allOutstandingVersions) {
 		this.newVersionId = newVersionId;
 		this.positionMaps = positionMaps;
-	}
-
-	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		out.writeInt(newVersionId);
-		int[] keys = new int[positionMaps.size()];
-		int k = 0;
-		for (Integer i : positionMaps.keySet()) {
-			keys[k++] = i;
-		}
-		Arrays.sort(keys);
-
-		out.writeInt(positionMaps.size());
-		for (int key : keys) {
-			out.writeInt(key);
-			positionMaps.get(key).writeExternal(out);
-		}
-	}
-
-	@Override
-	public void readExternal(DataInput in) throws IOException {
-		newVersionId = in.readInt();
-		int size = in.readInt();
-		positionMaps = new HashMap<>(size);
-		while (size-- > 0) {
-			int key = in.readInt();
-			PositionMap pm = new PositionMap();
-			pm.readExternal(in);
-			positionMaps.put(key, pm);
-		}
+		this.evictionMap = evictionMap;
+		this.outstandingVersions = outstandingVersions;
+		this.allOutstandingVersions = allOutstandingVersions;
 	}
 
 	public Map<Integer, PositionMap> getPositionMaps() {
@@ -56,5 +24,17 @@ public class PositionMaps implements CustomExternalizable {
 
 	public int getNewVersionId() {
 		return newVersionId;
+	}
+
+	public Map<Integer, EvictionMap> getEvictionMap() {
+		return evictionMap;
+	}
+
+	public Map<Integer, int[]> getAllOutstandingVersions() {
+		return allOutstandingVersions;
+	}
+
+	public int[] getOutstandingVersions() {
+		return outstandingVersions;
 	}
 }

@@ -26,21 +26,19 @@ public class FullORAMObject extends ORAMObject {
 											int substitutedBlockAddress, int substitutedBlockNewLocation,
 											int newVersionId) {
 		if (op == Operation.WRITE || (op == Operation.READ && isRealAccess)) {
-			mergedPositionMap.setPathAt(accessedAddress, accessedAddressNewLocation);
-			mergedPositionMap.setPathAt(substitutedBlockAddress, substitutedBlockNewLocation);
-			mergedPositionMap.setVersionIdAt(accessedAddress, newVersionId);
-			mergedPositionMap.setVersionIdAt(substitutedBlockAddress, newVersionId);
+			mergedPositionMap.setLocationOf(accessedAddress, accessedAddressNewLocation);
+			mergedPositionMap.setLocationOf(substitutedBlockAddress, substitutedBlockNewLocation);
+			mergedPositionMap.setLocationVersionOf(accessedAddress, newVersionId);
+			mergedPositionMap.setLocationVersionOf(substitutedBlockAddress, newVersionId);
 		}
 		return mergedPositionMap;
 	}
 
 	protected PositionMaps getPositionMaps() {
 		try {
-			ORAMMessage request = new GetPositionMap(oramId, -1);
+			ORAMMessage request = new GetPositionMap(oramId, -1, null, -1);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
-			if (serializedRequest == null) {
-				return null;
-			}
+
 			long start, end, delay;
 			start = System.nanoTime();
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
@@ -68,8 +66,8 @@ public class FullORAMObject extends ORAMObject {
 			for (PositionMap positionMap : oldPositionMaps.getPositionMaps().values()) {
 				if (positionMap.getLocations().length == 0)
 					continue;
-				int pathId = positionMap.getPathAt(address);
-				int versionId = positionMap.getVersionIdAt(address);
+				int pathId = positionMap.getLocationOf(address);
+				int versionId = positionMap.getLocationVersionOf(address);
 				if (versionId > recentVersionId) {
 					recentVersionId = versionId;
 					recentPathId = pathId;
@@ -78,6 +76,6 @@ public class FullORAMObject extends ORAMObject {
 			pathIds[address] = recentPathId;
 			versionIds[address] = recentVersionId;
 		}
-		return new PositionMap(versionIds, pathIds);
+		return new PositionMap(pathIds, versionIds);
 	}
 }

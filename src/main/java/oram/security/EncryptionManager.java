@@ -7,8 +7,8 @@ import oram.utils.ORAMUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,8 +25,13 @@ public class EncryptionManager {
 	}
 
 	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
-		EncryptedPositionMaps encryptedPositionMaps =
-				ORAMUtils.deserializeEncryptedPositionMaps(serializedEncryptedPositionMaps);
+		EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
+		int offset = encryptedPositionMaps.readExternal(serializedEncryptedPositionMaps, 0);
+		if (offset != serializedEncryptedPositionMaps.length) {
+			logger.error("Failed to deserialize encrypted position maps");
+			return null;
+		}
+
 		return decryptPositionMaps(encryptedPositionMaps);
 	}
 
@@ -44,32 +49,39 @@ public class EncryptionManager {
 		for (Map.Entry<Integer, EncryptedPositionMap> entry : encryptedPMs.entrySet()) {
 			positionMaps.put(entry.getKey(), decryptPositionMap(entry.getValue()));
 		}
-		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), positionMaps);
+
+		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), positionMaps,
+				encryptedPositionMaps.getEvictionMap(), encryptedPositionMaps.getOutstandingVersions(),
+				encryptedPositionMaps.getAllOutstandingVersions());
 
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext, byte[] serializedEncryptedStashesAndPaths) {
-
-		EncryptedStashesAndPaths encryptedStashesAndPaths = ORAMUtils.deserializeEncryptedPathAndStash(oramContext,
-				serializedEncryptedStashesAndPaths);
+		EncryptedStashesAndPaths encryptedStashesAndPaths = new EncryptedStashesAndPaths(oramContext);
+		int offset = encryptedStashesAndPaths.readExternal(serializedEncryptedStashesAndPaths, 0);
+		if (offset != serializedEncryptedStashesAndPaths.length) {
+			logger.error("Failed to deserialize encrypted stashes and paths");
+			return null;
+		}
 
 		return decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
 	}
 
 	public StashesAndPaths decryptStashesAndPaths(ORAMContext oramContext,
 												  EncryptedStashesAndPaths encryptedStashesAndPaths) {
-		Stash[] stashes = decryptStashes(oramContext.getBlockSize(), encryptedStashesAndPaths.getEncryptedStashes());
+		Map<Integer, Stash> stashes = decryptStashes(oramContext.getBlockSize(), encryptedStashesAndPaths.getEncryptedStashes());
 		Bucket[] paths = decryptPaths(oramContext, encryptedStashesAndPaths.getPaths());
 		return new StashesAndPaths(stashes, paths);
 	}
 
-	private Stash[] decryptStashes(int blockSize, EncryptedStash[] encryptedStashes) {
-		Stash[] stashes = new Stash[encryptedStashes.length];
-		measurementLogger.info("M-receivedStashes: {}", stashes.length);
+	private Map<Integer, Stash> decryptStashes(int blockSize, Map<Integer, EncryptedStash> encryptedStashes) {
+		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.size());
+		measurementLogger.info("M-receivedStashes: {}", encryptedStashes.size());
 		long nBlocks = 0;
-		for (int i = 0; i < encryptedStashes.length; i++) {
-			stashes[i] = decryptStash(blockSize, encryptedStashes[i]);
-			nBlocks += stashes[i].getBlocks().size();
+		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
+			Stash stash = decryptStash(blockSize, entry.getValue());
+			stashes.put(entry.getKey(), stash);
+			nBlocks += stash.getBlocks().size();
 		}
 		measurementLogger.info("M-receivedStashBlocks: {}", nBlocks);
 
@@ -86,30 +98,26 @@ public class EncryptionManager {
 	}
 
 	public EncryptedPositionMap encryptPositionMap(PositionMap positionMap) {
-		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			 DataOutputStream out = new DataOutputStream(bos)) {
-			positionMap.writeExternal(out);
-			out.flush();
-			bos.flush();
-			byte[] serializedPositionMap = bos.toByteArray();
-			byte[] encryptedPositionMap = encryptionAbstraction.encrypt(serializedPositionMap);
-			//logger.info("Position map size: {} bytes", serializedPositionMap.length);
-			//logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
-			return new EncryptedPositionMap(encryptedPositionMap);
-		} catch (IOException e) {
-			logger.error("Failed to encrypt position map", e);
+		int dataSize = positionMap.getSerializedSize();
+		byte[] serializedPositionMap = new byte[dataSize];
+		int offset = positionMap.writeExternal(serializedPositionMap, 0);
+		if (offset != dataSize) {
+			logger.error("Failed to serialize position map");
 			return null;
 		}
+
+		byte[] encryptedPositionMap = encryptionAbstraction.encrypt(serializedPositionMap);
+		//logger.info("Position map size: {} bytes", serializedPositionMap.length);
+		//logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
+		return new EncryptedPositionMap(encryptedPositionMap);
 	}
 
 	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {
 		byte[] serializedPositionMap = encryptionAbstraction.decrypt(encryptedPositionMap.getEncryptedPositionMap());
 		PositionMap deserializedPositionMap = new PositionMap();
-		try (ByteArrayInputStream bis = new ByteArrayInputStream(serializedPositionMap);
-			 DataInputStream in = new DataInputStream(bis)) {
-			deserializedPositionMap.readExternal(in);
-		} catch (IOException e) {
-			logger.error("Failed to decrypt position map", e);
+		int offset = deserializedPositionMap.readExternal(serializedPositionMap, 0);
+		if (offset != serializedPositionMap.length) {
+			logger.error("Failed to deserialize position map");
 			return null;
 		}
 		return deserializedPositionMap;
@@ -140,14 +148,14 @@ public class EncryptionManager {
 			block.writeExternal(serializedBlock, 0);
 			encryptedBlocks[i] = encryptionAbstraction.encrypt(serializedBlock);
 		}
-		return new EncryptedBucket(encryptedBlocks);
+		return new EncryptedBucket(encryptedBlocks, bucket.getLocation());
 	}
 
 	public Bucket decryptBucket(ORAMContext oramContext, EncryptedBucket encryptedBucket) {
 		if (encryptedBucket == null)
 			return null;
 		byte[][] blocks = encryptedBucket.getBlocks();
-		Bucket newBucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize());
+		Bucket newBucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), encryptedBucket.getLocation());
 
 		for (byte[] block : blocks) {
 			byte[] serializedBlock = encryptionAbstraction.decrypt(block);
@@ -159,6 +167,35 @@ public class EncryptionManager {
 			}
 		}
 		return newBucket;
+	}
+
+	public DebugSnapshot decryptDebugSnapshot(ORAMContext context, byte[] plainData) {
+		EncryptedDebugSnapshot encryptedDebugSnapshot = new EncryptedDebugSnapshot(context.getBucketSize());
+		int offset = encryptedDebugSnapshot.readExternal(plainData, 0);
+		if (offset != plainData.length) {
+			logger.error("Failed to deserialize encrypted debug snapshot");
+			return null;
+		}
+		BucketHolder[] encryptedTree = encryptedDebugSnapshot.getTree();
+		Map<Integer, EncryptedStash> encryptedStashes = encryptedDebugSnapshot.getStashes();
+
+		ArrayList<Bucket>[] tree = new ArrayList[encryptedTree.length];
+		for (int i = 0; i < encryptedTree.length; i++) {
+			BucketHolder bucketHolder = encryptedTree[i];
+			ArrayList<Bucket> buckets = new ArrayList<>(bucketHolder.getOutstandingBucketsVersions().size());
+			for (BucketSnapshot encryptedBucket : bucketHolder.getOutstandingBucketsVersions()) {
+				Bucket bucket = decryptBucket(context, encryptedBucket.getBucket());
+				buckets.add(bucket);
+			}
+			tree[i] = buckets;
+		}
+
+		Map<Integer, Stash> stashes = new HashMap<>(encryptedStashes.size());
+		for (Map.Entry<Integer, EncryptedStash> entry : encryptedStashes.entrySet()) {
+			stashes.put(entry.getKey(), decryptStash(context.getBlockSize(), entry.getValue()));
+		}
+
+		return new DebugSnapshot(tree, stashes);
 	}
 
 	public Map<Integer, EncryptedBucket> encryptPath(ORAMContext oramContext, Map<Integer, Bucket> path) {

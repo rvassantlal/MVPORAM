@@ -1,40 +1,48 @@
 package oram.client.structure;
 
-import oram.utils.CustomExternalizable;
 import oram.utils.ORAMUtils;
 import oram.utils.RawCustomExternalizable;
 
-import java.io.*;
 import java.util.Arrays;
 import java.util.Objects;
 
-public class Block implements CustomExternalizable, RawCustomExternalizable {
+public class Block implements RawCustomExternalizable {
 	private final int blockSize;
 	private int address;
-	private int versionId;
+	private int contentVersion;
+	private int locationVersion;
 	private byte[] content;
 
 	public Block(int blockSize) {
 		this.blockSize = blockSize;
 	}
 
-	public Block(int blockSize, int address, int versionId, byte[] newContent) {
+	public Block(int blockSize, int address, int contentAndLocationVersion, byte[] newContent) {
 		this.blockSize = blockSize;
 		this.address = address;
-		this.versionId = versionId;
+		this.contentVersion = contentAndLocationVersion;
 		this.content = newContent;
+		this.locationVersion = contentAndLocationVersion;
 	}
 
 	public int getAddress() {
 		return address;
 	}
 
-	public int getVersionId() {
-		return versionId;
+	public int getContentVersion() {
+		return contentVersion;
 	}
 
-	public void setVersionId(int versionId) {
-		this.versionId = versionId;
+	public int getLocationVersion() {
+		return locationVersion;
+	}
+
+	public void setContentVersion(int contentVersion) {
+		this.contentVersion = contentVersion;
+	}
+
+	public void setLocationVersion(int locationVersion) {
+		this.locationVersion = locationVersion;
 	}
 
 	public byte[] getContent() {
@@ -46,37 +54,16 @@ public class Block implements CustomExternalizable, RawCustomExternalizable {
 	}
 
 	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		out.writeInt(address);
-		out.writeInt(versionId);
-		byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
-		int emptyBytes = blockSize - content.length;
-		byte[] serializedNEmptyBytes = ORAMUtils.toBytes(emptyBytes);
-		System.arraycopy(serializedNEmptyBytes, 0, paddedContent, blockSize, 4);
-		out.write(paddedContent);
-	}
-
-	@Override
-	public void readExternal(DataInput in) throws IOException {
-		address = in.readInt();
-		versionId = in.readInt();
-		byte[] paddedContent = new byte[blockSize + 4];
-		in.readFully(paddedContent);
-		byte[] serializedNEmptyBytes = new byte[4];
-		System.arraycopy(paddedContent, blockSize, serializedNEmptyBytes, 0, 4);
-		int emptyBytes = ORAMUtils.toNumber(serializedNEmptyBytes);
-		content = Arrays.copyOf(paddedContent, blockSize - emptyBytes);
-	}
-
-	@Override
 	public int writeExternal(byte[] output, int startOffset) {
 		int offset = startOffset;
-		byte[] addressBytes = ORAMUtils.toBytes(address);
-		System.arraycopy(addressBytes, 0, output, offset, 4);
+
+		ORAMUtils.serializeInteger(address, output, offset);
 		offset += 4;
 
-		byte[] versionIdBytes = ORAMUtils.toBytes(versionId);
-		System.arraycopy(versionIdBytes, 0, output, offset, 4);
+		ORAMUtils.serializeInteger(contentVersion, output, offset);
+		offset += 4;
+
+		ORAMUtils.serializeInteger(locationVersion, output, offset);
 		offset += 4;
 
 		byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
@@ -92,15 +79,15 @@ public class Block implements CustomExternalizable, RawCustomExternalizable {
 	@Override
 	public int readExternal(byte[] input, int startOffset) {
 		int offset = startOffset;
-		byte[] addressBytes = new byte[4];
-		System.arraycopy(input, offset, addressBytes, 0, 4);
-		offset += 4;
-		address = ORAMUtils.toNumber(addressBytes);
 
-		byte[] versionIdBytes = new byte[4];
-		System.arraycopy(input, offset, versionIdBytes, 0, 4);
+		address = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
-		versionId = ORAMUtils.toNumber(versionIdBytes);
+
+		contentVersion = ORAMUtils.deserializeInteger(input, offset);
+		offset += 4;
+
+		locationVersion = ORAMUtils.deserializeInteger(input, offset);
+		offset += 4;
 
 		byte[] paddedContent = new byte[blockSize + 4];
 		System.arraycopy(input, offset, paddedContent, 0, blockSize + 4);
@@ -117,26 +104,22 @@ public class Block implements CustomExternalizable, RawCustomExternalizable {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
+		if (!(o instanceof Block)) return false;
 		Block block = (Block) o;
-		return address == block.address && Arrays.equals(content, block.content);
+		return address == block.address && contentVersion == block.contentVersion && locationVersion == block.locationVersion;
 	}
 
 	@Override
 	public int hashCode() {
-		int result = Objects.hash(address);
-		result = 31 * result + Arrays.hashCode(content);
-		return result;
+		return Objects.hash(address, contentVersion, locationVersion);
 	}
 
 	@Override
 	public String toString() {
-		//String contentString = content == null ? "null" : new String(content);
-		//return "Block{" + address + ", " + contentString + ", " + versionId + '}';
-		return "B(" + address + ", " + versionId + ')';
+		return "B(A: " + address + ", CV: " + contentVersion + ", LV: " + locationVersion + ")";
 	}
 
 	public int getSerializedSize() {
-		return 4 * 3 + blockSize;
+		return 4 * Integer.BYTES + blockSize;
 	}
 }

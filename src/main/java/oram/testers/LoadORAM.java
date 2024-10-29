@@ -36,7 +36,7 @@ public class LoadORAM {
 		int blockSize = Integer.parseInt(args[3]);
 
 		ORAMManager oramManager = new ORAMManager(initialClientId);
-		ORAMObject oram = oramManager.createORAM(oramId, positionMapType, 1, treeHeight, bucketSize, blockSize);
+		ORAMObject oram = oramManager.createORAM(oramId, positionMapType, treeHeight, bucketSize, blockSize);
 		if (oram == null) {
 			logger.warn("ORAM with id {} already exists", oramId);
 			oram = oramManager.getORAM(oramId);

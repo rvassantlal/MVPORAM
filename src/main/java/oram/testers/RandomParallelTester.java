@@ -28,14 +28,21 @@ public class RandomParallelTester {
 	static SecureRandom rnd;
 	static int maxAddress;
 
-	// RUN WITH 3 ARGS : NUMBER_OF_CLIENTS, ORAM_ID AND TEST_SIZE
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
+		if (args.length != 6) {
+			System.out.println("Usage: oram.testers.RandomParallelTester <initial client id> <nClients> <testSize> <treeHeight> <nBlocksPerBucket> <full | triple>");
+			System.exit(-1);
+		}
 		rnd = new SecureRandom("oram".getBytes());
-		int nClients = Integer.parseInt(args[0]);
+		int initialClientId = Integer.parseInt(args[0]);
+		int nClients = Integer.parseInt(args[1]);
+		testSize = Integer.parseInt(args[2]);
+		int treeHeight = Integer.parseInt(args[3]);
+		int nBlocksPerBucket = Integer.parseInt(args[4]);
+		int blockSize = 20;
 		int oramId = 1;
-		testSize = Integer.parseInt(args[1]);
 		PositionMapType oramType;
-		switch (args[2]) {
+		switch (args[5]) {
 			case "full":
 				oramType = PositionMapType.FULL_POSITION_MAP;
 				break;
@@ -47,25 +54,27 @@ public class RandomParallelTester {
 		}
 		List<ORAMManager> oramManagerList = new ArrayList<>();
 		List<Thread> threads = new ArrayList<>();
-		for (int i = 1; i < nClients + 1; i++) {
-			oramManagerList.add(new ORAMManager(i));
+		for (int i = 0; i < nClients; i++) {
+			oramManagerList.add(new ORAMManager(initialClientId + i));
 		}
-		int garbageCollectionFrequency = 2001;
-		int treeHeight = 15;
-		int nBlocksPerBucket = 4;
-		int blockSize = 20;
+
 		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
 
-		oramManagerList.get(0).createORAM(oramId, oramType, garbageCollectionFrequency, treeHeight, nBlocksPerBucket,
-				blockSize);
+		oramManagerList.get(0).createORAM(oramId, oramType, treeHeight, nBlocksPerBucket, blockSize);
 
 		for (ORAMManager oramManager : oramManagerList) {
 			ORAMObject oram = oramManager.getORAM(oramId);
 			threads.add(new Thread(() -> {
 				for (int i = 0; i < testSize; i++) {
 					//System.out.println(i);
-					randomAccess(oram);
+					try {
+						randomAccess(oram);
+					} catch (Exception e) {
+						//oram.serializeDebugData();
+						throw e;
+					}
 				}
+				//oram.serializeDebugData();
 			}));
 		}
 		////// For profiling uncomment these lines
@@ -83,6 +92,12 @@ public class RandomParallelTester {
 		for (ORAMManager oramManager : oramManagerList) {
 			oramManager.close();
 		}
+
+		ORAMManager oramManager = new ORAMManager(100000 + initialClientId);
+		ORAMObject oram = oramManager.getORAM(oramId);
+		oram.writeMemory(0, "test".getBytes());
+		//oram.getORAMSnapshot();
+		oramManager.close();
 	}
 
 	private static void randomAccess(ORAMObject oram) {

@@ -39,6 +39,10 @@ public class OutstandingTree {
 		return stashes;
 	}
 
+	public BucketHolder[] getTree() {
+		return tree;
+	}
+
 	public Set<Integer> getOutstandingVersions() {
 		return outstandingVersions;
 	}

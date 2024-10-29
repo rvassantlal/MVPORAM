@@ -1,6 +1,7 @@
 package oram.utils;
 
 public enum ServerOperationType {
+	DEBUG,
 	CREATE_ORAM,
 	GET_POSITION_MAP,
 	GET_ORAM,

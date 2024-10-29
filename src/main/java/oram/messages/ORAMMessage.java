@@ -1,10 +1,9 @@
 package oram.messages;
 
-import oram.utils.CustomExternalizable;
+import oram.utils.ORAMUtils;
+import oram.utils.RawCustomExternalizable;
 
-import java.io.*;
-
-public class ORAMMessage implements CustomExternalizable {
+public class ORAMMessage implements RawCustomExternalizable {
 	private int oramId;
 
 	public ORAMMessage() {}
@@ -17,17 +16,22 @@ public class ORAMMessage implements CustomExternalizable {
 		return oramId;
 	}
 
-	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		out.writeInt(oramId);
-	}
-
-	@Override
-	public void readExternal(DataInput in) throws IOException {
-		oramId = in.readInt();
-	}
-
 	public int getSerializedSize() {
 		return 4;
+	}
+
+	@Override
+	public int writeExternal(byte[] output, int startOffset) {
+		byte[] oramIdBytes = ORAMUtils.toBytes(oramId);
+		System.arraycopy(oramIdBytes, 0, output, startOffset, 4);
+		return startOffset + 4;
+	}
+
+	@Override
+	public int readExternal(byte[] input, int startOffset) {
+		byte[] oramIdBytes = new byte[4];
+		System.arraycopy(input, startOffset, oramIdBytes, 0, 4);
+		oramId = ORAMUtils.toNumber(oramIdBytes);
+		return startOffset + 4;
 	}
 }

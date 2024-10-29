@@ -3,6 +3,12 @@ package oram.utils;
 public interface RawCustomExternalizable {
 
 	/**
+	 * Returns the number of bytes required to serialize the object.
+	 * @return The number of bytes required to serialize the object
+	 */
+	int getSerializedSize();
+
+	/**
 	 * Serializes the object into the output byte array.
 	 * @param output Output byte array
 	 * @param startOffset Start offset in the output byte array

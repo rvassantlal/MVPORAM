@@ -1,6 +1,7 @@
-package oram.server.structure;
+package oram.server;
 
 import oram.messages.GetPositionMap;
+import oram.server.structure.*;
 import oram.utils.PositionMapType;
 import vss.secretsharing.VerifiableShare;
 
@@ -10,10 +11,10 @@ import java.util.Set;
 
 public class FullPositionMapORAM extends ORAM {
 
-	public FullPositionMapORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType, int garbageCollectionFrequency,
+	public FullPositionMapORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType,
 							   int treeHeight, int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
 							   EncryptedStash encryptedStash) {
-		super(oramId, encryptionKeyShare, positionMapType, garbageCollectionFrequency, treeHeight, bucketSize, blockSize,
+		super(oramId, encryptionKeyShare, positionMapType, treeHeight, bucketSize, blockSize,
 				encryptedPositionMap, encryptedStash);
 	}
 
@@ -34,7 +35,8 @@ public class FullPositionMapORAM extends ORAM {
 				outstandingTree);
 
 		oramClientContexts.put(clientId, oramClientContext);
-		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);
+		return new EncryptedPositionMaps(newVersionId, resultedPositionMap, null,
+				currentOutstandingVersions, null);
 	}
 
 	protected void cleanPositionMaps(int[] outstandingVersions) {

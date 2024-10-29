@@ -21,12 +21,14 @@ import java.util.Set;
 public class TripleORAMObject extends ORAMObject {
 	private final PositionMap mergedPositionMap;
 	private int latestSequenceNumber;
+	private final Set<Integer> missingTriples;
 
 	public TripleORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 							EncryptionManager encryptionManager) throws SecretSharingException {
 		super(serviceProxy, oramId, oramContext, encryptionManager);
 		this.mergedPositionMap = new PositionMap(oramContext.getTreeSize());
 		this.latestSequenceNumber = 0; //server stores the initial position map and stash with version 1
+		this.missingTriples = new HashSet<>();
 	}
 
 	@Override
@@ -35,44 +37,54 @@ public class TripleORAMObject extends ORAMObject {
 											int substitutedBlockAddress, int substitutedBlockNewLocation,
 											int newVersionId) {
 		int[] addresses = new int[] {accessedAddress, substitutedBlockAddress};
-		int[] blockModificationVersions;
-		int[] versionId;
-		int[] pathId;
-		if (isRealAccess || op == Operation.WRITE) {
-			pathId = new int[] {accessedAddressNewLocation, substitutedBlockNewLocation};
-			mergedPositionMap.setPathAt(accessedAddress, accessedAddressNewLocation);
-			mergedPositionMap.setPathAt(substitutedBlockAddress, substitutedBlockNewLocation);
-			versionId = new int[] {newVersionId, newVersionId};
-			mergedPositionMap.setVersionIdAt(accessedAddress, newVersionId);
-			mergedPositionMap.setVersionIdAt(substitutedBlockAddress, newVersionId);
+		int[] locations = new int[2];
+		int[] contentVersions = new int[2];
+		int[] locationVersions = new int[2];
+
+		//updating accessed block information
+		if (op == Operation.READ && isRealAccess) {
+			locations[0] = accessedAddressNewLocation;
+			locationVersions[0] = newVersionId;
+			contentVersions[0] = mergedPositionMap.getContentVersionOf(accessedAddress);
+			mergedPositionMap.setLocationOf(accessedAddress, accessedAddressNewLocation);
+			mergedPositionMap.setLocationVersionOf(accessedAddress, newVersionId);
+		} else if (op == Operation.WRITE) {
+			locations[0] = accessedAddressNewLocation;
+			locationVersions[0] = newVersionId;
+			contentVersions[0] = newVersionId;
+			mergedPositionMap.setLocationOf(accessedAddress, accessedAddressNewLocation);
+			mergedPositionMap.setLocationVersionOf(accessedAddress, newVersionId);
+			mergedPositionMap.setContentVersionOf(accessedAddress, newVersionId);
 		} else {
-			pathId = new int[] {ORAMUtils.DUMMY_LOCATION, ORAMUtils.DUMMY_LOCATION};
-			versionId = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
+			locations[0] = ORAMUtils.DUMMY_LOCATION;
+			locationVersions[0] = ORAMUtils.DUMMY_VERSION;
+			contentVersions[0] = ORAMUtils.DUMMY_VERSION;
 		}
 
-		if (op == Operation.WRITE) {
-			blockModificationVersions = new int[] {newVersionId,
-					mergedPositionMap.getBlockModificationVersionAt(substitutedBlockAddress)};
-			mergedPositionMap.setBlockModificationVersionAt(accessedAddress, newVersionId);
+		//update substituted block information
+		if (substitutedBlockAddress != ORAMUtils.DUMMY_ADDRESS) {
+			locations[1] = substitutedBlockNewLocation;
+			locationVersions[1] = newVersionId;
+			contentVersions[1] = mergedPositionMap.getContentVersionOf(substitutedBlockAddress);
+			mergedPositionMap.setLocationOf(substitutedBlockAddress, substitutedBlockNewLocation);
+			mergedPositionMap.setLocationVersionOf(substitutedBlockAddress, newVersionId);
 		} else {
-			blockModificationVersions = new int[] {
-					mergedPositionMap.getBlockModificationVersionAt(accessedAddress),
-					mergedPositionMap.getBlockModificationVersionAt(substitutedBlockAddress)
-			};
+			locations[1] = ORAMUtils.DUMMY_LOCATION;
+			locationVersions[1] = ORAMUtils.DUMMY_VERSION;
+			contentVersions[1] = ORAMUtils.DUMMY_VERSION;
 		}
 
-		return new PositionMap(versionId, pathId, addresses, blockModificationVersions);
+		return new PositionMap(addresses, locations, locationVersions, contentVersions);
 	}
 
 
 	protected PositionMaps getPositionMaps() {
 		try {
 			//sb.append("My last sequence number: ").append(latestSequenceNumber).append("\n");
-			ORAMMessage request = new GetPositionMap(oramId, latestSequenceNumber);
+			debugInfoBuilder.append("My last sequence number: ").append(latestSequenceNumber).append("\n");
+			debugInfoBuilder.append("Missing triples: ").append(missingTriples).append("\n");
+			ORAMMessage request = new GetPositionMap(oramId, latestSequenceNumber, missingTriples, latestEvictionSequenceNumber);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
-			if (serializedRequest == null) {
-				return null;
-			}
 
 			long start, end, delay;
 			start = System.nanoTime();
@@ -95,74 +107,75 @@ public class TripleORAMObject extends ORAMObject {
 
 	@Override
 	protected PositionMap mergePositionMaps(PositionMaps oldPositionMaps) {
-		int highestSequenceNumber = oldPositionMaps.getNewVersionId();
 		Map<Integer, PositionMap> positionMaps = oldPositionMaps.getPositionMaps();
-		boolean notNull = true;
+		debugInfoBuilder.append("Number of position maps: ").append(positionMaps.size()).append("\n");
 
-		//sb.append("Number of position maps: ").append(positionMaps.size()).append("\n");
-		//sb.append("Modified addresses: ").append(modifiedAddresses).append("\n");
+		int maxReceivedSequenceNumber = ORAMUtils.DUMMY_VERSION;
+		for (Map.Entry<Integer, PositionMap> entry : positionMaps.entrySet()) {
+			maxReceivedSequenceNumber = Math.max(maxReceivedSequenceNumber, entry.getKey());
+			missingTriples.remove(entry.getKey());
 
-		for (int i = latestSequenceNumber + 1; i < highestSequenceNumber; i++) {
-			if(i == ORAMUtils.DUMMY_VERSION)
-				continue;
-			PositionMap currentPM = positionMaps.get(i);
-			if (currentPM == null) {
-				notNull = false;
-			} else {
-				//apply changes of modified block
-				int modifiedBlockAddress = currentPM.getAddress()[0];
-				int modifiedBlockLocation = currentPM.getPathAt(modifiedBlockAddress);
-				if (modifiedBlockAddress != ORAMUtils.DUMMY_ADDRESS
-						&& modifiedBlockLocation != ORAMUtils.DUMMY_LOCATION) {
-					if (currentPM.getBlockModificationVersionAt(modifiedBlockAddress)
-							> mergedPositionMap.getBlockModificationVersionAt(modifiedBlockAddress)) { //if the block was recently written
-						mergedPositionMap.setPathAt(modifiedBlockAddress, modifiedBlockLocation);
-						mergedPositionMap.setBlockModificationVersionAt(modifiedBlockAddress,
-								currentPM.getBlockModificationVersionAt(modifiedBlockAddress));
-						mergedPositionMap.setVersionIdAt(modifiedBlockAddress,
-								currentPM.getVersionIdAt(modifiedBlockAddress));
-					} else if (currentPM.getBlockModificationVersionAt(modifiedBlockAddress)
-							== mergedPositionMap.getBlockModificationVersionAt(modifiedBlockAddress)
-							&& currentPM.getVersionIdAt(modifiedBlockAddress)
-							> mergedPositionMap.getVersionIdAt(modifiedBlockAddress)) { //if the block was recently read
-						mergedPositionMap.setPathAt(modifiedBlockAddress, modifiedBlockLocation);
-						mergedPositionMap.setVersionIdAt(modifiedBlockAddress, currentPM.getVersionIdAt(modifiedBlockAddress));
-					}
+			PositionMap currentPM = entry.getValue();
+
+			//apply changes of modified block
+			int accessedBlockAddress = currentPM.getAddress()[0];
+			int accessedBlockLocation = currentPM.getLocationOf(accessedBlockAddress);
+			int accessedBlockContentVersion = currentPM.getContentVersionOf(accessedBlockAddress);
+			int accessedBlockLocationVersion = currentPM.getLocationVersionOf(accessedBlockAddress);
+
+			if (accessedBlockAddress != ORAMUtils.DUMMY_ADDRESS
+					&& accessedBlockLocation != ORAMUtils.DUMMY_LOCATION) {
+				if (accessedBlockContentVersion > mergedPositionMap.getContentVersionOf(accessedBlockAddress)) { //if the block was recently written
+					mergedPositionMap.setLocationOf(accessedBlockAddress, accessedBlockLocation);
+					mergedPositionMap.setContentVersionOf(accessedBlockAddress, accessedBlockContentVersion);
+					mergedPositionMap.setLocationVersionOf(accessedBlockAddress, accessedBlockLocationVersion);
+				} else if (accessedBlockContentVersion == mergedPositionMap.getContentVersionOf(accessedBlockAddress)
+						&& accessedBlockLocationVersion > mergedPositionMap.getLocationVersionOf(accessedBlockAddress)) { //if the block was recently read
+					mergedPositionMap.setLocationOf(accessedBlockAddress, accessedBlockLocation);
+					mergedPositionMap.setLocationVersionOf(accessedBlockAddress, accessedBlockLocationVersion);
 				}
+			}
 
-				/*int substitutedBlockAddress = currentPM.getAddress()[1];
-				int substitutedBlockLocation = currentPM.getPathAt(substitutedBlockAddress);
-				sb.append("\t").append(i).append(" -> modified: ")
-						.append(modifiedBlockAddress).append(" ")
-						.append(modifiedBlockLocation).append(" ")
-						.append(currentPM.getBlockModificationVersionAt(modifiedBlockAddress)).append(" ")
-						.append(currentPM.getVersionIdAt(modifiedBlockAddress))
-						.append("\t\tsubstituted: ")
-						.append(substitutedBlockAddress).append(" ")
-						.append(substitutedBlockLocation).append(" ")
-						.append(currentPM.getBlockModificationVersionAt(substitutedBlockAddress)).append(" ")
-						.append(currentPM.getVersionIdAt(substitutedBlockAddress)).append("\n");*/
-			}
-			if (notNull) {
-				latestSequenceNumber = i;
-			}
+			int substitutedBlockAddress = currentPM.getAddress()[1];
+			int substitutedBlockLocation = currentPM.getLocationOf(substitutedBlockAddress);
+			int substitutedBlockContentVersion = currentPM.getContentVersionOf(substitutedBlockAddress);
+			int substitutedBlockLocationVersion = currentPM.getLocationVersionOf(substitutedBlockAddress);
+
+			/*debugInfoBuilder.append("\t").append(" -> modified: ")
+					.append(accessedBlockAddress).append(" ")
+					.append(accessedBlockLocation).append(" ")
+					.append(currentPM.getContentVersionOf(accessedBlockAddress)).append(" ")
+					.append(currentPM.getLocationVersionOf(accessedBlockAddress))
+					.append("\t\tsubstituted: ")
+					.append(substitutedBlockAddress).append(" ")
+					.append(substitutedBlockLocation).append(" ")
+					.append(substitutedBlockContentVersion).append(" ")
+					.append(substitutedBlockLocationVersion).append("\n");*/
 		}
 
 		for (PositionMap currentPM : positionMaps.values()) {
 			//apply changes of substituted block
 			int substitutedBlockAddress = currentPM.getAddress()[1];
-			int substitutedBlockLocation = currentPM.getPathAt(substitutedBlockAddress);
+			int substitutedBlockLocation = currentPM.getLocationOf(substitutedBlockAddress);
+			int substitutedBlockContentVersion = currentPM.getContentVersionOf(substitutedBlockAddress);
+			int substitutedBlockLocationVersion = currentPM.getLocationVersionOf(substitutedBlockAddress);
+
 			if (substitutedBlockAddress != ORAMUtils.DUMMY_ADDRESS
-					&& substitutedBlockLocation != ORAMUtils.DUMMY_LOCATION) {
-				if (currentPM.getBlockModificationVersionAt(substitutedBlockAddress)
-						== mergedPositionMap.getBlockModificationVersionAt(substitutedBlockAddress)
-						&& currentPM.getVersionIdAt(substitutedBlockAddress)
-						>= mergedPositionMap.getVersionIdAt(substitutedBlockAddress)) {
-					mergedPositionMap.setPathAt(substitutedBlockAddress, substitutedBlockLocation);
-					mergedPositionMap.setVersionIdAt(substitutedBlockAddress, currentPM.getVersionIdAt(substitutedBlockAddress));
-				}
+					&& substitutedBlockLocation != ORAMUtils.DUMMY_LOCATION
+					&& substitutedBlockContentVersion == mergedPositionMap.getContentVersionOf(substitutedBlockAddress)
+					&& substitutedBlockLocationVersion >= mergedPositionMap.getLocationVersionOf(substitutedBlockAddress)) {
+				mergedPositionMap.setLocationOf(substitutedBlockAddress, substitutedBlockLocation);
+				mergedPositionMap.setLocationVersionOf(substitutedBlockAddress, substitutedBlockLocationVersion);
 			}
 		}
+
+		for (int i = latestSequenceNumber + 1; i < maxReceivedSequenceNumber; i++) {
+			if (!positionMaps.containsKey(i)) {
+				missingTriples.add(i);
+			}
+		}
+		latestSequenceNumber = maxReceivedSequenceNumber;
+		debugInfoBuilder.append("Latest sequence number: ").append(latestSequenceNumber).append("\n");
 
 		return mergedPositionMap;
 	}

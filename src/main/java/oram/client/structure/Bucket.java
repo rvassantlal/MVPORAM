@@ -1,18 +1,17 @@
 package oram.client.structure;
 
-import oram.utils.CustomExternalizable;
-
-import java.io.*;
 import java.util.Arrays;
 
-public class Bucket implements CustomExternalizable {
+public class Bucket {
 	private final Block[] blocks;
 	private final int blockSize;
+	private final int location;
 	private int index;
 
-	public Bucket(int bucketSize, int blockSize) {
+	public Bucket(int bucketSize, int blockSize, int location) {
 		blocks = new Block[bucketSize];
 		this.blockSize = blockSize;
+		this.location = location;
 	}
 
 	public boolean putBlock(Block block) {
@@ -30,23 +29,11 @@ public class Bucket implements CustomExternalizable {
 		return this.blocks;
 	}
 
+	public int getLocation() {
+		return location;
+	}
+
 	public String toString() {
 		return Arrays.toString(blocks);
-	}
-
-
-	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		for (Block block : blocks) {
-			block.writeExternal(out);
-		}
-	}
-
-	@Override
-	public void readExternal(DataInput in) throws IOException {
-		for (int i = 0; i < blocks.length; i++) {
-			Block block = new Block(blockSize);
-			block.readExternal(in);
-		}
 	}
 }

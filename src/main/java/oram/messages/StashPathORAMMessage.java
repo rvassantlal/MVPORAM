@@ -1,6 +1,6 @@
 package oram.messages;
 
-import java.io.*;
+import oram.utils.ORAMUtils;
 
 public class StashPathORAMMessage extends ORAMMessage {
 
@@ -18,15 +18,26 @@ public class StashPathORAMMessage extends ORAMMessage {
 	}
 
 	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		super.writeExternal(out);
-		out.writeInt(pathId);
+	public int writeExternal(byte[] output, int startOffset) {
+		int offset = super.writeExternal(output, startOffset);
+
+		byte[] pathIdBytes = ORAMUtils.toBytes(pathId);
+		System.arraycopy(pathIdBytes, 0, output, offset, 4);
+		offset += 4;
+
+		return offset;
 	}
 
 	@Override
-	public void readExternal(DataInput in) throws IOException {
-		super.readExternal(in);
-		pathId = in.readInt();
+	public int readExternal(byte[] input, int startOffset) {
+		int offset = super.readExternal(input, startOffset);
+
+		byte[] pathIdBytes = new byte[4];
+		System.arraycopy(input, offset, pathIdBytes, 0, 4);
+		pathId = ORAMUtils.toNumber(pathIdBytes);
+		offset += 4;
+
+		return offset;
 	}
 
 	@Override

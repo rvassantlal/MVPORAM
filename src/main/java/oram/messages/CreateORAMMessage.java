@@ -2,13 +2,11 @@ package oram.messages;
 
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
+import oram.utils.ORAMUtils;
 import oram.utils.PositionMapType;
-
-import java.io.*;
 
 public class CreateORAMMessage extends ORAMMessage {
 	private PositionMapType positionMapType;
-	private int garbageCollectionFrequency;
 	private int treeHeight;
 	private int nBlocksPerBucket;
 	private int blockSize;
@@ -17,12 +15,11 @@ public class CreateORAMMessage extends ORAMMessage {
 
 	public CreateORAMMessage() {}
 
-	public CreateORAMMessage(int oramId, PositionMapType positionMapType, int garbageCollectionFrequency,
+	public CreateORAMMessage(int oramId, PositionMapType positionMapType,
 							 int treeHeight, int nBlocksPerBucket, int blockSize,
 							 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
 		super(oramId);
 		this.positionMapType = positionMapType;
-		this.garbageCollectionFrequency = garbageCollectionFrequency;
 		this.treeHeight = treeHeight;
 		this.nBlocksPerBucket = nBlocksPerBucket;
 		this.blockSize = blockSize;
@@ -32,10 +29,6 @@ public class CreateORAMMessage extends ORAMMessage {
 
 	public PositionMapType getPositionMapType() {
 		return positionMapType;
-	}
-
-	public int getGarbageCollectionFrequency() {
-		return garbageCollectionFrequency;
 	}
 
 	public int getTreeHeight() {
@@ -59,34 +52,64 @@ public class CreateORAMMessage extends ORAMMessage {
 	}
 
 	@Override
-	public void writeExternal(DataOutput out) throws IOException {
-		super.writeExternal(out);
-		out.writeByte(positionMapType.ordinal());
-		out.writeInt(garbageCollectionFrequency);
-		out.writeInt(treeHeight);
-		out.writeInt(nBlocksPerBucket);
-		out.writeInt(blockSize);
-		encryptedPositionMap.writeExternal(out);
-		encryptedStash.writeExternal(out);
+	public int writeExternal(byte[] output, int startOffset) {
+		int offset = super.writeExternal(output, startOffset);
+
+		output[offset] = (byte) positionMapType.ordinal();
+		offset++;
+
+		byte[] treeHeightBytes = ORAMUtils.toBytes(treeHeight);
+		System.arraycopy(treeHeightBytes, 0, output, offset, 4);
+		offset += 4;
+
+		byte[] nBlocksPerBucketBytes = ORAMUtils.toBytes(nBlocksPerBucket);
+		System.arraycopy(nBlocksPerBucketBytes, 0, output, offset, 4);
+		offset += 4;
+
+		byte[] blockSizeBytes = ORAMUtils.toBytes(blockSize);
+		System.arraycopy(blockSizeBytes, 0, output, offset, 4);
+		offset += 4;
+
+		offset = encryptedPositionMap.writeExternal(output, offset);
+		offset = encryptedStash.writeExternal(output, offset);
+
+		return offset;
 	}
 
 	@Override
-	public void readExternal(DataInput in) throws IOException {
-		super.readExternal(in);
-		positionMapType = PositionMapType.getPositionMapType(in.readByte());
-		garbageCollectionFrequency = in.readInt();
-		treeHeight = in.readInt();
-		nBlocksPerBucket = in.readInt();
-		blockSize = in.readInt();
+	public int readExternal(byte[] input, int startOffset) {
+		int offset = super.readExternal(input, startOffset);
+
+		positionMapType = PositionMapType.getPositionMapType(input[offset]);
+		offset++;
+
+		byte[] treeHeightBytes = new byte[4];
+		System.arraycopy(input, offset, treeHeightBytes, 0, 4);
+		offset += 4;
+		treeHeight = ORAMUtils.toNumber(treeHeightBytes);
+
+		byte[] nBlocksPerBucketBytes = new byte[4];
+		System.arraycopy(input, offset, nBlocksPerBucketBytes, 0, 4);
+		offset += 4;
+		nBlocksPerBucket = ORAMUtils.toNumber(nBlocksPerBucketBytes);
+
+		byte[] blockSizeBytes = new byte[4];
+		System.arraycopy(input, offset, blockSizeBytes, 0, 4);
+		offset += 4;
+		blockSize = ORAMUtils.toNumber(blockSizeBytes);
+
 		encryptedPositionMap = new EncryptedPositionMap();
-		encryptedPositionMap.readExternal(in);
+		offset = encryptedPositionMap.readExternal(input, offset);
+
 		encryptedStash = new EncryptedStash();
-		encryptedStash.readExternal(in);
+		offset = encryptedStash.readExternal(input, offset);
+
+		return offset;
 	}
 
 	@Override
 	public int getSerializedSize() {
-		return super.getSerializedSize() + 1 + 4 * 4 + encryptedPositionMap.getSerializedSize()
+		return super.getSerializedSize() + 1 + 4 * 3 + encryptedPositionMap.getSerializedSize()
 				+ encryptedStash.getSerializedSize();
 	}
 }

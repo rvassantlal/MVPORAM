@@ -1,5 +1,6 @@
-package oram.server.structure;
+package oram.server;
 
+import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
 
@@ -7,7 +8,7 @@ import java.util.*;
 
 public class ORAMTreeManager {
 	private final ORAMContext oramContext;
-	private OutstandingTree currentOutstandingTree;
+	protected OutstandingTree currentOutstandingTree;
 	private final Deque<OutstandingTree> unusedOutstandingTreesPool;
 	private final ArrayList<OutstandingTree> allOutstandingTreesObjects;
 	private final Map<Integer, EncryptedBucket> getBucketsBuffer;

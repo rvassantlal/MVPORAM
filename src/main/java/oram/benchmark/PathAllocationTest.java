@@ -29,7 +29,7 @@ public class PathAllocationTest {
 		int[] pathLocations = ORAMUtils.computePathLocations(pathId, treeHeight);
 		Map<Integer, Bucket> path = new HashMap<>(treeLevels);
 		for (int pathLocation : pathLocations) {
-			path.put(pathLocation, new Bucket(bucketSize, blockSize));
+			path.put(pathLocation, new Bucket(bucketSize, blockSize, pathLocation));
 		}
 
 		Stash remainingBlocks = new Stash(blockSize);
@@ -68,7 +68,7 @@ public class PathAllocationTest {
 		int[] pathLocations = ORAMUtils.computePathLocations(pathId, treeHeight);
 		Map<Integer, Bucket> path = new HashMap<>(treeLevels);
 		for (int pathLocation : pathLocations) {
-			path.put(pathLocation, new Bucket(bucketSize, blockSize));
+			path.put(pathLocation, new Bucket(bucketSize, blockSize, pathLocation));
 		}
 
 
