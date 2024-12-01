@@ -70,11 +70,11 @@ public class RandomParallelTester {
 					try {
 						randomAccess(oram);
 					} catch (Exception e) {
-						//oram.serializeDebugData();
+						oram.serializeDebugData();
 						throw e;
 					}
 				}
-				//oram.serializeDebugData();
+				oram.serializeDebugData();
 			}));
 		}
 		////// For profiling uncomment these lines

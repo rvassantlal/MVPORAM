@@ -144,7 +144,7 @@ public abstract class ORAMObject {
 		//Merging metadata
 		oldPositionMaps.getAllOutstandingVersions().put(oldPositionMaps.getNewVersionId(), oldPositionMaps.getOutstandingVersions());
 		blockMetadataManager.processMetadata(oldPositionMaps.getEvictionMap(),
-				oldPositionMaps.getAllOutstandingVersions(), debugInfoBuilder);
+				oldPositionMaps.getAllOutstandingVersions(), oldPositionMaps.getNewVersionId(), debugInfoBuilder);
 
 		end = System.nanoTime();
 		delay = end - start;
@@ -784,11 +784,11 @@ public abstract class ORAMObject {
 			throw new IllegalStateException(message);
 		}
 
-		/*if (!strangeBlocks.isEmpty()) {
+		if (!strangeBlocks.isEmpty()) {
 			String message = "[Client " + serviceProxy.getProcessId() + "] " + debugInfoBuilder
 					+ "\nStrange blocks ERROR";
 			throw new IllegalStateException(message);
-		}*/
+		}
 	}
 
 	public void serializeDebugData() {

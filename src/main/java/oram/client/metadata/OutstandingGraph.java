@@ -48,4 +48,31 @@ public class OutstandingGraph {
 		}
 		return false;
 	}
+
+	public boolean doesOverrides(int currentVersion, Set<Integer> limitOutstandingVersions) {
+		queue.clear();
+		visitedOutstandingVersions.clear();
+		queue.add(outstandingVersions.get(currentVersion));
+		int minLimitVersion = Collections.min(limitOutstandingVersions);
+		while (!queue.isEmpty()) {
+			int[] versions = queue.poll();
+			for (int version : versions) {
+				if (version == ORAMUtils.DUMMY_VERSION) {
+					return false;
+				}
+				if (limitOutstandingVersions.contains(version)) {
+					return true;
+				}
+				if (version > minLimitVersion) {
+					int[] newVersions = outstandingVersions.get(version);
+					int hash = ORAMUtils.computeHashCode(newVersions);
+					if (!visitedOutstandingVersions.contains(hash)) {
+						queue.add(newVersions);
+						visitedOutstandingVersions.add(hash);
+					}
+				}
+			}
+		}
+		return false;
+	}
 }

@@ -124,36 +124,16 @@ public class TripleORAMObject extends ORAMObject {
 			int accessedBlockLocationVersion = currentPM.getLocationVersionOf(accessedBlockAddress);
 
 			if (accessedBlockAddress != ORAMUtils.DUMMY_ADDRESS
-					&& accessedBlockLocation != ORAMUtils.DUMMY_LOCATION) {
-				if (accessedBlockContentVersion > mergedPositionMap.getContentVersionOf(accessedBlockAddress)) { //if the block was recently written
-					mergedPositionMap.setLocationOf(accessedBlockAddress, accessedBlockLocation);
-					mergedPositionMap.setContentVersionOf(accessedBlockAddress, accessedBlockContentVersion);
-					mergedPositionMap.setLocationVersionOf(accessedBlockAddress, accessedBlockLocationVersion);
-				} else if (accessedBlockContentVersion == mergedPositionMap.getContentVersionOf(accessedBlockAddress)
-						&& accessedBlockLocationVersion > mergedPositionMap.getLocationVersionOf(accessedBlockAddress)) { //if the block was recently read
-					mergedPositionMap.setLocationOf(accessedBlockAddress, accessedBlockLocation);
-					mergedPositionMap.setLocationVersionOf(accessedBlockAddress, accessedBlockLocationVersion);
-				}
+					&& accessedBlockLocation != ORAMUtils.DUMMY_LOCATION
+					&& (accessedBlockContentVersion > mergedPositionMap.getContentVersionOf(accessedBlockAddress)
+					|| (accessedBlockContentVersion == mergedPositionMap.getContentVersionOf(accessedBlockAddress)
+					&& accessedBlockLocationVersion > mergedPositionMap.getLocationVersionOf(accessedBlockAddress)))) {
+				//if the block was recently written or was recently read
+				mergedPositionMap.setLocationOf(accessedBlockAddress, accessedBlockLocation);
+				mergedPositionMap.setContentVersionOf(accessedBlockAddress, accessedBlockContentVersion);
+				mergedPositionMap.setLocationVersionOf(accessedBlockAddress, accessedBlockLocationVersion);
 			}
 
-			int substitutedBlockAddress = currentPM.getAddress()[1];
-			int substitutedBlockLocation = currentPM.getLocationOf(substitutedBlockAddress);
-			int substitutedBlockContentVersion = currentPM.getContentVersionOf(substitutedBlockAddress);
-			int substitutedBlockLocationVersion = currentPM.getLocationVersionOf(substitutedBlockAddress);
-
-			/*debugInfoBuilder.append("\t").append(" -> modified: ")
-					.append(accessedBlockAddress).append(" ")
-					.append(accessedBlockLocation).append(" ")
-					.append(currentPM.getContentVersionOf(accessedBlockAddress)).append(" ")
-					.append(currentPM.getLocationVersionOf(accessedBlockAddress))
-					.append("\t\tsubstituted: ")
-					.append(substitutedBlockAddress).append(" ")
-					.append(substitutedBlockLocation).append(" ")
-					.append(substitutedBlockContentVersion).append(" ")
-					.append(substitutedBlockLocationVersion).append("\n");*/
-		}
-
-		for (PositionMap currentPM : positionMaps.values()) {
 			//apply changes of substituted block
 			int substitutedBlockAddress = currentPM.getAddress()[1];
 			int substitutedBlockLocation = currentPM.getLocationOf(substitutedBlockAddress);
@@ -162,9 +142,11 @@ public class TripleORAMObject extends ORAMObject {
 
 			if (substitutedBlockAddress != ORAMUtils.DUMMY_ADDRESS
 					&& substitutedBlockLocation != ORAMUtils.DUMMY_LOCATION
-					&& substitutedBlockContentVersion == mergedPositionMap.getContentVersionOf(substitutedBlockAddress)
-					&& substitutedBlockLocationVersion >= mergedPositionMap.getLocationVersionOf(substitutedBlockAddress)) {
+					&& (substitutedBlockContentVersion > mergedPositionMap.getContentVersionOf(substitutedBlockAddress)
+					|| (substitutedBlockContentVersion == mergedPositionMap.getContentVersionOf(substitutedBlockAddress)
+					&& substitutedBlockLocationVersion >= mergedPositionMap.getLocationVersionOf(substitutedBlockAddress)))) {
 				mergedPositionMap.setLocationOf(substitutedBlockAddress, substitutedBlockLocation);
+				mergedPositionMap.setContentVersionOf(substitutedBlockAddress, substitutedBlockContentVersion);
 				mergedPositionMap.setLocationVersionOf(substitutedBlockAddress, substitutedBlockLocationVersion);
 			}
 		}

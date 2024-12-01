@@ -3,10 +3,7 @@ package oram.client.metadata;
 import oram.client.structure.EvictionMap;
 import oram.utils.ORAMUtils;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static oram.utils.ORAMUtils.computeHashCode;
 
@@ -38,6 +35,7 @@ public class BlockMetadataManager {
 
 	public void processMetadata(Map<Integer, EvictionMap> evictionMaps,
 								Map<Integer, int[]> allOutstandingVersions,
+								int newVersion,
 								StringBuilder debugInfoBuilder) {
 		localEvictionMapHistory.putAll(evictionMaps);
 		outstandingGraph.addOutstandingVersions(allOutstandingVersions);
@@ -47,19 +45,23 @@ public class BlockMetadataManager {
 		for (int receivedVersion : receivedVersions) {
 			int[] outstandingVersions = allOutstandingVersions.get(receivedVersion);
 			int outstandingVersionsHash = computeHashCode(outstandingVersions);
-			//debugInfoBuilder.append("Processing version ").append(receivedVersion).append("\n");
-			//debugInfoBuilder.append("\tOV: ").append(Arrays.toString(outstandingVersions)).append("\n");
-			//debugInfoBuilder.append("\tOV hash: ").append(outstandingVersionsHash).append("\n");
+			debugInfoBuilder.append("Processing version ").append(receivedVersion).append("\n");
+			debugInfoBuilder.append("\tOV: ").append(Arrays.toString(outstandingVersions)).append("\n");
+			for (int outstandingVersion : outstandingVersions) {
+				if (outstandingVersion == ORAMUtils.DUMMY_VERSION) {
+					continue;
+				}
+				int[] ovOutstandingVersion = outstandingVersionsHistory.get(outstandingVersion);
+				Set<Integer> concurrentVersions = findConcurrentVersions(receivedVersion, outstandingVersion, ovOutstandingVersion,
+						outstandingVersionsHistory, debugInfoBuilder);
+				debugInfoBuilder.append("\tConcurrent versions for OV ").append(outstandingVersion).append(": ").append(concurrentVersions).append("\n");
+			}
 
 			if (processedOutstandingVersions.containsKey(outstandingVersionsHash)) {
 				int processedVersion = processedOutstandingVersions.get(outstandingVersionsHash);
-				if (!Arrays.equals(outstandingVersions, outstandingVersionsHistory.get(processedVersion))) {
-					throw new IllegalStateException("Outstanding versions " + Arrays.toString(outstandingVersions)
-							+ " and " + Arrays.toString(outstandingVersionsHistory.get(processedVersion)) + " have same hashcode!");
-				}
 				Map<Integer, BlockMetadata> metadata = metadataHistory.get(processedVersion);
 				metadataHistory.put(receivedVersion, metadata);
-				//debugInfoBuilder.append("\tProcessed by version ").append(processedVersion).append("\n");
+				debugInfoBuilder.append("\tProcessed by version ").append(processedVersion).append("\n");
 			} else {
 				Map<Integer, BlockMetadata> mergedMetadata = mergeOutstandingMetadata(outstandingVersions,
 						debugInfoBuilder);
@@ -69,7 +71,7 @@ public class BlockMetadataManager {
 							.append(" -> ").append(mergedMetadata.get(blockOfInterest)).append("\n");
 				}
 
-				applyEvictionMaps(outstandingVersions, mergedMetadata, debugInfoBuilder);
+				applyEvictionMaps(outstandingVersions, mergedMetadata, newVersion, debugInfoBuilder);
 				if (blockOfInterest != -1) {
 					debugInfoBuilder.append("\tUpdated metadata:\n");
 					debugInfoBuilder.append("\t\t").append("Block ").append(blockOfInterest)
@@ -87,9 +89,55 @@ public class BlockMetadataManager {
 		}
 	}
 
+	private Set<Integer> findConcurrentVersions(int startVersion, int ovVersion, int[] limitOutstandingVersions,
+												Map<Integer, int[]> outstandingVersionsHistory, StringBuilder debugInfoBuilder) {
+		Set<Integer> visitedOutstandingVersions = new HashSet<>();
+		Queue<int[]> queue = new ArrayDeque<>();
+		queue.add(outstandingVersionsHistory.get(startVersion));
+		Set<Integer> limitOVSet = new HashSet<>(limitOutstandingVersions.length);
+		int minLimitVersion = Integer.MAX_VALUE;
+		for (int limitOutstandingVersion : limitOutstandingVersions) {
+			limitOVSet.add(limitOutstandingVersion);
+			if (limitOutstandingVersion < minLimitVersion) {
+				minLimitVersion = limitOutstandingVersion;
+			}
+		}
+		Set<Integer> concurrentVersions = new HashSet<>();
+		while (!queue.isEmpty()) {
+			int[] versions = queue.poll();
+			for (int version : versions) {
+				if (outstandingGraph.doesOverrides(version, limitOVSet)) {
+					concurrentVersions.add(version);
+				}
+				if (version > minLimitVersion && version != ovVersion) {
+					int[] newVersions = outstandingVersionsHistory.get(version);
+					int hash = ORAMUtils.computeHashCode(newVersions);
+					if (!visitedOutstandingVersions.contains(hash)) {
+						queue.add(newVersions);
+						visitedOutstandingVersions.add(hash);
+					}
+				}
+			}
+		}
+
+		return concurrentVersions;
+	}
+
 	private void applyEvictionMaps(int[] outstandingVersions, Map<Integer, BlockMetadata> metadata,
-								   StringBuilder debugInfoBuilder) {
-		for (int outstandingVersion : outstandingVersions) {
+								   int newVersion, StringBuilder debugInfoBuilder) {
+		removeBlockLocationFromMetadata(outstandingVersions, metadata, newVersion, debugInfoBuilder);
+		if (blockOfInterest != -1) {
+			debugInfoBuilder.append("\tOutstanding metadata after removing:\n");
+			debugInfoBuilder.append("\t\t").append("Block ").append(blockOfInterest)
+					.append(" -> ").append(metadata.get(blockOfInterest)).append("\n");
+		}
+		addBlockLocationToMetadata(outstandingVersions, metadata, debugInfoBuilder);
+		if (blockOfInterest != -1) {
+			debugInfoBuilder.append("\tOutstanding metadata after adding:\n");
+			debugInfoBuilder.append("\t\t").append("Block ").append(blockOfInterest)
+					.append(" -> ").append(metadata.get(blockOfInterest)).append("\n");
+		}
+		/*for (int outstandingVersion : outstandingVersions) {
 			if (outstandingVersion == ORAMUtils.DUMMY_VERSION) {
 				continue;
 			}
@@ -110,76 +158,132 @@ public class BlockMetadataManager {
 
 			removeBlockLocationFromMetadata(outstandingVersion, metadata, blocksRemovedFromPath);
 			addBlockLocationToMetadata(outstandingVersion, metadata, blocksMovedToPath);
-		}
+		}*/
 	}
 
-	private void addBlockLocationToMetadata(int evictionMapVersion, Map<Integer, BlockMetadata> metadata,
-											PartialTree blocksMovedToPath) {
-		Map<Integer, Integer> emLocations = blocksMovedToPath.getLocations();
-		Map<Integer, Integer> emContentVersions = blocksMovedToPath.getContentVersions();
-		Map<Integer, Integer> emLocationVersions = blocksMovedToPath.getLocationVersions();
-		for (Map.Entry<Integer, Integer> entry : emLocations.entrySet()) {
-			int address = entry.getKey();
-			int locationToAdd = entry.getValue();
-			int contentVersion = emContentVersions.get(address);
-			int locationVersion = emLocationVersions.get(address);
-
-			BlockMetadata blockMetadata = metadata.get(address);
-			if (blockMetadata == null) {
-				blockMetadata = new BlockMetadata();
-				blockMetadata.setNewValues(contentVersion, locationVersion, locationToAdd, evictionMapVersion);
-				metadata.put(address, blockMetadata);
+	private void addBlockLocationToMetadata(int[] outstandingVersions, Map<Integer, BlockMetadata> metadata,
+											StringBuilder debugInfoBuilder) {
+		for (int outstandingVersion : outstandingVersions) {
+			if (outstandingVersion == ORAMUtils.DUMMY_VERSION) {
 				continue;
 			}
-			int mContentVersion = blockMetadata.getContentVersion();
-			int mLocationVersion = blockMetadata.getLocationVersion();
-			int mHighestLocation = blockMetadata.getHighestLocation();
-			int mHighestLocationVersion = blockMetadata.getHighestLocationVersion();
-
-			if (contentVersion > mContentVersion
-					|| (contentVersion == mContentVersion && locationVersion > mLocationVersion)
-					|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
-					&& locationToAdd > mHighestLocation)
-					|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
-					&& locationToAdd == mHighestLocation && evictionMapVersion > mHighestLocationVersion)
-			) {
-				blockMetadata.setNewValues(contentVersion, locationVersion, locationToAdd, evictionMapVersion);
+			EvictionMap evictionMap = localEvictionMapHistory.get(outstandingVersion);
+			PartialTree blocksMovedToPath = evictionMap.getBlocksMovedToPath();
+			if (blockOfInterest != -1) {
+				debugInfoBuilder.append("\tEviction map ").append(outstandingVersion).append(":\n");
+				debugInfoBuilder.append("\t\tBlock ").append(blockOfInterest).append(" moved to path:\n");
+				debugInfoBuilder.append("\t\t\t L:").append(blocksMovedToPath.getLocations().get(blockOfInterest)).append("\n");
+				debugInfoBuilder.append("\t\t\tCV:").append(blocksMovedToPath.getContentVersions().get(blockOfInterest)).append("\n");
+				debugInfoBuilder.append("\t\t\tLV:").append(blocksMovedToPath.getLocationVersions().get(blockOfInterest)).append("\n");
 			}
-		}
-	}
+			Map<Integer, Integer> emLocations = blocksMovedToPath.getLocations();
+			Map<Integer, Integer> emContentVersions = blocksMovedToPath.getContentVersions();
+			Map<Integer, Integer> emLocationVersions = blocksMovedToPath.getLocationVersions();
+			for (Map.Entry<Integer, Integer> entry : emLocations.entrySet()) {
+				int address = entry.getKey();
+				int locationToAdd = entry.getValue();
+				int contentVersion = emContentVersions.get(address);
+				int locationVersion = emLocationVersions.get(address);
 
-	private void removeBlockLocationFromMetadata(int evictionMapVersion, Map<Integer, BlockMetadata> metadata,
-												 PartialTreeWithDuplicatedBlocks blocksRemovedFromPath) {
-		Map<Integer, Set<Integer>> emLocations = blocksRemovedFromPath.getLocations();
-		Map<Integer, Integer> emContentVersions = blocksRemovedFromPath.getContentVersions();
-		Map<Integer, Integer> emLocationVersions = blocksRemovedFromPath.getLocationVersions();
-
-		for (Map.Entry<Integer, Set<Integer>> entry : emLocations.entrySet()) {
-			int address = entry.getKey();
-			Set<Integer> locationsToRemove = entry.getValue();
-			int contentVersion = emContentVersions.get(address);
-			int locationVersion = emLocationVersions.get(address);
-			BlockMetadata blockMetadata = metadata.get(address);
-			if (blockMetadata == null) {
-				blockMetadata = new BlockMetadata();
-				blockMetadata.setNewValues(contentVersion, locationVersion, ORAMUtils.DUMMY_LOCATION, evictionMapVersion);
-				metadata.put(address, blockMetadata);
-			} else {
+				BlockMetadata blockMetadata = metadata.get(address);
+				if (blockMetadata == null) {
+					blockMetadata = new BlockMetadata();
+					blockMetadata.setNewValues(contentVersion, locationVersion, locationToAdd, outstandingVersion);
+					metadata.put(address, blockMetadata);
+					continue;
+				}
 				int mContentVersion = blockMetadata.getContentVersion();
 				int mLocationVersion = blockMetadata.getLocationVersion();
 				int mHighestLocation = blockMetadata.getHighestLocation();
 				int mHighestLocationVersion = blockMetadata.getHighestLocationVersion();
 
-				//the condition is true if one of the following conditions is satisfied:
-				//1) there is a new block with new content version;
-				//2) there is a new block with new location version;
-				//3) remove the highest location. Have to confirm the dependency to not remove location allocated by a concurrent version.
 				if (contentVersion > mContentVersion
 						|| (contentVersion == mContentVersion && locationVersion > mLocationVersion)
 						|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
-						&& locationsToRemove.contains(mHighestLocation)
-						&& outstandingGraph.doesOverrides(evictionMapVersion, mHighestLocationVersion))) {
-					blockMetadata.setNewValues(contentVersion, locationVersion, ORAMUtils.DUMMY_LOCATION, evictionMapVersion);
+						&& locationToAdd > mHighestLocation)
+						|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
+						&& locationToAdd == mHighestLocation && outstandingVersion > mHighestLocationVersion)
+				) {
+					blockMetadata.setNewValues(contentVersion, locationVersion, locationToAdd, outstandingVersion);
+				}
+			}
+		}
+	}
+
+	private void removeBlockLocationFromMetadata(int[] outstandingVersions, Map<Integer, BlockMetadata> metadata,
+												 int newVersion, StringBuilder debugInfoBuilder) {
+		for (int outstandingVersion : outstandingVersions) {
+			if (outstandingVersion == ORAMUtils.DUMMY_VERSION) {
+				continue;
+			}
+			EvictionMap evictionMap = localEvictionMapHistory.get(outstandingVersion);
+			PartialTreeWithDuplicatedBlocks blocksRemovedFromPath = evictionMap.getBlocksRemovedFromPath();
+			if (blockOfInterest != -1) {
+				debugInfoBuilder.append("\tEviction map ").append(outstandingVersion).append(":\n");
+				debugInfoBuilder.append("\t\tBlock ").append(blockOfInterest).append(" removed from path:\n");
+				debugInfoBuilder.append("\t\t\t L:").append(blocksRemovedFromPath.getLocations().get(blockOfInterest)).append("\n");
+				debugInfoBuilder.append("\t\t\tCV:").append(blocksRemovedFromPath.getContentVersions().get(blockOfInterest)).append("\n");
+				debugInfoBuilder.append("\t\t\tLV:").append(blocksRemovedFromPath.getLocationVersions().get(blockOfInterest)).append("\n");
+			}
+			Map<Integer, Set<Integer>> emLocations = blocksRemovedFromPath.getLocations();
+			Map<Integer, Integer> emContentVersions = blocksRemovedFromPath.getContentVersions();
+			Map<Integer, Integer> emLocationVersions = blocksRemovedFromPath.getLocationVersions();
+
+			for (Map.Entry<Integer, Set<Integer>> entry : emLocations.entrySet()) {
+				int address = entry.getKey();
+				Set<Integer> locationsToRemove = entry.getValue();
+				int contentVersion = emContentVersions.get(address);
+				int locationVersion = emLocationVersions.get(address);
+				BlockMetadata blockMetadata = metadata.get(address);
+				if (blockMetadata == null) {
+					blockMetadata = new BlockMetadata();
+					blockMetadata.setNewValues(contentVersion, locationVersion, ORAMUtils.DUMMY_LOCATION, outstandingVersion);
+					metadata.put(address, blockMetadata);
+				} else {
+					int mContentVersion = blockMetadata.getContentVersion();
+					int mLocationVersion = blockMetadata.getLocationVersion();
+					int mHighestLocation = blockMetadata.getHighestLocation();
+					int mHighestLocationVersion = blockMetadata.getHighestLocationVersion();
+
+					//the condition is true if one of the following conditions is satisfied:
+					//1) there is a new block with new content version;
+					//2) there is a new block with new location version;
+					//3) remove the highest location. Have to confirm the dependency to not remove location allocated by a concurrent version.
+					if (contentVersion > mContentVersion
+							|| (contentVersion == mContentVersion && locationVersion > mLocationVersion)
+							|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
+							&& locationsToRemove.contains(mHighestLocation)
+							&& outstandingGraph.doesOverrides(outstandingVersion, mHighestLocationVersion))) {
+						blockMetadata.setNewValues(contentVersion, locationVersion, ORAMUtils.DUMMY_LOCATION, outstandingVersion);
+					}
+				}
+			}
+		}
+		for (Map.Entry<Integer, BlockMetadata> metadataEntry : metadata.entrySet()) {
+			int address = metadataEntry.getKey();
+			BlockMetadata blockMetadata = metadataEntry.getValue();
+			int mContentVersion = blockMetadata.getContentVersion();
+			int mLocationVersion = blockMetadata.getLocationVersion();
+			int mHighestLocation = blockMetadata.getHighestLocation();
+			int mHighestLocationVersion = blockMetadata.getHighestLocationVersion();
+			for (int v = blockMetadata.getHighestLocationVersion(); v < newVersion; v++) {
+				EvictionMap evictionMap = localEvictionMapHistory.get(v);
+				if (evictionMap != null && outstandingGraph.doesOverrides(v, mHighestLocationVersion)
+						&& outstandingGraph.doesOverrides(newVersion, v)) {
+					PartialTreeWithDuplicatedBlocks blocksRemovedFromPath = evictionMap.getBlocksRemovedFromPath();
+					Set<Integer> locationsToRemove = blocksRemovedFromPath.getLocations().get(address);
+					if (locationsToRemove == null) {
+						continue;
+					}
+					int contentVersion = blocksRemovedFromPath.getContentVersions().get(address);
+					int locationVersion = blocksRemovedFromPath.getLocationVersions().get(address);
+					if (contentVersion > mContentVersion
+							|| (contentVersion == mContentVersion && locationVersion > mLocationVersion)
+							|| (contentVersion == mContentVersion && locationVersion == mLocationVersion
+							&& locationsToRemove.contains(mHighestLocation))) {
+						blockMetadata.setNewValues(contentVersion, locationVersion, ORAMUtils.DUMMY_LOCATION, v);
+						break;
+					}
 				}
 			}
 		}

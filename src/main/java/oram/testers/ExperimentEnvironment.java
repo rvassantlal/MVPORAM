@@ -27,8 +27,8 @@ public class ExperimentEnvironment {
 
 	private static void loadData() {
 		String dataFolder = "C:\\Users\\robin\\Desktop\\oram\\";
-		String traceErrorFilename1 = dataFolder + "oramErrorTrace_1730152921302_client_1.txt";
-		String traceErrorFilename2 = dataFolder + "oramErrorTrace_1730152938972_client_2.txt";
+		String traceErrorFilename1 = dataFolder + "oramErrorTrace_1730991971295_client_100.txt";
+		String traceErrorFilename2 = dataFolder + "oramErrorTrace_1730991980737_client_200.txt";
 		lastVersions = new HashSet<>(2);
 		deserializeTraceError(traceErrorFilename1);
 		deserializeTraceError(traceErrorFilename2);
@@ -45,19 +45,20 @@ public class ExperimentEnvironment {
 		int blockOfInterest = 2;
 		int problematicVersion = Collections.min(lastVersions);
 
-		//BlockMetadataManager metadataManager = new BlockMetadataManager();
-		BlockMetadataManager metadataManagerV2 = new BlockMetadataManager();
-		//metadataManager.setBlockOfInterest(blockOfInterest);
-		metadataManagerV2.setBlockOfInterest(blockOfInterest);
-		//metadataManager.processMetadata(evictionMaps, outstandingVersions, positionMap, messageBuilder);
-		metadataManagerV2.processMetadata(evictionMaps, outstandingVersions, messageBuilder);
+		BlockMetadataManager metadataManager = new BlockMetadataManager();
+		metadataManager.setBlockOfInterest(blockOfInterest);
+		metadataManager.processMetadata(evictionMaps, outstandingVersions, problematicVersion, messageBuilder);
 		System.out.println(messageBuilder);
+
+		if (true) {
+			return;
+		}
 
 		Map<Integer, Stash> problematicVersionStashes = ExperimentEnvironment.stashes.get(problematicVersion);
 		Map<Integer, Block> stash = mergeStashes(problematicVersion,
-				positionMap, problematicVersionStashes, metadataManagerV2);
+				positionMap, problematicVersionStashes, metadataManager);
 
-		Map<Integer, BlockMetadata> metadata = metadataManagerV2.getMetadata(problematicVersion);
+		Map<Integer, BlockMetadata> metadata = metadataManager.getMetadata(problematicVersion);
 		Map<Integer, ArrayList<Pair<Block, Integer>>> blocksGroupedByAddress = trees.get(problematicVersion);
 		Set<Integer> unknownBlocks = new HashSet<>();
 		Set<Integer> strangeBlocks = new HashSet<>();
@@ -123,7 +124,7 @@ public class ExperimentEnvironment {
 
 		System.out.println(accessedPathsHistory);
 
-		int minVersion = 0;//Math.max(positionMap.getContentVersionOf(blockOfInterest),
+		int minVersion = 200;//Math.max(positionMap.getContentVersionOf(blockOfInterest),
 				//positionMap.getLocationVersionOf(blockOfInterest));
 
 		studyBlock(blockOfInterest, problematicVersion, minVersion);
@@ -202,8 +203,10 @@ public class ExperimentEnvironment {
 			for (Block block : stash.getBlocks()) {
 				int address = block.getAddress();
 				int contentVersion = block.getContentVersion();
+				int locationVersion = block.getLocationVersion();
 				Block previousBlock = mergedStash.get(address);
-				if (previousBlock == null || contentVersion > previousBlock.getContentVersion()) {
+				if (previousBlock == null || contentVersion > previousBlock.getContentVersion()
+						|| (contentVersion == previousBlock.getContentVersion() && locationVersion > previousBlock.getLocationVersion())) {
 					mergedStash.put(address, block);
 				}
 			}
