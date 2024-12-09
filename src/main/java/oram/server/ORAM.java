@@ -1,6 +1,5 @@
 package oram.server;
 
-import oram.client.structure.EvictionMap;
 import oram.messages.GetPositionMap;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
@@ -10,23 +9,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class ORAM {
 	protected final Logger logger = LoggerFactory.getLogger("oram");
 	private final int oramId;
 	private final VerifiableShare encryptionKeyShare;
 	private final ORAMContext oramContext;
-	protected final Map<Integer, EncryptedPositionMap> positionMaps;
+	protected final Map<Integer, EncryptedPathMap> pathMaps;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
 	protected int sequenceNumber;
 	protected final ORAMTreeManager oramTreeManager;
 	private final Map<Integer, int[]> preComputedPathLocations;
-	protected final Map<Integer, EvictionMap> evictionMaps;
 	protected final Map<Integer, int[]> outstandingVersions;
 
 	public ORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType, int treeHeight,
-				int bucketSize, int blockSize, EncryptedPositionMap encryptedPositionMap,
+				int bucketSize, int blockSize, EncryptedPathMap encryptedPathMap,
 				EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.encryptionKeyShare = encryptionKeyShare;
@@ -34,8 +34,7 @@ public abstract class ORAM {
 		int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
 		this.oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
 		logger.info("ORAM tree capacity: {} blocks ({} buckets)", treeSize, nBuckets);
-		this.positionMaps = new HashMap<>();
-		this.evictionMaps = new HashMap<>();
+		this.pathMaps = new HashMap<>();
 		this.outstandingVersions = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
@@ -45,8 +44,7 @@ public abstract class ORAM {
 		this.oramClientContexts = new HashMap<>();
 		int versionId = ++sequenceNumber;
 		this.oramTreeManager = new ORAMTreeManager(oramContext, versionId, encryptedStash);
-		this.positionMaps.put(versionId, encryptedPositionMap);
-		this.evictionMaps.put(versionId, new EvictionMap());
+		this.pathMaps.put(versionId, encryptedPathMap);
 		this.outstandingVersions.put(versionId, new int[]{ORAMUtils.DUMMY_VERSION});
 	}
 
@@ -107,8 +105,8 @@ public abstract class ORAM {
 		return new EncryptedStashesAndPaths(outstandingStashes, encryptedBuckets);
 	}
 
-	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPositionMap encryptedPositionMap,
-								   Map<Integer, EncryptedBucket> encryptedPath, int clientId, EvictionMap evictionMap) {
+	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
+								   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
 		if (oramClientContext == null) {
 			logger.debug("Client {} doesn't have any client context", clientId);
@@ -117,8 +115,7 @@ public abstract class ORAM {
 		int newVersionId = oramClientContext.getNewVersionId();
 		OutstandingPath outstandingPath = oramClientContext.getOutstandingPath();
 
-		positionMaps.put(newVersionId, encryptedPositionMap);
-		evictionMaps.put(newVersionId, evictionMap);
+		pathMaps.put(newVersionId, encryptedPathMap);
 
 		logger.debug("Client {} is performing eviction in path {} with version {}", clientId,
 				oramClientContext.getPathId(), newVersionId);

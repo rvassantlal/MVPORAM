@@ -1,6 +1,6 @@
 package oram.messages;
 
-import oram.server.structure.EncryptedPositionMap;
+import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.ORAMUtils;
 import oram.utils.PositionMapType;
@@ -8,22 +8,22 @@ import oram.utils.PositionMapType;
 public class CreateORAMMessage extends ORAMMessage {
 	private PositionMapType positionMapType;
 	private int treeHeight;
-	private int nBlocksPerBucket;
+	private int bucketSize;
 	private int blockSize;
-	private EncryptedPositionMap encryptedPositionMap;
+	private EncryptedPathMap encryptedPathMap;
 	private EncryptedStash encryptedStash;
 
 	public CreateORAMMessage() {}
 
 	public CreateORAMMessage(int oramId, PositionMapType positionMapType,
-							 int treeHeight, int nBlocksPerBucket, int blockSize,
-							 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+							 int treeHeight, int bucketSize, int blockSize,
+							 EncryptedPathMap encryptedPathMap, EncryptedStash encryptedStash) {
 		super(oramId);
 		this.positionMapType = positionMapType;
 		this.treeHeight = treeHeight;
-		this.nBlocksPerBucket = nBlocksPerBucket;
+		this.bucketSize = bucketSize;
 		this.blockSize = blockSize;
-		this.encryptedPositionMap = encryptedPositionMap;
+		this.encryptedPathMap = encryptedPathMap;
 		this.encryptedStash = encryptedStash;
 	}
 
@@ -35,16 +35,16 @@ public class CreateORAMMessage extends ORAMMessage {
 		return treeHeight;
 	}
 
-	public int getNBlocksPerBucket() {
-		return nBlocksPerBucket;
+	public int getBucketSize() {
+		return bucketSize;
 	}
 
 	public int getBlockSize() {
 		return blockSize;
 	}
 
-	public EncryptedPositionMap getEncryptedPositionMap() {
-		return encryptedPositionMap;
+	public EncryptedPathMap getEncryptedPathMap() {
+		return encryptedPathMap;
 	}
 
 	public EncryptedStash getEncryptedStash() {
@@ -58,19 +58,16 @@ public class CreateORAMMessage extends ORAMMessage {
 		output[offset] = (byte) positionMapType.ordinal();
 		offset++;
 
-		byte[] treeHeightBytes = ORAMUtils.toBytes(treeHeight);
-		System.arraycopy(treeHeightBytes, 0, output, offset, 4);
-		offset += 4;
+		ORAMUtils.serializeInteger(treeHeight, output, offset);
+		offset += Integer.BYTES;
 
-		byte[] nBlocksPerBucketBytes = ORAMUtils.toBytes(nBlocksPerBucket);
-		System.arraycopy(nBlocksPerBucketBytes, 0, output, offset, 4);
-		offset += 4;
+		ORAMUtils.serializeInteger(bucketSize, output, offset);
+		offset += Integer.BYTES;
 
-		byte[] blockSizeBytes = ORAMUtils.toBytes(blockSize);
-		System.arraycopy(blockSizeBytes, 0, output, offset, 4);
-		offset += 4;
+		ORAMUtils.serializeInteger(blockSize, output, offset);
+		offset += Integer.BYTES;
 
-		offset = encryptedPositionMap.writeExternal(output, offset);
+		offset = encryptedPathMap.writeExternal(output, offset);
 		offset = encryptedStash.writeExternal(output, offset);
 
 		return offset;
@@ -83,23 +80,17 @@ public class CreateORAMMessage extends ORAMMessage {
 		positionMapType = PositionMapType.getPositionMapType(input[offset]);
 		offset++;
 
-		byte[] treeHeightBytes = new byte[4];
-		System.arraycopy(input, offset, treeHeightBytes, 0, 4);
-		offset += 4;
-		treeHeight = ORAMUtils.toNumber(treeHeightBytes);
+		treeHeight = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
-		byte[] nBlocksPerBucketBytes = new byte[4];
-		System.arraycopy(input, offset, nBlocksPerBucketBytes, 0, 4);
-		offset += 4;
-		nBlocksPerBucket = ORAMUtils.toNumber(nBlocksPerBucketBytes);
+		bucketSize = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
-		byte[] blockSizeBytes = new byte[4];
-		System.arraycopy(input, offset, blockSizeBytes, 0, 4);
-		offset += 4;
-		blockSize = ORAMUtils.toNumber(blockSizeBytes);
+		blockSize = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
-		encryptedPositionMap = new EncryptedPositionMap();
-		offset = encryptedPositionMap.readExternal(input, offset);
+		encryptedPathMap = new EncryptedPathMap();
+		offset = encryptedPathMap.readExternal(input, offset);
 
 		encryptedStash = new EncryptedStash();
 		offset = encryptedStash.readExternal(input, offset);
@@ -109,7 +100,7 @@ public class CreateORAMMessage extends ORAMMessage {
 
 	@Override
 	public int getSerializedSize() {
-		return super.getSerializedSize() + 1 + 4 * 3 + encryptedPositionMap.getSerializedSize()
+		return super.getSerializedSize() + 1 + Integer.BYTES * 3 + encryptedPathMap.getSerializedSize()
 				+ encryptedStash.getSerializedSize();
 	}
 }

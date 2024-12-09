@@ -3,10 +3,6 @@ package oram.client.structure;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 public class OngoingAccessContext {
 	private final int address;
 	private final Operation operation;
@@ -18,7 +14,7 @@ public class OngoingAccessContext {
 	private int substitutedBlockNewBucketLocation;
 	private boolean isRealAccess;
 	private int newVersionId;
-	private PositionMap updatedPositionMap;
+	private PathMap pathMap;
 	private byte[] oldContent;
 	private int substitutedBlockAddress;
 	private int accessedAddressBucket;
@@ -101,12 +97,12 @@ public class OngoingAccessContext {
 		return newVersionId;
 	}
 
-	public void setUpdatedPositionMap(PositionMap positionMap) {
-		this.updatedPositionMap = positionMap;
+	public void setPathMap(PathMap positionMap) {
+		this.pathMap = positionMap;
 	}
 
-	public PositionMap getUpdatedPositionMap() {
-		return updatedPositionMap;
+	public PathMap getPathMap() {
+		return pathMap;
 	}
 
 	public byte[] getNewContent() {

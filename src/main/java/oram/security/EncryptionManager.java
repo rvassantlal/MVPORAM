@@ -44,15 +44,14 @@ public class EncryptionManager {
 	}
 
 	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
-		Map<Integer, EncryptedPositionMap> encryptedPMs = encryptedPositionMaps.getEncryptedPositionMaps();
-		Map<Integer, PositionMap> positionMaps = new HashMap<>(encryptedPMs.size());
-		for (Map.Entry<Integer, EncryptedPositionMap> entry : encryptedPMs.entrySet()) {
-			positionMaps.put(entry.getKey(), decryptPositionMap(entry.getValue()));
+		Map<Integer, EncryptedPathMap> encryptedPMs = encryptedPositionMaps.getEncryptedPathMaps();
+		Map<Integer, PathMap> pathMaps = new HashMap<>(encryptedPMs.size());
+		for (Map.Entry<Integer, EncryptedPathMap> entry : encryptedPMs.entrySet()) {
+			pathMaps.put(entry.getKey(), decryptPathMap(entry.getValue()));
 		}
 
-		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), positionMaps,
-				encryptedPositionMaps.getEvictionMap(), encryptedPositionMaps.getOutstandingVersions(),
-				encryptedPositionMaps.getAllOutstandingVersions());
+		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), pathMaps,
+				encryptedPositionMaps.getOutstandingVersions(), encryptedPositionMaps.getAllOutstandingVersions());
 
 	}
 
@@ -97,6 +96,19 @@ public class EncryptionManager {
 		return paths;
 	}
 
+	public EncryptedPathMap encryptPathMap(PathMap pathMap) {
+		int dataSize = pathMap.getSerializedSize();
+		byte[] serializedPathMap = new byte[dataSize];
+		int offset = pathMap.writeExternal(serializedPathMap, 0);
+		if (offset != dataSize) {
+			logger.error("Failed to serialize path map");
+			return null;
+		}
+
+		byte[] encryptedPathMap = encryptionAbstraction.encrypt(serializedPathMap);
+		return new EncryptedPathMap(encryptedPathMap);
+	}
+
 	public EncryptedPositionMap encryptPositionMap(PositionMap positionMap) {
 		int dataSize = positionMap.getSerializedSize();
 		byte[] serializedPositionMap = new byte[dataSize];
@@ -110,6 +122,17 @@ public class EncryptionManager {
 		//logger.info("Position map size: {} bytes", serializedPositionMap.length);
 		//logger.info("Encrypted position map size: {} bytes", encryptedPositionMap.length);
 		return new EncryptedPositionMap(encryptedPositionMap);
+	}
+
+	public PathMap decryptPathMap(EncryptedPathMap encryptedPathMap) {
+		byte[] serializedPathMap = encryptionAbstraction.decrypt(encryptedPathMap.getEncryptedPathMap());
+		PathMap deserializedPathMap = new PathMap();
+		int offset = deserializedPathMap.readExternal(serializedPathMap, 0);
+		if (offset != serializedPathMap.length) {
+			logger.error("Failed to deserialize path map");
+			return null;
+		}
+		return deserializedPathMap;
 	}
 
 	public PositionMap decryptPositionMap(EncryptedPositionMap encryptedPositionMap) {

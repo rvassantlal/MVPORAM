@@ -1,8 +1,7 @@
 package oram.messages;
 
-import oram.client.structure.EvictionMap;
 import oram.server.structure.EncryptedBucket;
-import oram.server.structure.EncryptedPositionMap;
+import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.ORAMUtils;
 
@@ -11,37 +10,30 @@ import java.util.Map;
 
 public class EvictionORAMMessage extends ORAMMessage {
 	private EncryptedStash encryptedStash;
-	private EncryptedPositionMap encryptedPositionMap;
+	private EncryptedPathMap encryptedPathMap;
 	private Map<Integer, EncryptedBucket> encryptedPath;
-	private EvictionMap evictionMap;
 
 	public EvictionORAMMessage() {}
 
 	public EvictionORAMMessage(int oramId, EncryptedStash encryptedStash,
-							   EncryptedPositionMap encryptedPositionMap,
-							   Map<Integer, EncryptedBucket> encryptedPath,
-							   EvictionMap evictionMap) {
+							   EncryptedPathMap encryptedPathMap,
+							   Map<Integer, EncryptedBucket> encryptedPath) {
 		super(oramId);
 		this.encryptedStash = encryptedStash;
-		this.encryptedPositionMap = encryptedPositionMap;
+		this.encryptedPathMap = encryptedPathMap;
 		this.encryptedPath = encryptedPath;
-		this.evictionMap = evictionMap;
 	}
 
 	public EncryptedStash getEncryptedStash() {
 		return encryptedStash;
 	}
 
-	public EncryptedPositionMap getEncryptedPositionMap() {
-		return encryptedPositionMap;
+	public EncryptedPathMap getEncryptedPathMap() {
+		return encryptedPathMap;
 	}
 
 	public Map<Integer, EncryptedBucket> getEncryptedPath() {
 		return encryptedPath;
-	}
-
-	public EvictionMap getEvictionMap() {
-		return evictionMap;
 	}
 
 	@Override
@@ -49,22 +41,18 @@ public class EvictionORAMMessage extends ORAMMessage {
 		int offset = super.writeExternal(output, startOffset);
 
 		offset = encryptedStash.writeExternal(output, offset);
-		offset = encryptedPositionMap.writeExternal(output, offset);
-		offset = evictionMap.writeExternal(output, offset);
+		offset = encryptedPathMap.writeExternal(output, offset);
 
 		int bucketSize = encryptedPath.values().iterator().next().getBlocks().length;
-		byte[] bucketSizeBytes = ORAMUtils.toBytes(bucketSize);
-		System.arraycopy(bucketSizeBytes, 0, output, offset, 4);
-		offset += 4;
+		ORAMUtils.serializeInteger(bucketSize, output, offset);
+		offset += Integer.BYTES;
 
-		byte[] pathSizeBytes = ORAMUtils.toBytes(encryptedPath.size());
-		System.arraycopy(pathSizeBytes, 0, output, offset, 4);
-		offset += 4;
+		ORAMUtils.serializeInteger(encryptedPath.size(), output, offset);
+		offset += Integer.BYTES;
 
 		for (Map.Entry<Integer, EncryptedBucket> entry : encryptedPath.entrySet()) {
-			byte[] locationBytes = ORAMUtils.toBytes(entry.getKey());
-			System.arraycopy(locationBytes, 0, output, offset, 4);
-			offset += 4;
+			ORAMUtils.serializeInteger(entry.getKey(), output, offset);
+			offset += Integer.BYTES;
 
 			offset = entry.getValue().writeExternal(output, offset);
 		}
@@ -78,28 +66,19 @@ public class EvictionORAMMessage extends ORAMMessage {
 		encryptedStash = new EncryptedStash();
 		offset = encryptedStash.readExternal(input, offset);
 
-		encryptedPositionMap = new EncryptedPositionMap();
-		offset = encryptedPositionMap.readExternal(input, offset);
+		encryptedPathMap = new EncryptedPathMap();
+		offset = encryptedPathMap.readExternal(input, offset);
 
-		evictionMap = new EvictionMap();
-		offset = evictionMap.readExternal(input, offset);
+		int bucketSize = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
-		byte[] bucketSizeBytes = new byte[4];
-		System.arraycopy(input, offset, bucketSizeBytes, 0, 4);
-		offset += 4;
-		int bucketSize = ORAMUtils.toNumber(bucketSizeBytes);
-
-		byte[] pathSizeBytes = new byte[4];
-		System.arraycopy(input, offset, pathSizeBytes, 0, 4);
-		offset += 4;
-		int pathSize = ORAMUtils.toNumber(pathSizeBytes);
+		int pathSize = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
 		encryptedPath = new HashMap<>(pathSize);
 		while (pathSize--> 0) {
-			byte[] locationBytes = new byte[4];
-			System.arraycopy(input, offset, locationBytes, 0, 4);
-			offset += 4;
-			int location = ORAMUtils.toNumber(locationBytes);
+			int location = ORAMUtils.deserializeInteger(input, offset);
+			offset += Integer.BYTES;
 
 			EncryptedBucket encryptedBucket = new EncryptedBucket(bucketSize);
 			offset = encryptedBucket.readExternal(input, offset);
@@ -112,11 +91,10 @@ public class EvictionORAMMessage extends ORAMMessage {
 	public int getSerializedSize() {
 		int size = super.getSerializedSize();
 		size += encryptedStash.getSerializedSize();
-		size += encryptedPositionMap.getSerializedSize();
-		size += evictionMap.getSerializedSize();
-		size += 8;
+		size += encryptedPathMap.getSerializedSize();
+		size += Integer.BYTES * 2;
 		for (EncryptedBucket value : encryptedPath.values()) {
-			size += 4 + value.getSerializedSize();
+			size += Integer.BYTES + value.getSerializedSize();
 		}
 		return size;
 	}

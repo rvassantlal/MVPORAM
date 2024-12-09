@@ -2,13 +2,14 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.positionmap.full.FullORAMObject;
 import oram.client.positionmap.triple.TripleORAMObject;
+import oram.client.structure.PathMap;
 import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
 import oram.messages.CreateORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.security.EncryptionManager;
+import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.*;
@@ -34,14 +35,10 @@ public class ORAMManager {
 			String password = encryptionManager.generatePassword();
 			encryptionManager.createSecretKey(password);
 
-			EncryptedPositionMap encryptedPositionMap;
-			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
-				encryptedPositionMap = initializeEmptyFullPositionMap();
-			else
-				encryptedPositionMap = initializeEmptyTriplePositionMap();
+			EncryptedPathMap encryptedPathMap = initializeEmptyPathMap();
 			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
 			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType,
-					treeHeight, bucketSize, blockSize, encryptedPositionMap, encryptedStash);
+					treeHeight, bucketSize, blockSize, encryptedPathMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 			Response response = serviceProxy.invokeOrdered(serializedRequest, password.getBytes());
 			if (response == null || response.getPlainData() == null) {
@@ -55,10 +52,8 @@ public class ORAMManager {
 			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 			ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight,
 					treeSize, bucketSize, blockSize);
-			if (positionMapType == PositionMapType.FULL_POSITION_MAP)
-				return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
-			else
-				return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+
+			return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
 			return null;
 		}
@@ -86,10 +81,8 @@ public class ORAMManager {
 				ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
 				String password = new String(response.getConfidentialData()[0]);
 				encryptionManager.createSecretKey(password);
-				if (oramContext.getPositionMapType() == PositionMapType.FULL_POSITION_MAP)
-					return new FullORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
-				else
-					return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+
+				return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
 		} catch (SecretSharingException | IOException e) {
 			return null;
@@ -101,20 +94,9 @@ public class ORAMManager {
 		return encryptionManager.encryptStash(stash);
 	}
 
-	private EncryptedPositionMap initializeEmptyFullPositionMap() {
-		int[] positionMap = new int[0];
-		int[] versionIds = new int[0];
-		PositionMap pm = new PositionMap(positionMap, versionIds);
-		return encryptionManager.encryptPositionMap(pm);
-	}
-
-	private EncryptedPositionMap initializeEmptyTriplePositionMap() {
-		int[] pathId = new int[] {ORAMUtils.DUMMY_LOCATION, ORAMUtils.DUMMY_LOCATION};
-		int[] versionId = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
-		int[] address = new int[] {ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_ADDRESS};
-		int[] blockVersions = new int[] {ORAMUtils.DUMMY_VERSION, ORAMUtils.DUMMY_VERSION};
-		PositionMap pm = new PositionMap(address, pathId, versionId, blockVersions);
-		return encryptionManager.encryptPositionMap(pm);
+	private EncryptedPathMap initializeEmptyPathMap() {
+		PathMap pathMap = new PathMap(1);
+		return encryptionManager.encryptPathMap(pathMap);
 	}
 
 	public void close() {

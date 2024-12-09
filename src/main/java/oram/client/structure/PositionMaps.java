@@ -4,30 +4,24 @@ import java.util.Map;
 
 public class PositionMaps {
 	private final int newVersionId;
-	private final Map<Integer, PositionMap> positionMaps;
-	private final Map<Integer, EvictionMap> evictionMap;
+	private final Map<Integer, PathMap> pathMaps;
 	private final int[] outstandingVersions;
 	private final Map<Integer, int[]> allOutstandingVersions;
 
-	public PositionMaps(int newVersionId, Map<Integer, PositionMap> positionMaps, Map<Integer, EvictionMap> evictionMap,
+	public PositionMaps(int newVersionId, Map<Integer, PathMap> pathMaps,
 						int[] outstandingVersions, Map<Integer, int[]> allOutstandingVersions) {
 		this.newVersionId = newVersionId;
-		this.positionMaps = positionMaps;
-		this.evictionMap = evictionMap;
+		this.pathMaps = pathMaps;
 		this.outstandingVersions = outstandingVersions;
 		this.allOutstandingVersions = allOutstandingVersions;
 	}
 
-	public Map<Integer, PositionMap> getPositionMaps() {
-		return positionMaps;
+	public Map<Integer, PathMap> getPathMaps() {
+		return pathMaps;
 	}
 
 	public int getNewVersionId() {
 		return newVersionId;
-	}
-
-	public Map<Integer, EvictionMap> getEvictionMap() {
-		return evictionMap;
 	}
 
 	public Map<Integer, int[]> getAllOutstandingVersions() {

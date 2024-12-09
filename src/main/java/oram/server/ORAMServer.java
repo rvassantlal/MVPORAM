@@ -13,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -182,8 +184,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPositionMap(),
-				request.getEncryptedPath(), msgCtx.getSender(), request.getEvictionMap());
+		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPathMap(),
+				request.getEncryptedPath(), msgCtx.getSender());
 		long end = System.nanoTime();
 		long delay = end - start;
 		evictionLatencies.add(delay);
@@ -303,28 +305,17 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		int oramId = request.getOramId();
 		PositionMapType positionMapType = request.getPositionMapType();
 		int treeHeight = request.getTreeHeight();
-		int nBlocksPerBucket = request.getNBlocksPerBucket();
+		int nBlocksPerBucket = request.getBucketSize();
 		int blockSize = request.getBlockSize();
-		EncryptedPositionMap encryptedPositionMap = request.getEncryptedPositionMap();
+		EncryptedPathMap encryptedPathMap = request.getEncryptedPathMap();
 		EncryptedStash encryptedStash = request.getEncryptedStash();
 		if (orams.containsKey(oramId)) {
 			logger.debug("ORAM with id {} exists", oramId);
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 		} else {
 			logger.debug("Created an ORAM with id {} of {} levels", oramId, treeHeight + 1);
-			ORAM oram;
-			if (positionMapType == PositionMapType.FULL_POSITION_MAP) {
-				logger.debug("Using full position map");
-				oram = new FullPositionMapORAM(oramId, encryptionKeyShare, positionMapType, treeHeight,
-						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
-			} else if (positionMapType == PositionMapType.TRIPLE_POSITION_MAP) {
-				logger.debug("Using triple position map");
-				oram = new TriplePositionMapORAM(oramId, encryptionKeyShare, positionMapType, treeHeight,
-						nBlocksPerBucket, blockSize, encryptedPositionMap, encryptedStash);
-			} else {
-				logger.error("Unknown position map type");
-				return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
-			}
+			ORAM oram = new TriplePositionMapORAM(oramId, encryptionKeyShare, positionMapType, treeHeight,
+					nBlocksPerBucket, blockSize, encryptedPathMap, encryptedStash);
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}

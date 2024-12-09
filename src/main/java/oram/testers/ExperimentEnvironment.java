@@ -1,8 +1,8 @@
 package oram.testers;
 
-import oram.client.metadata.*;
+import oram.client.metadata.OutstandingGraph;
 import oram.client.structure.Block;
-import oram.client.structure.EvictionMap;
+import oram.client.structure.PathMap;
 import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
 import oram.utils.ORAMContext;
@@ -14,183 +14,462 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ExperimentEnvironment {
-	private static PositionMap positionMap;
+	private static Map<Integer, PathMap> pathMaps;
 	private static ORAMContext context;
-	private static Map<Integer, EvictionMap> evictionMaps;
-	private static Map<Integer, int[]> outstandingVersions;
+	private static Map<Integer, int[]> outstandingVersionsHistory;
 	private static Map<Integer, Map<Integer, ArrayList<Pair<Block, Integer>>>> trees;
 	private static Map<Integer, Map<Integer, Stash>> stashes;
 	private static Map<Integer, Integer> accessedPathsHistory;
+	private static Map<Integer, Set<Integer>> unknownBlocksHistory;
+	private static Map<Integer, Set<Integer>> versionsPerClient;
 	private static Set<Integer> lastVersions;
-
-	private static void loadData() {
-		String dataFolder = "C:\\Users\\robin\\Desktop\\oram\\";
-		String traceErrorFilename1 = dataFolder + "oramErrorTrace_1730991971295_client_100.txt";
-		String traceErrorFilename2 = dataFolder + "oramErrorTrace_1730991980737_client_200.txt";
-		lastVersions = new HashSet<>(2);
-		deserializeTraceError(traceErrorFilename1);
-		deserializeTraceError(traceErrorFilename2);
-
-		accessedPathsHistory.put(1, -1);
-		stashes.put(1, new HashMap<>());
-	}
+	private static Map<Integer, PositionMap> positionMapHistory = new HashMap<>();
 
 	public static void main(String[] args) {
 		StringBuilder messageBuilder = new StringBuilder();
+		int nClients = 3;
 
-		loadData();
+		loadData(nClients);
 
+
+		boolean isAllOf = true;
+		for (Map.Entry<Integer, Set<Integer>> entry : unknownBlocksHistory.entrySet()) {
+			if (!entry.getValue().isEmpty()) {
+				isAllOf = false;
+				System.out.println("Access " + entry.getKey() + " found " + entry.getValue().size() + " unknown block");
+			}
+		}
+
+		int maxStashSize = 0;
+		for (Map<Integer, Stash> stashes : stashes.values()) {
+			for (Stash stash : stashes.values()) {
+				if (stash.getBlocks().size() > maxStashSize) {
+					maxStashSize = stash.getBlocks().size();
+				}
+			}
+		}
+		System.out.println("Max stash size: " + maxStashSize);
+
+		if (isAllOf) {
+			System.out.println("Every thing is perfect!!");
+			System.exit(0);
+		}
+
+		System.out.println("Tree height: " + context.getTreeHeight());
+		positionMapHistory.put(1, new PositionMap(context.getTreeSize()));
 		int blockOfInterest = 2;
 		int problematicVersion = Collections.min(lastVersions);
+		System.out.println("Last versions: " + lastVersions);
+		System.out.println("Problematic version: " + problematicVersion);
 
-		BlockMetadataManager metadataManager = new BlockMetadataManager();
-		metadataManager.setBlockOfInterest(blockOfInterest);
-		metadataManager.processMetadata(evictionMaps, outstandingVersions, problematicVersion, messageBuilder);
-		System.out.println(messageBuilder);
+		versionsPerClient.keySet().stream().sorted().forEach(c -> {
+			Set<Integer> version = versionsPerClient.get(c);
+			System.out.printf("Client %d versions:", c);
+			version.stream().sorted().forEach(v -> System.out.printf(" %d", v));
+			System.out.println();
+		});
 
+		removeNonOutstandingVersionsOfProblematicVersion(problematicVersion);
+
+		OutstandingGraph outstandingGraph = new OutstandingGraph();
+		outstandingGraph.addOutstandingVersions(outstandingVersionsHistory);
+
+		/*outstandingVersionsHistory.keySet().stream().filter(v -> v <= problematicVersion).sorted().forEach(v -> {
+			int c = 0;
+			for (Map.Entry<Integer, Set<Integer>> entry : versionsPerClient.entrySet()) {
+				if (entry.getValue().contains(v)) {
+					c = entry.getKey();
+					break;
+				}
+			}
+			int[] ovs = outstandingVersionsHistory.get(v);
+			PathMap pathMap = pathMaps.get(v);
+			System.out.println("OP sequence " + v);
+			System.out.println("\tClient: " + c);
+			System.out.println("\tPath: " + accessedPathsHistory.get(v));
+			System.out.print("\tPM: " + (pathMap == null || pathMap.getStoredAddresses().isEmpty() ? "\n" : pathMap));
+			System.out.println("\tOV: " + Arrays.toString(ovs));
+		});*/
+
+		int checkVersion = 86;
+		PositionMap positionMap = getPositionMap(checkVersion, outstandingGraph);
+		int[] ov = outstandingVersionsHistory.get(checkVersion);
+		for (int v : ov) {
+			System.out.println("Version " + v);
+			printTreeMap(positionMapHistory.get(v));
+		}
+
+		printTreeMap(positionMap);
 		if (true) {
 			return;
 		}
+		PositionMap treeMap = buildTreeMap(messageBuilder);
+		printTreeMap(treeMap);
 
-		Map<Integer, Stash> problematicVersionStashes = ExperimentEnvironment.stashes.get(problematicVersion);
-		Map<Integer, Block> stash = mergeStashes(problematicVersion,
-				positionMap, problematicVersionStashes, metadataManager);
+		Stash stash = mergeStashes(treeMap, stashes.get(problematicVersion));
 
-		Map<Integer, BlockMetadata> metadata = metadataManager.getMetadata(problematicVersion);
+		System.out.println(messageBuilder);
+
 		Map<Integer, ArrayList<Pair<Block, Integer>>> blocksGroupedByAddress = trees.get(problematicVersion);
 		Set<Integer> unknownBlocks = new HashSet<>();
 		Set<Integer> strangeBlocks = new HashSet<>();
 
 		for (int address = 0; address < context.getTreeSize(); address++) {
-			int pmLocation = positionMap.getLocationOf(address);
-			if (pmLocation == ORAMUtils.DUMMY_LOCATION) {
+			int tmAccessVersion = treeMap.getAccessVersionOf(address);
+			if (tmAccessVersion == ORAMUtils.DUMMY_VERSION) {
 				continue;
 			}
 			ArrayList<Pair<Block, Integer>> blocksInTree = blocksGroupedByAddress.get(address);
-			Block blockInStash = stash.get(address);
+			Block blockInStash = stash.getBlock(address);
 			if (blocksInTree == null && blockInStash == null) {
 				unknownBlocks.add(address);
-				continue;
 			}
 
-			int pmContentVersion = positionMap.getContentVersionOf(address);
-			int pmLocationVersion = positionMap.getLocationVersionOf(address);
-			BlockMetadata blockMetadata = metadata.get(address);
-			System.out.println(address);
-			int mBlockLocation = blockMetadata.getHighestLocation();
-			int mBlockContentVersion = blockMetadata.getContentVersion();
-			int mBlockLocationVersion = blockMetadata.getLocationVersion();
-			int mBlockHighestLocationVersion = blockMetadata.getHighestLocationVersion();
-
-			if ((blocksInTree != null && blockInStash != null)
-					|| (blocksInTree != null && mBlockLocation == ORAMUtils.DUMMY_LOCATION)) {
+			if (blocksInTree != null && blockInStash != null) {
 				strangeBlocks.add(address);
 			}
 
-			boolean isInStash = blocksInTree == null && mBlockLocation == ORAMUtils.DUMMY_LOCATION
-					&& mBlockContentVersion == pmContentVersion && mBlockLocationVersion == pmLocationVersion
-					&& blockInStash.getContentVersion() == mBlockContentVersion
-					&& blockInStash.getLocationVersion() == mBlockLocationVersion;
-			boolean isSingleInTree = blockInStash == null
-					&& blocksInTree.size() == 1 && blocksInTree.get(0).getRight() == mBlockLocation
-					&& mBlockContentVersion == pmContentVersion && mBlockLocationVersion == pmLocationVersion
-					&& blocksInTree.get(0).getLeft().getContentVersion() == mBlockContentVersion
-					&& blocksInTree.get(0).getLeft().getLocationVersion() == mBlockLocationVersion;
-			//if (!isInStash && !isSingleInTree) {
-			printBlockInformation("", address, positionMap, blocksGroupedByAddress, stash, metadata);
-			//}
+			printBlockInformation("", address, treeMap, blocksGroupedByAddress, stash);
 		}
 
-		System.out.printf("Strange blocks: %d\n", strangeBlocks.size());
-		strangeBlocks.stream().sorted().forEach(address
-				-> printBlockInformation("\t", address, positionMap, blocksGroupedByAddress, stash, metadata));
-
-		System.out.printf("Unknown blocks: %d\n", unknownBlocks.size());
-		unknownBlocks.stream().sorted().forEach(address
-				-> printBlockInformation("\t", address, positionMap, blocksGroupedByAddress, stash, metadata));
-
-		//printing stash
-		System.out.printf("Stash: %d\n\t", stash.size());
-		stash.keySet().stream().sorted().forEach(address -> {
-			Block block = stash.get(address);
-			System.out.print(block + " ");
-		});
-		System.out.println();
-
-		//printing merged position map
-		//printPositionMap();
-
-		System.out.println(accessedPathsHistory);
-
-		int minVersion = 200;//Math.max(positionMap.getContentVersionOf(blockOfInterest),
-				//positionMap.getLocationVersionOf(blockOfInterest));
-
-		studyBlock(blockOfInterest, problematicVersion, minVersion);
-
-		Set<Integer> problematicBlocks = new HashSet<>();
-		problematicBlocks.addAll(strangeBlocks);
-		problematicBlocks.addAll(unknownBlocks);
-		System.out.printf("Problematic blocks: %s\n", problematicBlocks);
-		System.out.printf("Last versions: %s\n", lastVersions);
-
+		System.out.println("Strange blocks: " + strangeBlocks);
+		System.out.println("Unknown  blocks: " + unknownBlocks);
 	}
 
-	private static void studyBlock(int blockOfInterest, int problematicVersion, int minVersion) {
-		evictionMaps.keySet().stream().filter(v -> v >= minVersion).sorted().forEach(version -> {
-			EvictionMap map = evictionMaps.get(version);
-			Map<Integer, ArrayList<Pair<Block, Integer>>> tree = trees.get(version);
-			System.out.printf("Version %d:\n", version);
-			System.out.printf("\tOV: %s\n", Arrays.toString(outstandingVersions.get(version)));
-			System.out.printf("\tPath: %d\n", accessedPathsHistory.get(version));
+	public static PositionMap getPositionMap(int version, OutstandingGraph outstandingGraph) {
+		PositionMap positionMap = positionMapHistory.get(version);
+		if (positionMap != null) {
+			return positionMap;
+		}
 
-			System.out.printf("\tBlock %d in tree:\n", blockOfInterest);
-			if (tree != null) {
-				System.out.printf("\t\t %s\n", tree.get(blockOfInterest));
+		positionMap = new PositionMap(context.getTreeSize());
+		int[] outstandingVersions = outstandingVersionsHistory.get(version);
+		PositionMap[] outstandingPositionMaps = new PositionMap[outstandingVersions.length];
+		for (int i = 0; i < outstandingVersions.length; i++) {
+			int outstandingVersion = outstandingVersions[i];
+			PositionMap outstandingPositionMap = getPositionMap(outstandingVersion, outstandingGraph);
+			outstandingPositionMaps[i] = outstandingPositionMap;
+		}
+
+		Map<Integer, int[]> updates = new HashMap<>();
+		System.out.println("Building version " + version);
+		System.out.println("\tOVs: " + Arrays.toString(outstandingVersions));
+
+		for (int address = 0; address < context.getTreeSize(); address++) {
+			System.out.println("\tAddress: " + address);
+			updates.clear();
+			for (int i = 0; i < outstandingVersions.length; i++) {
+				int outstandingVersion = outstandingVersions[i];
+				System.out.println("\t\tOV: " + outstandingVersion);
+				PositionMap outstandingPositionMap = outstandingPositionMaps[i];
+				int[] outstandingVersionsOfOV = outstandingVersionsHistory.get(outstandingVersion);
+				Set<Integer> concurrentVersions = findConcurrentVersions(version, outstandingVersion,
+						outstandingVersionsOfOV, outstandingVersionsHistory, outstandingGraph);
+				System.out.println("\t\t\tCV: " + concurrentVersions);
+
+				int[] outstandingUpdate = consolidateUpdateFor(address, outstandingGraph, concurrentVersions, outstandingPositionMap);
+
+				if (outstandingUpdate != null) {
+					updates.put(outstandingUpdate[3], outstandingUpdate);
+					System.out.println("\t\t\tOutstanding update: " + Arrays.toString(outstandingUpdate));
+				}
 			}
 
-			Map<Integer, Stash> currentVersionStashes = stashes.get(version);
-			if (currentVersionStashes == null) {
-				System.out.printf("\tBlock %d in stash: there are no stashes\n", blockOfInterest);
-			} else {
-				Map<Integer, Block> stash = simpleMergeStashes(currentVersionStashes);
-				System.out.printf("\tBlock %d in stash: %s\n", blockOfInterest, stash.get(blockOfInterest));
+			System.out.println("\t\tConsolidate");
+
+			//Remove older versions
+			removeOlderVersions(updates);
+			System.out.println("\t\t\tRecent versions: " + updates.keySet());
+
+			//Remove overridden updates and keep concurrent updates
+			removeOverriddenUpdates(outstandingGraph, updates);
+			System.out.println("\t\t\tConcurrent updates: " + updates.keySet());
+
+			//Select deepest and recent update
+			selectDeepestAndRecentUpdates(updates);
+			System.out.println("\t\t\tDeepest updates: " + updates.keySet());
+
+			if (!updates.isEmpty()) {
+				int[] bestUpdate = updates.values().iterator().next();
+				System.out.println("\t\t\tBest update " + Arrays.toString(bestUpdate));
+				positionMap.update(address, bestUpdate[0], bestUpdate[1], bestUpdate[2], bestUpdate[3]);
 			}
+		}
 
-			PartialTreeWithDuplicatedBlocks blocksRemovedFromPath = map.getBlocksRemovedFromPath();
-			PartialTree blocksMovedToPath = map.getBlocksMovedToPath();
+		positionMapHistory.put(version, positionMap);
+		return positionMap;
+	}
 
-			System.out.print("\tBlocks removed from path:\n");
-			System.out.printf("\t\t L: %s\n", blocksRemovedFromPath.getLocations().get(blockOfInterest));
-			System.out.printf("\t\tCV: %s\n", blocksRemovedFromPath.getContentVersions().get(blockOfInterest));
-			System.out.printf("\t\tLV: %s\n", blocksRemovedFromPath.getLocationVersions().get(blockOfInterest));
-			System.out.print("\tBlocks moved to path:\n");
-			System.out.printf("\t\t L: %s\n", blocksMovedToPath.getLocations().get(blockOfInterest));
-			System.out.printf("\t\tCV: %s\n", blocksMovedToPath.getContentVersions().get(blockOfInterest));
-			System.out.printf("\t\tLV: %s\n", blocksMovedToPath.getLocationVersions().get(blockOfInterest));
-		});
+	private static int[] consolidateUpdates(OutstandingGraph outstandingGraph, int[] updateA, int[] updateB) {
+		if (updateA[2] == ORAMUtils.DUMMY_VERSION) {
+			return updateB;
+		}
+		if (updateB[2] == ORAMUtils.DUMMY_VERSION) {
+			return updateA;
+		}
+		if (updateA[1] > updateB[1] || (updateA[1] == updateB[1] && updateA[2] > updateB[2])) {
+			return updateA;
+		}
+		if (outstandingGraph.doesOverrides(updateA[3], updateB[3])) {
+			System.out.println("\t\t\t\t" + Arrays.toString(updateA) + " overrides " + Arrays.toString(updateB));
+			return updateA;
+		}
 
-		System.out.printf("Path accessed by problematic version %d: %d\n", problematicVersion,
-				accessedPathsHistory.get(problematicVersion));
-		System.out.printf("Problematic version %d tree:\n", problematicVersion);
-		Map<Integer, ArrayList<Pair<Block, Integer>>> problematicTree = trees.get(problematicVersion);
-		problematicTree.keySet().stream().sorted().forEach(address
-				-> System.out.printf("\t%s\n", problematicTree.get(address)));
+		if (outstandingGraph.doesOverrides(updateB[3], updateA[3])) {
+			System.out.println("\t\t\t\t" + Arrays.toString(updateB) + " overrides " + Arrays.toString(updateA));
+			return updateB;
+		}
 
-		Map<Integer, Stash> currentVersionStashes = stashes.get(problematicVersion);
-		System.out.printf("Problematic version %d stash:\n\t", problematicVersion);
-		if (currentVersionStashes == null) {
-			System.out.print("There are no stashes\n");
-		} else {
-			Map<Integer, Block> stash = simpleMergeStashes(currentVersionStashes);
-			stash.keySet().stream().sorted().forEach(address -> {
-				Block block = stash.get(address);
-				System.out.print(block + " ");
-			});
-			System.out.println();
+		if (updateA[0] > updateB[0] || (updateA[0] == updateB[0] && updateA[3] > updateB[3])) {
+			System.out.println("\t\t\t\t" + Arrays.toString(updateA) + " is deeper than " + Arrays.toString(updateB));
+			return updateA;
+		}
+		System.out.println("\t\t\t\t" + Arrays.toString(updateB) + " is deeper than " + Arrays.toString(updateA));
+		return updateB;
+	}
+
+	private static int[] consolidateUpdateFor(int address, OutstandingGraph outstandingGraph,
+											  Set<Integer> concurrentPathMaps, PositionMap outstandingPositionMap) {
+		//Collect updates
+		Map<Integer, int[]> updates = collectConcurrentUpdatesFor(address, concurrentPathMaps);
+		int positionMapAccessVersion = outstandingPositionMap.getAccessVersionOf(address);
+		if (positionMapAccessVersion != ORAMUtils.DUMMY_VERSION) {
+			int positionMapLocationUpdateVersion = outstandingPositionMap.getLocationUpdateVersion(address);
+			int[] pmUpdate = {
+					outstandingPositionMap.getLocationOf(address),
+					outstandingPositionMap.getWriteVersionOf(address),
+					positionMapAccessVersion,
+					positionMapLocationUpdateVersion
+			};
+			updates.put(positionMapLocationUpdateVersion, pmUpdate);
+		}
+		System.out.println("\t\t\tConcurrent updates: " + updates.keySet());
+
+		//Remove updates with older versions
+		removeOlderVersions(updates);
+		System.out.println("\t\t\tRecent versions: " + updates.keySet());
+
+		//Remove overridden updates and keep concurrent updates
+		removeOverriddenUpdates(outstandingGraph, updates);
+		System.out.println("\t\t\tConcurrent updates: " + updates.keySet());
+
+		//Select deepest and recent update
+		selectDeepestAndRecentUpdates(updates);
+		System.out.println("\t\t\tDeepest updates: " + updates.keySet());
+
+		if (updates.isEmpty()) {
+			return null;
+		}
+		return updates.values().iterator().next();
+	}
+
+	private static Map<Integer, int[]> collectConcurrentUpdatesFor(int address, Set<Integer> concurrentVersions) {
+		Map<Integer, int[]> updates = new HashMap<>();
+		for (int concurrentVersion : concurrentVersions) {
+			PathMap concurrentPathMap = pathMaps.get(concurrentVersion);
+			if (concurrentPathMap.getAccessVersionOf(address) == ORAMUtils.DUMMY_VERSION) {
+				continue;
+			}
+			int[] update = {
+					concurrentPathMap.getLocationOf(address),
+					concurrentPathMap.getWriteVersionOf(address),
+					concurrentPathMap.getAccessVersionOf(address),
+					concurrentVersion
+			};
+			updates.put(concurrentVersion, update);
+		}
+		return updates;
+	}
+
+	private static void removeOlderVersions(Map<Integer, int[]> updates) {
+		//Remove older versions
+		Set<Integer> currentUpdates = new HashSet<>(updates.keySet());
+		for (int ovA : currentUpdates) {
+			int[] updateA = updates.get(ovA);
+			if (updateA == null) {
+				continue;
+			}
+			for (int ovB : currentUpdates) {
+				int[] updateB = updates.get(ovB);
+				if (ovA == ovB || updateB == null) {
+					continue;
+				}
+				if (updateA[1] > updateB[1] || (updateA[1] == updateB[1] && updateA[2] > updateB[2])) {
+					updates.remove(ovB);
+				}
+			}
 		}
 	}
+
+	private static void removeOverriddenUpdates(OutstandingGraph outstandingGraph, Map<Integer, int[]> updates) {
+		Set<Integer> currentUpdates = new HashSet<>(updates.keySet());
+		for (int ovA : currentUpdates) {
+			int[] updateA = updates.get(ovA);
+			if (updateA == null) {
+				continue;
+			}
+			for (int ovB : currentUpdates) {
+				int[] updateB = updates.get(ovB);
+				if (ovA == ovB || updateB == null) {
+					continue;
+				}
+				if (outstandingGraph.doesOverrides(updateA[3], updateB[3])) {
+					updates.remove(ovB);
+					System.out.println("\t\t\t\t" + Arrays.toString(updateA) + " overrides " + Arrays.toString(updateB));
+				}
+			}
+		}
+	}
+
+	private static void selectDeepestAndRecentUpdates(Map<Integer, int[]> updates) {
+		Set<Integer> currentUpdates = new HashSet<>(updates.keySet());
+		for (int ovA : currentUpdates) {
+			int[] updateA = updates.get(ovA);
+			if (updateA == null) {
+				continue;
+			}
+			for (int ovB : currentUpdates) {
+				int[] updateB = updates.get(ovB);
+				if (ovA == ovB || updateB == null) {
+					continue;
+				}
+				if (updateA[0] > updateB[0] || (updateA[0] == updateB[0] && updateA[3] > updateB[3])) {
+					System.out.println("\t\t\t\t" + Arrays.toString(updateA) + " is deeper than " + Arrays.toString(updateB));
+					updates.remove(ovB);
+				}
+			}
+		}
+	}
+
+	private static Set<Integer> findConcurrentVersions(int startVersion, int ovVersion, int[] limitOutstandingVersions,
+													   Map<Integer, int[]> outstandingVersionsHistory,
+													   OutstandingGraph outstandingGraph) {
+		Set<Integer> visitedOutstandingVersions = new HashSet<>();
+		Queue<int[]> queue = new ArrayDeque<>();
+		queue.add(outstandingVersionsHistory.get(startVersion));
+		Set<Integer> limitOVSet = new HashSet<>(limitOutstandingVersions.length);
+		int minLimitVersion = Integer.MAX_VALUE;
+		for (int limitOutstandingVersion : limitOutstandingVersions) {
+			limitOVSet.add(limitOutstandingVersion);
+			if (limitOutstandingVersion < minLimitVersion) {
+				minLimitVersion = limitOutstandingVersion;
+			}
+		}
+		Set<Integer> concurrentVersions = new HashSet<>();
+		while (!queue.isEmpty()) {
+			int[] versions = queue.poll();
+			for (int version : versions) {
+				if (outstandingGraph.doesOverrides(version, limitOVSet)) {
+					concurrentVersions.add(version);
+				}
+				if (version > minLimitVersion && version != ovVersion) {
+					int[] newVersions = outstandingVersionsHistory.get(version);
+					int hash = ORAMUtils.computeHashCode(newVersions);
+					if (!visitedOutstandingVersions.contains(hash)) {
+						queue.add(newVersions);
+						visitedOutstandingVersions.add(hash);
+					}
+				}
+			}
+		}
+
+		return concurrentVersions;
+	}
+
+	private static void removeNonOutstandingVersionsOfProblematicVersion(int problematicVersion) {
+		OutstandingGraph outstandingGraph = new OutstandingGraph();
+		outstandingGraph.addOutstandingVersions(outstandingVersionsHistory);
+		Set<Integer> allVersions = new HashSet<>(outstandingVersionsHistory.keySet());
+		for (int version : allVersions) {
+			if (!outstandingGraph.doesOverrides(problematicVersion, version) && version != problematicVersion) {
+				outstandingVersionsHistory.remove(version);
+				pathMaps.remove(version);
+			}
+		}
+	}
+
+	private static PositionMap buildTreeMap(StringBuilder debugInformation) {
+		OutstandingGraph outstandingGraph = new OutstandingGraph();
+		outstandingGraph.addOutstandingVersions(outstandingVersionsHistory);
+
+		Set<Integer> updatedAddresses = new HashSet<>();
+		for (Map.Entry<Integer, PathMap> entry : pathMaps.entrySet()) {
+			PathMap currentPM = entry.getValue();
+			updatedAddresses.addAll(currentPM.getStoredAddresses());
+		}
+
+		return buildTreeMap(updatedAddresses, pathMaps, outstandingGraph, debugInformation);
+	}
+
+	private static PositionMap buildTreeMap(Set<Integer> updatedAddresses, Map<Integer, PathMap> pathMaps,
+											OutstandingGraph outstandingGraph, StringBuilder debugInformation) {
+		debugInformation.append("Updated addresses: ").append(updatedAddresses).append("\n");
+		PositionMap treeMap = new PositionMap(context.getTreeSize());
+		Set<Integer> concurrentVersions = new HashSet<>();
+		for (int updatedAddress : updatedAddresses) {
+			int tmLocation = treeMap.getLocationOf(updatedAddress);
+			int tmWriteVersion = treeMap.getWriteVersionOf(updatedAddress);
+			int tmAccessVersion = treeMap.getAccessVersionOf(updatedAddress);
+			int tmLocationUpdateVersion = treeMap.getLocationUpdateVersion(updatedAddress);
+			debugInformation.append("\tUpdated address: ").append(updatedAddress)
+					.append(" (L: ").append(tmLocation)
+					.append(" WV: ").append(tmWriteVersion)
+					.append(" AV: ").append(tmAccessVersion)
+					.append(" LUV: ").append(tmLocationUpdateVersion).append(")\n");
+			for (Map.Entry<Integer, PathMap> entry : pathMaps.entrySet()) {
+				int pmLocationUpdateVersion = entry.getKey();
+				PathMap pathMap = entry.getValue();
+				int pmLocation = pathMap.getLocationOf(updatedAddress);
+				int pmWriteVersion = pathMap.getWriteVersionOf(updatedAddress);
+				int pmAccessVersion = pathMap.getAccessVersionOf(updatedAddress);
+				if (pmAccessVersion == ORAMUtils.DUMMY_VERSION) {
+					continue;
+				}
+				debugInformation.append("\t\tUpdated op sequence: ").append(pmLocationUpdateVersion)
+						.append(" (L: ").append(pmLocation)
+						.append(" WV: ").append(pmWriteVersion)
+						.append(" AV: ").append(pmAccessVersion)
+						.append(" LUV: ").append(pmLocationUpdateVersion).append(")\n");
+				if (pmWriteVersion > tmWriteVersion ||
+						(pmWriteVersion == tmWriteVersion && pmAccessVersion > tmAccessVersion)) {
+					tmWriteVersion = pmWriteVersion;
+					tmAccessVersion = pmAccessVersion;
+					tmLocationUpdateVersion = pmLocationUpdateVersion;
+					tmLocation = pmLocation;
+					concurrentVersions.clear();
+					concurrentVersions.add(pmLocationUpdateVersion);
+				} else if (pmWriteVersion == tmWriteVersion && pmAccessVersion == tmAccessVersion)  {
+					if (outstandingGraph.doesOverrides(pmLocationUpdateVersion, tmLocationUpdateVersion)) {
+						tmLocationUpdateVersion = pmLocationUpdateVersion;
+						tmLocation = pmLocation;
+					} else if (!outstandingGraph.doesOverrides(tmLocationUpdateVersion, pmLocationUpdateVersion)) {//concurrent version
+						concurrentVersions.add(pmLocationUpdateVersion);
+						if (pmLocation > tmLocation || (pmLocation == tmLocation && pmLocationUpdateVersion > tmLocationUpdateVersion)) {//TODO have to compute and compare heights
+							tmLocationUpdateVersion = pmLocationUpdateVersion;
+							tmLocation = pmLocation;
+						}
+					}
+				}
+			}
+
+			treeMap.setLocationOf(updatedAddress, tmLocation);
+			treeMap.setWriteVersionOf(updatedAddress, tmWriteVersion);
+			treeMap.setAccessVersionOf(updatedAddress, tmAccessVersion);
+			treeMap.setLocationUpdateVersions(updatedAddress, tmLocationUpdateVersion);
+			debugInformation.append("\t\tResult: (A: ").append(updatedAddress)
+					.append(", L: ").append(tmLocation)
+					.append(", WV: ").append(tmWriteVersion)
+					.append(", AV: ").append(tmAccessVersion)
+					.append(", LUV: ").append(tmLocationUpdateVersion)
+					.append(")\n");
+		}
+
+		return treeMap;
+	}
+
 
 	private static Map<Integer, Block> simpleMergeStashes(Map<Integer, Stash> stashes) {
 		Map<Integer, Block> mergedStash = new HashMap<>();
@@ -200,13 +479,13 @@ public class ExperimentEnvironment {
 			if (stash == null) {
 				throw new IllegalStateException("Stash is null");
 			}
-			for (Block block : stash.getBlocks()) {
+			for (Block block : stash.getBlocks().values()) {
 				int address = block.getAddress();
-				int contentVersion = block.getContentVersion();
-				int locationVersion = block.getLocationVersion();
+				int contentVersion = block.getWriteVersion();
+				int locationVersion = block.getAccessVersion();
 				Block previousBlock = mergedStash.get(address);
-				if (previousBlock == null || contentVersion > previousBlock.getContentVersion()
-						|| (contentVersion == previousBlock.getContentVersion() && locationVersion > previousBlock.getLocationVersion())) {
+				if (previousBlock == null || contentVersion > previousBlock.getWriteVersion()
+						|| (contentVersion == previousBlock.getWriteVersion() && locationVersion > previousBlock.getAccessVersion())) {
 					mergedStash.put(address, block);
 				}
 			}
@@ -215,31 +494,30 @@ public class ExperimentEnvironment {
 		return mergedStash;
 	}
 
-	private static Map<Integer, Block> mergeStashes(int version, PositionMap positionMap,
-													Map<Integer, Stash> stashes,
-													BlockMetadataManager metadataManager) {
-		Map<Integer, Block> mergedStash = new HashMap<>();
-		for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
-			Stash stash = entry.getValue();
+	private static Stash mergeStashes(PositionMap treeMap,
+									  Map<Integer, Stash> stashes) {
+		Stash mergedStash = new Stash(context.getBlockSize());
+		for (Map.Entry<Integer, Stash> stashEntry : stashes.entrySet()) {
+			Stash stash = stashEntry.getValue();
 			if (stash == null) {
-				throw new IllegalStateException("Stash is null");
+				continue;
 			}
-			for (Block block : stash.getBlocks()) {
-				int address = block.getAddress();
-				int contentVersion = block.getContentVersion();
-				int pmContentVersion = positionMap.getContentVersionOf(address);
-				int pmLocationVersion = positionMap.getLocationVersionOf(address);
-				if (contentVersion > pmContentVersion
-						|| (contentVersion == pmContentVersion
-						&& block.getLocationVersion() > pmLocationVersion)) {
-					throw new IllegalStateException("Block in stash has a higher version than the position map");
+
+			for (Map.Entry<Integer, Block> blockEntry : stash.getBlocks().entrySet()) {
+				int address = blockEntry.getKey();
+				Block block =  blockEntry.getValue();
+				int writeVersion = block.getWriteVersion();
+				int accessVersion = block.getAccessVersion();
+				int tmLocation = treeMap.getLocationOf(address);
+				int tmWriteVersion = treeMap.getWriteVersionOf(address);
+				int tmAccessVersion = treeMap.getAccessVersionOf(address);
+				if (writeVersion > tmWriteVersion
+						|| (writeVersion == tmWriteVersion && accessVersion > tmAccessVersion)) {
+					throw new IllegalStateException("Block in stash has a higher version than the tree map");
 				}
-
-
-				if (pmContentVersion == contentVersion
-						&& pmLocationVersion == block.getLocationVersion()
-						&& !metadataManager.isInTree(version, block.getAddress())) {
-					mergedStash.put(block.getAddress(), block);
+				if (tmLocation == ORAMUtils.DUMMY_LOCATION && tmWriteVersion == writeVersion
+						&& tmAccessVersion == accessVersion) {
+					mergedStash.putBlock(block);
 				}
 			}
 		}
@@ -248,33 +526,56 @@ public class ExperimentEnvironment {
 
 	private static void printBlockInformation(String initialTabs, int address, PositionMap positionMap,
 											  Map<Integer, ArrayList<Pair<Block, Integer>>> blocksInTree,
-											  Map<Integer, Block> stash, Map<Integer, BlockMetadata> metadata) {
+											  Stash stash) {
 		int pmLocation = positionMap.getLocationOf(address);
-		int pmContentVersion = positionMap.getContentVersionOf(address);
-		int pmLocationVersion = positionMap.getLocationVersionOf(address);
+		int pmWriteVersion = positionMap.getWriteVersionOf(address);
+		int pmAccessVersion = positionMap.getAccessVersionOf(address);
+		int pmLocationUpdateVersion = positionMap.getLocationUpdateVersion(address);
 		System.out.printf("%sBlock %d\n", initialTabs, address);
-		System.out.printf("%s\tVersion in PM -> L: %d | CV: %d | LV: %d\n", initialTabs,
-				pmLocation, pmContentVersion, pmLocationVersion);
+		System.out.printf("%s\tVersion in PM -> L: %d | WV: %d | AV: %d | LUV: %d\n", initialTabs,
+				pmLocation, pmWriteVersion, pmAccessVersion, pmLocationUpdateVersion);
 		System.out.printf("%s\tVersions in tree -> %s\n", initialTabs, blocksInTree.get(address));
-		System.out.printf("%s\tVersion in stash -> %s\n", initialTabs, stash.get(address));
-		System.out.printf("%s\tBlock location -> %s\n", initialTabs, metadata.get(address));
+		System.out.printf("%s\tVersion in stash -> %s\n", initialTabs, stash.getBlock(address));
 	}
 
-	private static void printPositionMap() {
-		System.out.println("Merged position map:");
+	private static void printTreeMap(PositionMap treeMap) {
+		System.out.println("Tree map:");
 		for (int address = 0; address < context.getTreeSize(); address++) {
-			int location = positionMap.getLocationOf(address);
-			if (location == ORAMUtils.DUMMY_LOCATION) {
+			int location = treeMap.getLocationOf(address);
+			int writeVersion = treeMap.getWriteVersionOf(address);
+			int accessVersion = treeMap.getAccessVersionOf(address);
+			int locationUpdateVersion = treeMap.getLocationUpdateVersion(address);
+			if (accessVersion == ORAMUtils.DUMMY_VERSION) {
 				continue;
 			}
-			int contentVersion = positionMap.getContentVersionOf(address);
-			int locationVersion = positionMap.getLocationVersionOf(address);
-			System.out.printf("\tA: %d | L: %d | CV: %d | LV: %d\n", address, location, contentVersion, locationVersion);
+			System.out.printf("\tA: %d | L: %d | WV: %d | AV: %d | LUV: %d\n", address, location, writeVersion,
+					accessVersion, locationUpdateVersion);
 		}
 	}
 
-	private static void deserializeTraceError(String positionMapFilename) {
-		try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(Paths.get(positionMapFilename)));
+	private static void loadData(int numberOfRecentFiles) {
+		String dataFolder = "C:\\Users\\robin\\Desktop\\oram\\";
+		lastVersions = new HashSet<>(numberOfRecentFiles);
+
+		File folder = new File(dataFolder);
+		File[] files = folder.listFiles();
+		if (files == null) {
+			throw new RuntimeException("There are no files");
+		}
+		Arrays.sort(files, Comparator.comparingLong(File::lastModified));
+
+		for (int i = files.length - 1, c = 0; i >= 0 && c < numberOfRecentFiles; i--, c++) {
+			File file = files[i];
+			System.out.println(file);
+			deserializeTraceError(file);
+		}
+
+		accessedPathsHistory.put(1, -1);
+		stashes.put(1, new HashMap<>());
+	}
+
+	private static void deserializeTraceError(File traceFilename) {
+		try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(Paths.get(traceFilename.toURI())));
 			 ObjectInput in = new ObjectInputStream(bis)) {
 			int treeHeight = in.readInt();
 			int blockSize = in.readInt();
@@ -284,38 +585,38 @@ public class ExperimentEnvironment {
 			int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
 			context = new ORAMContext(PositionMapType.TRIPLE_POSITION_MAP, treeHeight, treeSize, bucketSize, blockSize);
 
-			//deserialize position map
-			if (positionMap == null) {
-				positionMap = new PositionMap(treeSize);
+			//deserialize version history
+			if (versionsPerClient == null) {
+				versionsPerClient = new HashMap<>();
 			}
-			for (int address = 0; address < treeSize; address++) {
-				int location = in.readInt();
-				int contentVersion = in.readInt();
-				int locationVersion = in.readInt();
-				positionMap.setLocationOf(address, location);
-				positionMap.setContentVersionOf(address, contentVersion);
-				positionMap.setLocationVersionOf(address, locationVersion);
-			}
-
-			//deserialize eviction maps
-			int evictionMapSize = in.readInt();
-			if (evictionMaps == null) {
-				evictionMaps = new HashMap<>(evictionMapSize);
-			}
-			while (evictionMapSize-- > 0) {
+			int clientId = in.readInt();
+			int nVersions = in.readInt();
+			Set<Integer> versions = new HashSet<>(nVersions);
+			while (nVersions-- > 0) {
 				int version = in.readInt();
-				int size = in.readInt();
-				byte[] serializedEvictionMap = new byte[size];
-				in.readFully(serializedEvictionMap);
-				EvictionMap map = new EvictionMap();
-				map.readExternal(serializedEvictionMap, 0);
-				evictionMaps.put(version, map);
+				versions.add(version);
+			}
+			versionsPerClient.put(clientId, versions);
+
+			//deserialize path map
+			int nPathMaps = in.readInt();
+			if (pathMaps == null) {
+				pathMaps = new HashMap<>(nPathMaps);
+			}
+			while (nPathMaps--> 0) {
+				int version = in.readInt();
+				int pathMapSize = in.readInt();
+				byte[] serializedPathMap = new byte[pathMapSize];
+				in.readFully(serializedPathMap);
+				PathMap pathMap = new PathMap();
+				pathMap.readExternal(serializedPathMap, 0);
+				pathMaps.put(version, pathMap);
 			}
 
 			//deserialize outstanding versions
 			int outstandingVersionsSize = in.readInt();
-			if (outstandingVersions == null) {
-				outstandingVersions = new HashMap<>(outstandingVersionsSize);
+			if (outstandingVersionsHistory == null) {
+				outstandingVersionsHistory = new HashMap<>(outstandingVersionsSize);
 			}
 			while (outstandingVersionsSize--> 0) {
 				int version = in.readInt();
@@ -324,7 +625,7 @@ public class ExperimentEnvironment {
 				for (int i = 0; i < size; i++) {
 					ov[i] = in.readInt();
 				}
-				outstandingVersions.put(version, ov);
+				outstandingVersionsHistory.put(version, ov);
 			}
 
 			//deserialize tree
@@ -387,6 +688,21 @@ public class ExperimentEnvironment {
 				int version = in.readInt();
 				int path = in.readInt();
 				accessedPathsHistory.put(version, path);
+			}
+
+			//deserialize unknown blocks history
+			int nSets = in.readInt();
+			if (unknownBlocksHistory == null) {
+				unknownBlocksHistory = new HashMap<>(nSets);
+			}
+			while (nSets-- > 0) {
+				int v = in.readInt();
+				int size = in.readInt();
+				Set<Integer> vs = new HashSet<>(size);
+				while (size--> 0) {
+					vs.add(in.readInt());
+				}
+				unknownBlocksHistory.put(v, vs);
 			}
 
 		} catch (IOException e) {

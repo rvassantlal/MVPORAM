@@ -3,65 +3,60 @@ package oram.client.structure;
 import oram.utils.ORAMUtils;
 import oram.utils.RawCustomExternalizable;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class Stash implements RawCustomExternalizable {
-	private final List<Block> blocks;
+	private final Map<Integer, Block> blocks;
 	private final int blockSize;
 
 	public Stash(int blockSize){
 		this.blockSize = blockSize;
-		this.blocks = new ArrayList<>();
+		this.blocks = new HashMap<>();
 	}
 
-	public void putBlock(Block b) {
-		blocks.add(b);
+	public void putBlock(Block block) {
+		blocks.put(block.getAddress(), block);
 	}
 
-	public List<Block> getBlocks() {
+	public Map<Integer, Block> getBlocks() {
 		return blocks;
 	}
 
 	public Block getBlock(int address){
-		for (Block block : blocks) {
-			if (block.getAddress() == address)
-				return block;
-		}
-		return null;
+		return blocks.get(address);
+	}
+
+	public Block getAndRemoveBlock(int address){
+		return blocks.remove(address);
 	}
 
 	@Override
 	public int writeExternal(byte[] output, int startOffset) {
 		int offset = startOffset;
-		byte[] nBlocksBytes = ORAMUtils.toBytes(blocks.size());
-		System.arraycopy(nBlocksBytes, 0, output, offset, nBlocksBytes.length);
-		offset += nBlocksBytes.length;
+		ORAMUtils.serializeInteger(blocks.size(), output, offset);
+		offset += Integer.BYTES;
 
-		for (Block block : blocks) {
-			offset += block.writeExternal(output, offset);
+		for (Block block : blocks.values()) {
+			offset = block.writeExternal(output, offset);
 		}
 
-		return offset - startOffset;
+		return offset;
 	}
 
 	@Override
 	public int readExternal(byte[] input, int startOffset) {
 		int offset = startOffset;
-		byte[] nBlocksBytes = new byte[4];
-		System.arraycopy(input, offset, nBlocksBytes, 0, nBlocksBytes.length);
-		offset += nBlocksBytes.length;
-		int nBlocks = ORAMUtils.toNumber(nBlocksBytes);
+		int nBlocks = ORAMUtils.deserializeInteger(input, offset);
+		offset += Integer.BYTES;
 
-		for (int i = 0; i < nBlocks; i++) {
+		while (nBlocks-- > 0) {
 			Block block = new Block(blockSize);
-			offset += block.readExternal(input, offset);
-			blocks.add(block);
+			offset = block.readExternal(input, offset);
+			blocks.put(block.getAddress(), block);
 		}
 
-		return offset - startOffset;
+		return offset;
 	}
 
 	@Override
@@ -70,15 +65,17 @@ public class Stash implements RawCustomExternalizable {
 			return blocks.size() + " blocks";
 		}
 		StringBuilder sb = new StringBuilder();
-		for (Block block : blocks) {
-			sb.append(block).append(", ");
-		}
+		blocks.keySet().stream().sorted().forEach(k -> {
+			Block block = blocks.get(k);
+			sb.append(block).append(" ");
+
+		});
 		return sb.toString();
 	}
 
 	public int getSerializedSize() {
-		int size = 4;
-		for (Block block : blocks) {
+		int size = Integer.BYTES;
+		for (Block block : blocks.values()) {
 			size += block.getSerializedSize();
 		}
 		return size;

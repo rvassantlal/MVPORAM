@@ -1,20 +1,22 @@
 package oram.server;
 
-import oram.client.structure.EvictionMap;
 import oram.messages.GetPositionMap;
 import oram.server.structure.*;
 import oram.utils.PositionMapType;
 import vss.secretsharing.VerifiableShare;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 public class TriplePositionMapORAM extends ORAM {
 
 	public TriplePositionMapORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType,
 								 int treeHeight, int bucketSize, int blockSize,
-								 EncryptedPositionMap encryptedPositionMap, EncryptedStash encryptedStash) {
+								 EncryptedPathMap encryptedPathMap, EncryptedStash encryptedStash) {
 		super(oramId, encryptionKeyShare, positionMapType, treeHeight, bucketSize, blockSize,
-				encryptedPositionMap, encryptedStash);
+				encryptedPathMap, encryptedStash);
 	}
 
 	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {
@@ -23,33 +25,24 @@ public class TriplePositionMapORAM extends ORAM {
 
 		OutstandingTree outstandingTree = oramTreeManager.getOutstandingTree();
 		Set<Integer> outstandingVersions = outstandingTree.getOutstandingVersions();
-		Map<Integer, EncryptedPositionMap> resultedPositionMap = new HashMap<>(sequenceNumber - lastVersion);
-		Map<Integer, EvictionMap> resultedEvictionMap = new HashMap<>(sequenceNumber - lastVersion);
+		Map<Integer, EncryptedPathMap> resultedPositionMap = new HashMap<>(sequenceNumber - lastVersion);
 		Map<Integer, int[]> resultedOutstandingVersions = new HashMap<>(sequenceNumber - lastVersion);
 
 		for (int i : missingTriples) {
-			EncryptedPositionMap encryptedPositionMap = positionMaps.get(i);
-			EvictionMap evictionMap = evictionMaps.get(i);
+			EncryptedPathMap encryptedPathMap = pathMaps.get(i);
 			int[] ov = this.outstandingVersions.get(i);
-			if (encryptedPositionMap != null) {
-				resultedPositionMap.put(i, encryptedPositionMap);
+			if (encryptedPathMap != null) {
+				resultedPositionMap.put(i, encryptedPathMap);
 				resultedOutstandingVersions.put(i, ov);
-			}
-			if (evictionMap != null) {
-				resultedEvictionMap.put(i, evictionMap);
 			}
 		}
 
 		for (int i = lastVersion + 1; i <= sequenceNumber; i++) {
-			EncryptedPositionMap encryptedPositionMap = positionMaps.get(i);
-			EvictionMap evictionMap = evictionMaps.get(i);
+			EncryptedPathMap encryptedPathMap = pathMaps.get(i);
 			int[] ov = this.outstandingVersions.get(i);
-			if (encryptedPositionMap != null) {
-				resultedPositionMap.put(i, encryptedPositionMap);
+			if (encryptedPathMap != null) {
+				resultedPositionMap.put(i, encryptedPathMap);
 				resultedOutstandingVersions.put(i, ov);
-			}
-			if (evictionMap != null) {
-				resultedEvictionMap.put(i, evictionMap);
 			}
 		}
 
@@ -65,8 +58,8 @@ public class TriplePositionMapORAM extends ORAM {
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId,
 				outstandingTree);
 		oramClientContexts.put(clientId, oramClientContext);
-		return new EncryptedPositionMaps(newVersionId, resultedPositionMap, resultedEvictionMap,
-				currentOutstandingVersions, resultedOutstandingVersions);
+		return new EncryptedPositionMaps(newVersionId, resultedPositionMap, currentOutstandingVersions,
+				resultedOutstandingVersions);
 	}
 
 	@Override

@@ -19,11 +19,11 @@ public class EvictionMap implements RawCustomExternalizable {
 	}
 
 	public void blockRemovedFromPath(Block block, int location) {
-		blocksRemovedFromPath.put(block.getAddress(), location, block.getContentVersion(), block.getLocationVersion());
+		blocksRemovedFromPath.put(block.getAddress(), location, block.getWriteVersion(), block.getAccessVersion());
 	}
 
 	public void blockAddedBackToPath(Block block, int location) {
-		blocksRemovedFromPath.remove(block.getAddress(), location, block.getContentVersion(), block.getLocationVersion());
+		blocksRemovedFromPath.remove(block.getAddress(), location, block.getWriteVersion(), block.getAccessVersion());
 	}
 
 

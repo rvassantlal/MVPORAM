@@ -14,6 +14,10 @@ public class Bucket {
 		this.location = location;
 	}
 
+	public boolean isFull() {
+		return index >= blocks.length;
+	}
+
 	public boolean putBlock(Block block) {
 		if (index >= blocks.length)
 			return false;

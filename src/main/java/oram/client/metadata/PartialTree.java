@@ -32,8 +32,8 @@ public class PartialTree implements RawCustomExternalizable {
 
 	public void put(Block block, int location) {
 		locations.put(block.getAddress(), location);
-		contentVersions.put(block.getAddress(), block.getContentVersion());
-		locationVersions.put(block.getAddress(), block.getLocationVersion());
+		contentVersions.put(block.getAddress(), block.getWriteVersion());
+		locationVersions.put(block.getAddress(), block.getAccessVersion());
 	}
 
 	public void remove(int address, int contentVersion, int locationVersion) {

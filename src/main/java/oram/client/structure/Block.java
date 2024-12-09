@@ -9,40 +9,40 @@ import java.util.Objects;
 public class Block implements RawCustomExternalizable {
 	private final int blockSize;
 	private int address;
-	private int contentVersion;
-	private int locationVersion;
+	private int writeVersion;
+	private int accessVersion;
 	private byte[] content;
 
 	public Block(int blockSize) {
 		this.blockSize = blockSize;
 	}
 
-	public Block(int blockSize, int address, int contentAndLocationVersion, byte[] newContent) {
+	public Block(int blockSize, int address, int writeAndAccessVersion, byte[] newContent) {
 		this.blockSize = blockSize;
 		this.address = address;
-		this.contentVersion = contentAndLocationVersion;
+		this.writeVersion = writeAndAccessVersion;
 		this.content = newContent;
-		this.locationVersion = contentAndLocationVersion;
+		this.accessVersion = writeAndAccessVersion;
 	}
 
 	public int getAddress() {
 		return address;
 	}
 
-	public int getContentVersion() {
-		return contentVersion;
+	public int getWriteVersion() {
+		return writeVersion;
 	}
 
-	public int getLocationVersion() {
-		return locationVersion;
+	public int getAccessVersion() {
+		return accessVersion;
 	}
 
-	public void setContentVersion(int contentVersion) {
-		this.contentVersion = contentVersion;
+	public void setWriteVersion(int writeVersion) {
+		this.writeVersion = writeVersion;
 	}
 
-	public void setLocationVersion(int locationVersion) {
-		this.locationVersion = locationVersion;
+	public void setAccessVersion(int accessVersion) {
+		this.accessVersion = accessVersion;
 	}
 
 	public byte[] getContent() {
@@ -60,10 +60,10 @@ public class Block implements RawCustomExternalizable {
 		ORAMUtils.serializeInteger(address, output, offset);
 		offset += 4;
 
-		ORAMUtils.serializeInteger(contentVersion, output, offset);
+		ORAMUtils.serializeInteger(writeVersion, output, offset);
 		offset += 4;
 
-		ORAMUtils.serializeInteger(locationVersion, output, offset);
+		ORAMUtils.serializeInteger(accessVersion, output, offset);
 		offset += 4;
 
 		byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
@@ -73,7 +73,7 @@ public class Block implements RawCustomExternalizable {
 		System.arraycopy(paddedContent, 0, output, offset, blockSize + 4);
 		offset += blockSize + 4;
 
-		return offset - startOffset;
+		return offset;
 	}
 
 	@Override
@@ -83,10 +83,10 @@ public class Block implements RawCustomExternalizable {
 		address = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
-		contentVersion = ORAMUtils.deserializeInteger(input, offset);
+		writeVersion = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
-		locationVersion = ORAMUtils.deserializeInteger(input, offset);
+		accessVersion = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
 		byte[] paddedContent = new byte[blockSize + 4];
@@ -97,7 +97,7 @@ public class Block implements RawCustomExternalizable {
 		int emptyBytes = ORAMUtils.toNumber(serializedNEmptyBytes);
 		content = Arrays.copyOf(paddedContent, blockSize - emptyBytes);
 
-		return offset - startOffset;
+		return offset;
 
 	}
 
@@ -106,17 +106,17 @@ public class Block implements RawCustomExternalizable {
 		if (this == o) return true;
 		if (!(o instanceof Block)) return false;
 		Block block = (Block) o;
-		return address == block.address && contentVersion == block.contentVersion && locationVersion == block.locationVersion;
+		return address == block.address && writeVersion == block.writeVersion && accessVersion == block.accessVersion;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(address, contentVersion, locationVersion);
+		return Objects.hash(address, writeVersion, accessVersion);
 	}
 
 	@Override
 	public String toString() {
-		return "B(A: " + address + ", CV: " + contentVersion + ", LV: " + locationVersion + ")";
+		return "B(A: " + address + ", WV: " + writeVersion + ", AV: " + accessVersion + ")";
 	}
 
 	public int getSerializedSize() {
