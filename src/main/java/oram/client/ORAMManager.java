@@ -2,15 +2,12 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.positionmap.triple.TripleORAMObject;
 import oram.client.structure.PathMap;
-import oram.client.structure.PositionMap;
 import oram.client.structure.Stash;
 import oram.messages.CreateORAMMessage;
 import oram.messages.ORAMMessage;
 import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedPathMap;
-import oram.server.structure.EncryptedPositionMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.*;
 import vss.facade.SecretSharingException;
@@ -53,7 +50,7 @@ public class ORAMManager {
 			ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight,
 					treeSize, bucketSize, blockSize);
 
-			return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
 			return null;
 		}
@@ -82,7 +79,7 @@ public class ORAMManager {
 				String password = new String(response.getConfidentialData()[0]);
 				encryptionManager.createSecretKey(password);
 
-				return new TripleORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
+				return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 			}
 		} catch (SecretSharingException | IOException e) {
 			return null;

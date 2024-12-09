@@ -30,10 +30,9 @@ public class ExperimentEnvironment {
 
 	public static void main(String[] args) {
 		StringBuilder messageBuilder = new StringBuilder();
-		int nClients = 3;
+		int nClients = 50;
 
 		loadData(nClients);
-
 
 		boolean isAllOf = true;
 		for (Map.Entry<Integer, Set<Integer>> entry : unknownBlocksHistory.entrySet()) {
@@ -44,8 +43,8 @@ public class ExperimentEnvironment {
 		}
 
 		int maxStashSize = 0;
-		for (Map<Integer, Stash> stashes : stashes.values()) {
-			for (Stash stash : stashes.values()) {
+		for (Map.Entry<Integer, Map<Integer, Stash>> stashes : stashes.entrySet()) {
+			for (Stash stash : stashes.getValue().values()) {
 				if (stash.getBlocks().size() > maxStashSize) {
 					maxStashSize = stash.getBlocks().size();
 				}
@@ -60,7 +59,7 @@ public class ExperimentEnvironment {
 
 		System.out.println("Tree height: " + context.getTreeHeight());
 		positionMapHistory.put(1, new PositionMap(context.getTreeSize()));
-		int blockOfInterest = 2;
+
 		int problematicVersion = Collections.min(lastVersions);
 		System.out.println("Last versions: " + lastVersions);
 		System.out.println("Problematic version: " + problematicVersion);
@@ -468,30 +467,6 @@ public class ExperimentEnvironment {
 		}
 
 		return treeMap;
-	}
-
-
-	private static Map<Integer, Block> simpleMergeStashes(Map<Integer, Stash> stashes) {
-		Map<Integer, Block> mergedStash = new HashMap<>();
-
-		for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
-			Stash stash = entry.getValue();
-			if (stash == null) {
-				throw new IllegalStateException("Stash is null");
-			}
-			for (Block block : stash.getBlocks().values()) {
-				int address = block.getAddress();
-				int contentVersion = block.getWriteVersion();
-				int locationVersion = block.getAccessVersion();
-				Block previousBlock = mergedStash.get(address);
-				if (previousBlock == null || contentVersion > previousBlock.getWriteVersion()
-						|| (contentVersion == previousBlock.getWriteVersion() && locationVersion > previousBlock.getAccessVersion())) {
-					mergedStash.put(address, block);
-				}
-			}
-		}
-
-		return mergedStash;
 	}
 
 	private static Stash mergeStashes(PositionMap treeMap,
