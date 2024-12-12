@@ -67,14 +67,8 @@ public class RandomParallelTester {
 			threads.add(new Thread(() -> {
 				for (int i = 0; i < testSize; i++) {
 					//System.out.println(i);
-					try {
-						randomAccess(oram);
-					} catch (Exception e) {
-						oram.serializeDebugData();
-						throw e;
-					}
+					randomAccess(oram);
 				}
-				oram.serializeDebugData();
 			}));
 		}
 		////// For profiling uncomment these lines
@@ -92,12 +86,6 @@ public class RandomParallelTester {
 		for (ORAMManager oramManager : oramManagerList) {
 			oramManager.close();
 		}
-
-		ORAMManager oramManager = new ORAMManager(100000 + initialClientId);
-		ORAMObject oram = oramManager.getORAM(oramId);
-		oram.writeMemory(0, "test".getBytes());
-		//oram.getORAMSnapshot();
-		oramManager.close();
 	}
 
 	private static void randomAccess(ORAMObject oram) {

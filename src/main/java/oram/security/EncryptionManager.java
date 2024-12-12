@@ -50,8 +50,7 @@ public class EncryptionManager {
 			pathMaps.put(entry.getKey(), decryptPathMap(entry.getValue()));
 		}
 
-		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), pathMaps,
-				encryptedPositionMaps.getOutstandingVersions(), encryptedPositionMaps.getAllOutstandingVersions());
+		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), pathMaps);
 
 	}
 

@@ -1,6 +1,5 @@
 package oram.server.structure;
 
-import oram.client.structure.EvictionMap;
 import oram.utils.ORAMUtils;
 import oram.utils.RawCustomExternalizable;
 

@@ -2,25 +2,20 @@ package oram.client;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.metadata.OutstandingGraph;
 import oram.client.structure.*;
-import oram.messages.*;
+import oram.messages.EvictionORAMMessage;
+import oram.messages.GetPositionMap;
+import oram.messages.ORAMMessage;
+import oram.messages.StashPathORAMMessage;
 import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.*;
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 
@@ -39,13 +34,6 @@ public class ORAMObject {
 	private final PositionMap positionMap;
 	private OngoingAccessContext ongoingAccessContext;
 	protected long globalDelayRemoteInvocation;
-	private final Map<Integer, Map<Integer, ArrayList<Pair<Block, Integer>>>> localTreeHistory = new HashMap<>();
-	private final Map<Integer, Map<Integer, Stash>> localStashesHistory = new HashMap<>();
-	private final Map<Integer, Set<Integer>> unknownBlocksHistory = new HashMap<>();
-	protected final Map<Integer, PathMap> localPathMapHistory = new HashMap<>();
-	private final Map<Integer, Integer> accessedPathsHistory = new HashMap<>();
-	private final Set<Integer> versionHistory = new HashSet<>();
-	protected final OutstandingGraph outstandingGraph;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) {
@@ -57,7 +45,6 @@ public class ORAMObject {
 		this.positionMap = new PositionMap(oramContext.getTreeSize());
 		this.latestSequenceNumber = 0; //server stores the initial position map and stash with version 1
 		this.missingTriples = new HashSet<>();
-		this.outstandingGraph = new OutstandingGraph();
 		preComputeTreeLocations(oramContext.getTreeHeight());
 	}
 
@@ -132,7 +119,6 @@ public class ORAMObject {
 
 		end = System.nanoTime();
 		delay = end - start;
-		versionHistory.add(opSequence);
 
 		measurementLogger.info("M-receivedPM: {}", oldPositionMaps.getPathMaps().size());
 		measurementLogger.info("M-map: {}", delay);
@@ -145,14 +131,8 @@ public class ORAMObject {
 		int pathId = getPathId(bucketId);
 		ongoingAccessContext.setAccessedPathId(pathId);
 
-		accessedPathsHistory.put(opSequence, pathId);
-
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getWriteVersionOf(address), positionMap.getAccessVersionOf(address));
-
-		if (serviceProxy.getProcessId() == 100200) {
-			getORAMSnapshot();
-		}
 
 		start = System.nanoTime();
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
@@ -160,7 +140,7 @@ public class ORAMObject {
 			logger.error("States and paths of oram {} are null", oramId);
 			return null;
 		}
-		localStashesHistory.put(opSequence, stashesAndPaths.getStashes());
+
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths(), positionMap);
 		end = System.nanoTime();
 		delay = end - start;
@@ -208,13 +188,6 @@ public class ORAMObject {
 
 	private void consolidatePathMaps(PositionMaps recentPathMaps) {
 		Map<Integer, PathMap> pathMaps = recentPathMaps.getPathMaps();
-		localPathMapHistory.putAll(pathMaps);
-
-		Map<Integer, int[]> allOutstandingVersions = recentPathMaps.getAllOutstandingVersions();
-		int[] outstandingVersions = recentPathMaps.getOutstandingVersions();
-		int newVersionId = recentPathMaps.getNewVersionId();
-		allOutstandingVersions.put(newVersionId, outstandingVersions);
-		outstandingGraph.addOutstandingVersions(allOutstandingVersions);
 
 		int maxReceivedSequenceNumber = ORAMUtils.DUMMY_VERSION;
 		for (Map.Entry<Integer, PathMap> entry : pathMaps.entrySet()) {
@@ -481,9 +454,6 @@ public class ORAMObject {
 				.append(ongoingAccessContext.getAccessedAddressBucket())
 				.append(" (path ").append(ongoingAccessContext.getAccessedPathId()).append(")\n");
 		errorMessageBuilder.append("New version id: ").append(ongoingAccessContext.getNewVersionId()).append("\n");
-		errorMessageBuilder.append("Outstanding versions: ")
-				.append(Arrays.toString(oldPositionMaps.getOutstandingVersions()))
-				.append("\n");
 		errorMessageBuilder.append("Old position maps:\n");
 		for (Map.Entry<Integer, PathMap> entry : oldPositionMaps.getPathMaps().entrySet()) {
 			PathMap currentPM = entry.getValue();
@@ -514,241 +484,6 @@ public class ORAMObject {
 		}
 		Status status = Status.getStatus(response.getPlainData()[0]);
 		return status != Status.FAILED;
-	}
-
-	public void getORAMSnapshot() {
-		try {
-			ORAMMessage request = new GetDebugMessage(oramId, serviceProxy.getProcessId());
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.DEBUG, request);
-
-			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
-			if (response == null || response.getPlainData() == null) {
-				return;
-			}
-			DebugSnapshot snapshot = encryptionManager.decryptDebugSnapshot(oramContext, response.getPlainData());
-			analiseSnapshot(snapshot);
-		} catch (SecretSharingException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private void analiseSnapshot(DebugSnapshot snapshot) {
-		StringBuilder messageBuilder = new StringBuilder("============= Start of snapshot =============\n");
-		int opSequence = ongoingAccessContext.getNewVersionId();
-
-		//printing tree map
-		/*messageBuilder.append("Tree map: (address, location, write version, access version, location update version)\n");
-		for (int address = 0; address < oramContext.getTreeSize(); address++) {
-			int location = positionMap.getLocationOf(address);
-			int writeVersion = positionMap.getWriteVersionOf(address);
-			int accessVersion = positionMap.getAccessVersionOf(address);
-			int locationUpdateVersion = positionMap.getLocationUpdateVersion(address);
-			if (accessVersion == ORAMUtils.DUMMY_VERSION) {
-				continue;
-			}
-			messageBuilder.append("\t(").append(address).append(", ").append(location).append(", ")
-					.append(writeVersion).append(", ").append(accessVersion).append(", ")
-					.append(locationUpdateVersion).append(")\n");
-		}*/
-
-		//printing stashes
-		Map<Integer, Stash> stashes = snapshot.getStashes();
-		localStashesHistory.put(opSequence, stashes);
-		messageBuilder.append("Stashes:\n");
-		stashes.keySet().stream().sorted().forEach(version -> {
-			messageBuilder.append("\tStash ").append(version).append(": ").append(stashes.get(version)).append("\n");
-		});
-
-		Stash mergedStash = new Stash(oramContext.getBlockSize());
-		mergeStashes(mergedStash, stashes, positionMap);
-		messageBuilder.append("Merged stash:\n");
-		messageBuilder.append("\t").append(mergedStash).append("\n");
-
-		//Group blocks by address
-		Map<Integer, ArrayList<Pair<Block, Integer>>> unfilteredBlocksGroupedByAddress = new HashMap<>();
-		Map<Integer, ArrayList<Pair<Block, Integer>>> blocksGroupedByAddress
-				= localTreeHistory.computeIfAbsent(opSequence, k -> new HashMap<>());
-		for (ArrayList<Bucket> buckets : snapshot.getTree()) {
-			for (Bucket bucket : buckets) {
-				for (Block block : bucket.readBucket()) {
-					if (block != null) {
-						int address = block.getAddress();
-						int writeVersion = block.getWriteVersion();
-						int accessVersion = block.getAccessVersion();
-						int positionMapWriteVersion = positionMap.getWriteVersionOf(address);
-						int positionMapAccessVersion = positionMap.getAccessVersionOf(address);
-						unfilteredBlocksGroupedByAddress.computeIfAbsent(address, k -> new ArrayList<>())
-								.add(Pair.of(block, bucket.getLocation()));
-						if (writeVersion > positionMapWriteVersion || (writeVersion == positionMapWriteVersion && accessVersion > positionMapAccessVersion)) {
-							throw new IllegalStateException("Block " + block + " is in future");
-						}
-						if (writeVersion == positionMapWriteVersion && accessVersion == positionMapAccessVersion) {
-							ArrayList<Pair<Block, Integer>> pairs = blocksGroupedByAddress.computeIfAbsent(address, k -> new ArrayList<>());
-							pairs.add(Pair.of(block, bucket.getLocation()));
-						}
-					}
-				}
-			}
-		}
-
-		Set<Integer> unknownBlocks = new HashSet<>();
-		Set<Integer> strangeBlocks = new HashSet<>();
-
-		//printing tree
-		messageBuilder.append("Tree:\n");
-		for (int address = 0; address < oramContext.getTreeSize(); address++) {
-			int positionMapLocation = positionMap.getLocationOf(address);
-			int positionMapWriteVersion = positionMap.getWriteVersionOf(address);
-			int positionMapAccessVersion = positionMap.getAccessVersionOf(address);
-			if (positionMapAccessVersion == ORAMUtils.DUMMY_VERSION) {
-				continue;
-			}
-			ArrayList<Pair<Block, Integer>> unfilteredBlocksInTree = unfilteredBlocksGroupedByAddress.get(address);
-			ArrayList<Pair<Block, Integer>> blocksInTree = blocksGroupedByAddress.get(address);
-			Block blockInStash = mergedStash.getBlock(address);
-
-			if (blocksInTree == null && blockInStash == null) {
-				unknownBlocks.add(address);
-			}
-			if (blocksInTree != null && blockInStash != null) {
-				strangeBlocks.add(address);
-			}
-
-			/*messageBuilder.append("\tBlock ").append(address).append("\n");
-			messageBuilder.append("\t\tVersion in TM -> ")
-					.append("L: ").append(positionMapLocation).append(" ")
-					.append("WV: ").append(positionMapWriteVersion).append(" ")
-					.append("AC: ").append(positionMapAccessVersion).append("\n");
-			messageBuilder.append("\t\tUnfiltered versions in tree -> ").append(unfilteredBlocksInTree).append("\n");
-			messageBuilder.append("\t\tVersions in tree -> ").append(blocksInTree).append("\n");
-			messageBuilder.append("\t\tVersion in stash -> ").append(blockInStash).append("\n");*/
-		}
-
-		messageBuilder.append("Strange blocks: ").append(strangeBlocks).append("\n");
-		messageBuilder.append("Unknown blocks: ").append(unknownBlocks).append("\n");
-		logger.info("Unknown blocks: {}", unknownBlocks);
-
-		messageBuilder.append("============= End of snapshot =============\n");
-		unknownBlocksHistory.put(opSequence, unknownBlocks);
-
-		if (!unknownBlocks.isEmpty()) {
-			String message = "[Client " + serviceProxy.getProcessId() + "] " + messageBuilder;
-			logger.info(message);
-			throw new IllegalStateException(">>>>>>>>>>>>>>>>>> Unknown blocks ERROR in version " + opSequence + " <<<<<<<<<<<<<<<<<<<");
-		}
-
-		/*if (!strangeBlocks.isEmpty()) {
-			String message = "[Client " + serviceProxy.getProcessId() + "] " + debugInformation
-					+ "\nStrange blocks ERROR";
-			throw new IllegalStateException(message);
-		}*/
-	}
-
-	public void serializeDebugData() {
-		long time = System.currentTimeMillis();
-		int clientId = serviceProxy.getProcessId();
-		String filename = "C:\\Users\\robin\\Desktop\\oram\\oramErrorTrace_" + time
-				+ "_client_" + clientId + ".txt";
-		try (BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(Paths.get(filename)));
-			 ObjectOutput out = new ObjectOutputStream(bos)) {
-			out.writeInt(oramContext.getTreeHeight());
-			out.writeInt(oramContext.getBlockSize());
-			out.writeInt(oramContext.getBucketSize());
-			out.writeInt(ongoingAccessContext.getNewVersionId());
-
-			//serialize versions
-			out.writeInt(serviceProxy.getProcessId());
-			out.writeInt(versionHistory.size());
-			for (int v : versionHistory) {
-				out.writeInt(v);
-			}
-
-			//serialize path maps
-			out.writeInt(localPathMapHistory.size());
-			for (Map.Entry<Integer, PathMap> entry : localPathMapHistory.entrySet()) {
-				int version = entry.getKey();
-				PathMap pathMap = entry.getValue();
-				out.writeInt(version);
-				int pathMapSize = pathMap.getSerializedSize();
-				byte[] serializedPathMap = new byte[pathMapSize];
-				pathMap.writeExternal(serializedPathMap, 0);
-				out.writeInt(pathMapSize);
-				out.write(serializedPathMap);
-			}
-
-			//serialize outstanding versions
-			Map<Integer, int[]> outstandingVersionsHistory = outstandingGraph.getOutstandingVersions();
-			out.writeInt(outstandingVersionsHistory.size());
-			for (Map.Entry<Integer, int[]> entry : outstandingVersionsHistory.entrySet()) {
-				out.writeInt(entry.getKey());
-				int[] outstandingVersions = entry.getValue();
-				out.writeInt(outstandingVersions.length);
-				for (int outstandingVersion : outstandingVersions) {
-					out.writeInt(outstandingVersion);
-				}
-			}
-
-			//serialize trees
-			out.writeInt(localTreeHistory.size());
-			for (Integer version : localTreeHistory.keySet()) {
-				out.writeInt(version);
-
-				Map<Integer, ArrayList<Pair<Block, Integer>>> blocksGroupedByAddress = localTreeHistory.get(version);
-				out.writeInt(blocksGroupedByAddress.size());
-				for (Integer address : blocksGroupedByAddress.keySet()) {
-					out.writeInt(address);
-					ArrayList<Pair<Block, Integer>> blocksAndLocations = blocksGroupedByAddress.get(address);
-					out.writeInt(blocksAndLocations.size());
-					for (Pair<Block, Integer> entry : blocksAndLocations) {
-						Block block = entry.getLeft();
-						int location = entry.getRight();
-						int blockSize = block.getSerializedSize();
-						byte[] serializedBlock = new byte[blockSize];
-						block.writeExternal(serializedBlock, 0);
-						out.writeInt(location);
-						out.writeInt(blockSize);
-						out.write(serializedBlock);
-					}
-				}
-			}
-
-			//serialize stashes
-			out.writeInt(localStashesHistory.size());
-			for (Integer v : localStashesHistory.keySet()) {
-				Map<Integer, Stash> stashes = localStashesHistory.get(v);
-				out.writeInt(v);
-				out.writeInt(stashes.size());
-				for (Map.Entry<Integer, Stash> entry : stashes.entrySet()) {
-					int version = entry.getKey();
-					Stash stash = entry.getValue();
-					out.writeInt(version);
-					int stashSize = stash.getSerializedSize();
-					byte[] serializedStash = new byte[stashSize];
-					stash.writeExternal(serializedStash, 0);
-					out.writeInt(stashSize);
-					out.write(serializedStash);
-				}
-			}
-
-			//serialize paths
-			out.writeInt(accessedPathsHistory.size());
-			for (Map.Entry<Integer, Integer> entry : accessedPathsHistory.entrySet()) {
-				out.writeInt(entry.getKey());
-				out.writeInt(entry.getValue());
-			}
-
-			//serialize unknown blocks history
-			out.writeInt(unknownBlocksHistory.size());
-			for (Map.Entry<Integer, Set<Integer>> entry : unknownBlocksHistory.entrySet()) {
-				out.writeInt(entry.getKey());
-				out.writeInt(entry.getValue().size());
-				for (int v : entry.getValue()) {
-					out.writeInt(v);
-				}
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
 	}
 
 	protected void reset() {
