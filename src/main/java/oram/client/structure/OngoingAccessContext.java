@@ -5,14 +5,14 @@ import oram.utils.ORAMUtils;
 public class OngoingAccessContext {
 	private int accessedPathId;
 	private boolean isRealAccess;
-	private int newVersionId;
+	private int operationSequence;
 	private int accessedAddressBucket;
-	private PositionMaps oldPositionMaps;
+	private PathMaps pathMapsHistory;
 
 	public OngoingAccessContext() {
 		this.isRealAccess = true;
 		this.accessedPathId = ORAMUtils.DUMMY_LOCATION;
-		this.newVersionId = ORAMUtils.DUMMY_VERSION;
+		this.operationSequence = ORAMUtils.DUMMY_VERSION;
 	}
 
 	public void setAccessedPathId(int pathId) {
@@ -33,12 +33,12 @@ public class OngoingAccessContext {
 		return isRealAccess;
 	}
 
-	public void setNewVersionId(int newVersionId) {
-		this.newVersionId = newVersionId;
+	public void setOperationSequence(int operationSequence) {
+		this.operationSequence = operationSequence;
 	}
 
-	public int getNewVersionId() {
-		return newVersionId;
+	public int getOperationSequence() {
+		return operationSequence;
 	}
 
 	public void setAccessedAddressBucket(int accessedAddressBucket) {
@@ -49,11 +49,11 @@ public class OngoingAccessContext {
 		return accessedAddressBucket;
 	}
 
-	public void setOldPositionMaps(PositionMaps oldPositionMaps) {
-		this.oldPositionMaps = oldPositionMaps;
+	public void setPathMapsHistory(PathMaps pathMapsHistory) {
+		this.pathMapsHistory = pathMapsHistory;
 	}
 
-	public PositionMaps getOldPositionMaps() {
-		return oldPositionMaps;
+	public PathMaps getPathMapsHistory() {
+		return pathMapsHistory;
 	}
 }

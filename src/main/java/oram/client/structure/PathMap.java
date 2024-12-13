@@ -9,37 +9,37 @@ import java.util.Set;
 
 public class PathMap implements RawCustomExternalizable {
 	private Map<Integer, Integer> locations;
-	private Map<Integer, Integer> writeVersions;
-	private Map<Integer, Integer> accessVersions;
+	private Map<Integer, Integer> versions;
+	private Map<Integer, Integer> accesses;
 
 	public PathMap() {}
 
 	public PathMap(int size) {
 		this.locations = new HashMap<>(size);
-		this.writeVersions = new HashMap<>(size);
-		this.accessVersions = new HashMap<>(size);
+		this.versions = new HashMap<>(size);
+		this.accesses = new HashMap<>(size);
 	}
 
 	public Set<Integer> getStoredAddresses() {
 		return locations.keySet();
 	}
 
-	public int getLocationOf(int address) {
+	public int getLocation(int address) {
 		return locations.getOrDefault(address, ORAMUtils.DUMMY_LOCATION);
 	}
 
-	public int getWriteVersionOf(int address) {
-		return writeVersions.getOrDefault(address, ORAMUtils.DUMMY_LOCATION);
+	public int getVersion(int address) {
+		return versions.getOrDefault(address, ORAMUtils.DUMMY_LOCATION);
 	}
 
-	public int getAccessVersionOf(int address) {
-		return accessVersions.getOrDefault(address, ORAMUtils.DUMMY_LOCATION);
+	public int getAccess(int address) {
+		return accesses.getOrDefault(address, ORAMUtils.DUMMY_LOCATION);
 	}
 
-	public void setLocation(int address, int location, int writeLocation, int readLocation) {
+	public void setLocation(int address, int location, int version, int access) {
 		locations.put(address, location);
-		writeVersions.put(address, writeLocation);
-		accessVersions.put(address, readLocation);
+		versions.put(address, version);
+		accesses.put(address, access);
 	}
 
 	@Override
@@ -57,8 +57,8 @@ public class PathMap implements RawCustomExternalizable {
 		for (Map.Entry<Integer, Integer> entry : locations.entrySet()) {
 			int address = entry.getKey();
 			int location = entry.getValue();
-			int writeVersion = writeVersions.get(address);
-			int accessVersion = accessVersions.get(address);
+			int version = versions.get(address);
+			int access = accesses.get(address);
 
 			ORAMUtils.serializeInteger(address, output, offset);
 			offset += Integer.BYTES;
@@ -66,10 +66,10 @@ public class PathMap implements RawCustomExternalizable {
 			ORAMUtils.serializeInteger(location, output, offset);
 			offset += Integer.BYTES;
 
-			ORAMUtils.serializeInteger(writeVersion, output, offset);
+			ORAMUtils.serializeInteger(version, output, offset);
 			offset += Integer.BYTES;
 
-			ORAMUtils.serializeInteger(accessVersion, output, offset);
+			ORAMUtils.serializeInteger(access, output, offset);
 			offset += Integer.BYTES;
 		}
 
@@ -84,8 +84,8 @@ public class PathMap implements RawCustomExternalizable {
 		offset += Integer.BYTES;
 
 		locations = new HashMap<>(size);
-		writeVersions = new HashMap<>(size);
-		accessVersions = new HashMap<>(size);
+		versions = new HashMap<>(size);
+		accesses = new HashMap<>(size);
 
 		while (size-- > 0) {
 			int address = ORAMUtils.deserializeInteger(input, offset);
@@ -101,8 +101,8 @@ public class PathMap implements RawCustomExternalizable {
 			offset += Integer.BYTES;
 
 			locations.put(address, location);
-			writeVersions.put(address, writeVersion);
-			accessVersions.put(address, accessVersion);
+			versions.put(address, writeVersion);
+			accesses.put(address, accessVersion);
 		}
 
 		return offset;
@@ -112,10 +112,10 @@ public class PathMap implements RawCustomExternalizable {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		locations.keySet().stream().sorted().forEach(address -> {
-			sb.append("(A: ").append(address)
+			sb.append("(ADDR: ").append(address)
 					.append(", L: ").append(locations.get(address))
-					.append(", WV: ").append(writeVersions.get(address))
-					.append(", AV: ").append(accessVersions.get(address))
+					.append(", V: ").append(versions.get(address))
+					.append(", A: ").append(accesses.get(address))
 					.append(") ");
 		});
 		return sb.toString();

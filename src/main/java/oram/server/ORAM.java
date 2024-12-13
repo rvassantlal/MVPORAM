@@ -1,6 +1,6 @@
 package oram.server;
 
-import oram.messages.GetPositionMap;
+import oram.messages.GetPathMaps;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -68,7 +67,7 @@ public class ORAM {
 		return oramTreeManager.getNOutstandingTreeObjects();
 	}
 
-	public EncryptedPositionMaps getPositionMaps(int clientId, GetPositionMap request) {
+	public EncryptedPathMaps getPositionMaps(int clientId, GetPathMaps request) {
 		int lastVersion = request.getLastVersion();
 		Set<Integer> missingTriples = request.getMissingTriples();
 
@@ -101,7 +100,7 @@ public class ORAM {
 		ORAMClientContext oramClientContext = new ORAMClientContext(currentOutstandingVersions, newVersionId,
 				outstandingTree);
 		oramClientContexts.put(clientId, oramClientContext);
-		return new EncryptedPositionMaps(newVersionId, resultedPositionMap);
+		return new EncryptedPathMaps(newVersionId, resultedPositionMap);
 	}
 
 	public EncryptedStashesAndPaths getStashesAndPaths(int pathId, int clientId) {
@@ -144,7 +143,7 @@ public class ORAM {
 			logger.debug("Client {} doesn't have any client context", clientId);
 			return false;
 		}
-		int newVersionId = oramClientContext.getNewVersionId();
+		int newVersionId = oramClientContext.getOperationSequence();
 		OutstandingPath outstandingPath = oramClientContext.getOutstandingPath();
 
 		pathMaps.put(newVersionId, encryptedPathMap);

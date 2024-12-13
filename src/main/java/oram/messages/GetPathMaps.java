@@ -2,17 +2,16 @@ package oram.messages;
 
 import oram.utils.ORAMUtils;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-public class GetPositionMap extends ORAMMessage {
+public class GetPathMaps extends ORAMMessage {
 	private int lastVersion;
 	private Set<Integer> missingTriples;
 
-	public GetPositionMap() {}
+	public GetPathMaps() {}
 
-	public GetPositionMap(int oramId, int lastVersion, Set<Integer> missingTriples) {
+	public GetPathMaps(int oramId, int lastVersion, Set<Integer> missingTriples) {
 		super(oramId);
 		this.lastVersion = lastVersion;
 		this.missingTriples = missingTriples;

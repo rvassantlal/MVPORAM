@@ -24,15 +24,15 @@ public class EncryptionManager {
 		this.encryptionAbstraction = new EncryptionAbstraction();
 	}
 
-	public PositionMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
-		EncryptedPositionMaps encryptedPositionMaps = new EncryptedPositionMaps();
-		int offset = encryptedPositionMaps.readExternal(serializedEncryptedPositionMaps, 0);
+	public PathMaps decryptPositionMaps(byte[] serializedEncryptedPositionMaps) {
+		EncryptedPathMaps encryptedPathMaps = new EncryptedPathMaps();
+		int offset = encryptedPathMaps.readExternal(serializedEncryptedPositionMaps, 0);
 		if (offset != serializedEncryptedPositionMaps.length) {
 			logger.error("Failed to deserialize encrypted position maps");
 			return null;
 		}
 
-		return decryptPositionMaps(encryptedPositionMaps);
+		return decryptPositionMaps(encryptedPathMaps);
 	}
 
 	public String generatePassword() {
@@ -43,14 +43,14 @@ public class EncryptionManager {
 		encryptionAbstraction.createSecretKey(password.toCharArray());
 	}
 
-	public PositionMaps decryptPositionMaps(EncryptedPositionMaps encryptedPositionMaps) {
-		Map<Integer, EncryptedPathMap> encryptedPMs = encryptedPositionMaps.getEncryptedPathMaps();
+	public PathMaps decryptPositionMaps(EncryptedPathMaps encryptedPathMaps) {
+		Map<Integer, EncryptedPathMap> encryptedPMs = encryptedPathMaps.getEncryptedPathMaps();
 		Map<Integer, PathMap> pathMaps = new HashMap<>(encryptedPMs.size());
 		for (Map.Entry<Integer, EncryptedPathMap> entry : encryptedPMs.entrySet()) {
 			pathMaps.put(entry.getKey(), decryptPathMap(entry.getValue()));
 		}
 
-		return new PositionMaps(encryptedPositionMaps.getNewVersionId(), pathMaps);
+		return new PathMaps(encryptedPathMaps.getNewVersionId(), pathMaps);
 
 	}
 

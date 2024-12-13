@@ -9,8 +9,8 @@ import java.util.Objects;
 public class Block implements RawCustomExternalizable {
 	private final int blockSize;
 	private int address;
-	private int writeVersion;
-	private int accessVersion;
+	private int version;
+	private int access;
 	private byte[] content;
 
 	public Block(int blockSize) {
@@ -20,29 +20,29 @@ public class Block implements RawCustomExternalizable {
 	public Block(int blockSize, int address, int writeAndAccessVersion, byte[] newContent) {
 		this.blockSize = blockSize;
 		this.address = address;
-		this.writeVersion = writeAndAccessVersion;
+		this.version = writeAndAccessVersion;
 		this.content = newContent;
-		this.accessVersion = writeAndAccessVersion;
+		this.access = writeAndAccessVersion;
 	}
 
 	public int getAddress() {
 		return address;
 	}
 
-	public int getWriteVersion() {
-		return writeVersion;
+	public int getVersion() {
+		return version;
 	}
 
-	public int getAccessVersion() {
-		return accessVersion;
+	public int getAccess() {
+		return access;
 	}
 
-	public void setWriteVersion(int writeVersion) {
-		this.writeVersion = writeVersion;
+	public void setVersion(int version) {
+		this.version = version;
 	}
 
-	public void setAccessVersion(int accessVersion) {
-		this.accessVersion = accessVersion;
+	public void setAccess(int access) {
+		this.access = access;
 	}
 
 	public byte[] getContent() {
@@ -60,10 +60,10 @@ public class Block implements RawCustomExternalizable {
 		ORAMUtils.serializeInteger(address, output, offset);
 		offset += 4;
 
-		ORAMUtils.serializeInteger(writeVersion, output, offset);
+		ORAMUtils.serializeInteger(version, output, offset);
 		offset += 4;
 
-		ORAMUtils.serializeInteger(accessVersion, output, offset);
+		ORAMUtils.serializeInteger(access, output, offset);
 		offset += 4;
 
 		byte[] paddedContent = Arrays.copyOf(content, blockSize + 4);
@@ -83,10 +83,10 @@ public class Block implements RawCustomExternalizable {
 		address = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
-		writeVersion = ORAMUtils.deserializeInteger(input, offset);
+		version = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
-		accessVersion = ORAMUtils.deserializeInteger(input, offset);
+		access = ORAMUtils.deserializeInteger(input, offset);
 		offset += 4;
 
 		byte[] paddedContent = new byte[blockSize + 4];
@@ -106,17 +106,17 @@ public class Block implements RawCustomExternalizable {
 		if (this == o) return true;
 		if (!(o instanceof Block)) return false;
 		Block block = (Block) o;
-		return address == block.address && writeVersion == block.writeVersion && accessVersion == block.accessVersion;
+		return address == block.address && version == block.version && access == block.access;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(address, writeVersion, accessVersion);
+		return Objects.hash(address, version, access);
 	}
 
 	@Override
 	public String toString() {
-		return "B(A: " + address + ", WV: " + writeVersion + ", AV: " + accessVersion + ")";
+		return "B(ADDR: " + address + ", V: " + version + ", A: " + access + ")";
 	}
 
 	public int getSerializedSize() {

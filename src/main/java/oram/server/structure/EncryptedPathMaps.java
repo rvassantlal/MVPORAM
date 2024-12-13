@@ -6,13 +6,13 @@ import oram.utils.RawCustomExternalizable;
 import java.util.HashMap;
 import java.util.Map;
 
-public class EncryptedPositionMaps implements RawCustomExternalizable {
+public class EncryptedPathMaps implements RawCustomExternalizable {
 	private int newVersionId;
 	private Map<Integer, EncryptedPathMap> encryptedPathMaps;
 
-	public EncryptedPositionMaps(){}
+	public EncryptedPathMaps(){}
 
-	public EncryptedPositionMaps(int newVersionId, Map<Integer, EncryptedPathMap> encryptedPathMaps) {
+	public EncryptedPathMaps(int newVersionId, Map<Integer, EncryptedPathMap> encryptedPathMaps) {
 		this.newVersionId = newVersionId;
 		this.encryptedPathMaps = encryptedPathMaps;
 	}

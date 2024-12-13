@@ -2,15 +2,15 @@ package oram.server.structure;
 
 public class ORAMClientContext {
 	private final int[] outstandingVersion;
-	private final int newVersionId;
+	private final int operationSequence;
 	private final OutstandingTree outstandingTree;
 	private int pathId;
 	private OutstandingPath outstandingPath;
 
-	public ORAMClientContext(int[] outstandingVersions, int newVersionId,
+	public ORAMClientContext(int[] outstandingVersions, int operationSequence,
 							 OutstandingTree outstandingTree) {
 		this.outstandingVersion = outstandingVersions;
-		this.newVersionId = newVersionId;
+		this.operationSequence = operationSequence;
 		this.outstandingTree = outstandingTree;
 	}
 
@@ -22,8 +22,8 @@ public class ORAMClientContext {
 		return outstandingTree;
 	}
 
-	public int getNewVersionId() {
-		return newVersionId;
+	public int getOperationSequence() {
+		return operationSequence;
 	}
 
 	public void setPathId(int pathId) {

@@ -89,7 +89,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					return getORAM(request);
 				case GET_POSITION_MAP:
 					logger.debug("Received getPM request from {}", msgCtx.getSender());
-					request = new GetPositionMap();
+					request = new GetPathMaps();
 					request.readExternal(plainData, 1);
 
 					clientsQueue.addLast(msgCtx);
@@ -145,7 +145,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			logger.debug("Processing getPM request from queue from {} | active clients: {}", nextClientMsgCtx.getSender(),
 					activeClients);
 			ORAMMessage nextRequest = clientsRequests.remove(nextClientMsgCtx.getSender());
-			ConfidentialMessage pmResponse = getPositionMap((GetPositionMap) nextRequest, nextClientMsgCtx);
+			ConfidentialMessage pmResponse = getPositionMap((GetPathMaps) nextRequest, nextClientMsgCtx);
 			if (pmResponse == null) {
 				logger.error("Failed to process getPM request from {}", nextClientMsgCtx.getSender());
 				break;
@@ -274,14 +274,14 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(GetPositionMap request, MessageContext msgCtx) {
+	private ConfidentialMessage getPositionMap(GetPathMaps request, MessageContext msgCtx) {
 		logger.debug("Processing getPM request from {}", msgCtx.getSender());
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		EncryptedPositionMaps positionMaps = oram.getPositionMaps(msgCtx.getSender(), request);
+		EncryptedPathMaps positionMaps = oram.getPositionMaps(msgCtx.getSender(), request);
 
 		int dataSize = positionMaps.getSerializedSize();
 		byte[] serializedPositionMaps = new byte[dataSize];
