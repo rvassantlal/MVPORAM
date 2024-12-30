@@ -356,11 +356,10 @@ public class ORAMObject {
 		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
 		PathMap pathMap = new PathMap(pathCapacity);
 
-		populatePath(pathId, accessedAddress, stash, positionMap, path, pathMap);
+		populatePathAccessedAndNewBlockToRoot(pathId, accessedAddress, stash, positionMap, path, pathMap);
 
 		for (Block block : stash.getBlocks().values()) {
-			pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(),
-					block.getAccess());
+			pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(), block.getAccess());
 		}
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(stash);
@@ -370,7 +369,168 @@ public class ORAMObject {
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private void populatePath(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
+	private void populatePathAccessedBlockToRoot(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
+									 Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
+		int[] accessedPathLocations = allPaths.get(pathId);
+		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
+		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
+		for (int i = 0; i < accessedPathLocations.length; i++) {
+			int pathLocation = accessedPathLocations[i];
+			bucketToIndex.put(pathLocation, i);
+			bucketWithAvailableCapacity.add(pathLocation);
+			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
+		}
+
+		//Move accessed block to the root bucket
+		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
+		if (accessedBlock != null) {
+			int location = positionMap.getLocation(accessedAddress);
+			int newLocation;
+			if (location == ORAMUtils.DUMMY_LOCATION) {
+				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
+			} else {
+				newLocation = 0;//accessedPathLocations[Math.min(oramContext.getTreeHeight(), bucketToIndex.get(location) + 1)];
+			}
+
+			Bucket bucket = pathToPopulate.get(newLocation);
+			bucket.putBlock(accessedBlock);
+			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(newLocation);
+			}
+		}
+
+		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
+
+		for (int address : blocksToEvict) {
+			if (bucketWithAvailableCapacity.isEmpty()) {
+				break;
+			}
+			Block block = stash.getAndRemoveBlock(address);
+			int bucketId = positionMap.getLocation(address);
+
+			//if it was not allocated to root bucket or the root bucket does not have space
+			if (!bucketWithAvailableCapacity.contains(bucketId)) {
+				bucketId = bucketWithAvailableCapacity.iterator().next();
+			}
+			Bucket bucket = pathToPopulate.get(bucketId);
+			bucket.putBlock(block);
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(bucketId);
+			}
+			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
+		}
+	}
+
+	private void populatePathAccessedBlockUp(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
+											 Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
+		int[] accessedPathLocations = allPaths.get(pathId);
+		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
+		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
+		for (int i = 0; i < accessedPathLocations.length; i++) {
+			int pathLocation = accessedPathLocations[i];
+			bucketToIndex.put(pathLocation, i);
+			bucketWithAvailableCapacity.add(pathLocation);
+			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
+		}
+
+		//Move accessed block to the root bucket
+		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
+		if (accessedBlock != null) {
+			int location = positionMap.getLocation(accessedAddress);
+			int newLocation;
+			if (location == ORAMUtils.DUMMY_LOCATION) {
+				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
+			} else {
+				int currentLevel = bucketToIndex.get(location);
+				int newLevel = rndGenerator.nextInt(accessedPathLocations.length - currentLevel) + currentLevel;
+				newLocation = accessedPathLocations[newLevel];
+			}
+
+			Bucket bucket = pathToPopulate.get(newLocation);
+			bucket.putBlock(accessedBlock);
+			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(newLocation);
+			}
+		}
+
+		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
+
+		for (int address : blocksToEvict) {
+			if (bucketWithAvailableCapacity.isEmpty()) {
+				break;
+			}
+			Block block = stash.getAndRemoveBlock(address);
+			int bucketId = positionMap.getLocation(address);
+
+			//if it was not allocated to root bucket or the root bucket does not have space
+			if (!bucketWithAvailableCapacity.contains(bucketId)) {
+				bucketId = bucketWithAvailableCapacity.iterator().next();
+			}
+			Bucket bucket = pathToPopulate.get(bucketId);
+			bucket.putBlock(block);
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(bucketId);
+			}
+			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
+		}
+	}
+
+	private void populatePathAccessedBlockLevelUp(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
+							  Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
+		int[] accessedPathLocations = allPaths.get(pathId);
+		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
+		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
+		for (int i = 0; i < accessedPathLocations.length; i++) {
+			int pathLocation = accessedPathLocations[i];
+			bucketToIndex.put(pathLocation, i);
+			bucketWithAvailableCapacity.add(pathLocation);
+			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
+		}
+
+		//Move accessed block to the root bucket
+		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
+		if (accessedBlock != null) {
+			int location = positionMap.getLocation(accessedAddress);
+			int newLocation;
+			if (location == ORAMUtils.DUMMY_LOCATION) {
+				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
+			} else {
+				newLocation = accessedPathLocations[Math.min(oramContext.getTreeHeight(), bucketToIndex.get(location) + 1)];
+			}
+
+			Bucket bucket = pathToPopulate.get(newLocation);
+			bucket.putBlock(accessedBlock);
+			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(newLocation);
+			}
+		}
+
+		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
+
+		for (int address : blocksToEvict) {
+			if (bucketWithAvailableCapacity.isEmpty()) {
+				break;
+			}
+			Block block = stash.getAndRemoveBlock(address);
+			int bucketId = positionMap.getLocation(address);
+
+			//if it was not allocated to root bucket or the root bucket does not have space
+			if (!bucketWithAvailableCapacity.contains(bucketId)) {
+				bucketId = bucketWithAvailableCapacity.iterator().next();
+			}
+			Bucket bucket = pathToPopulate.get(bucketId);
+			bucket.putBlock(block);
+			if (bucket.isFull()) {
+				bucketWithAvailableCapacity.remove(bucketId);
+			}
+			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
+		}
+	}
+
+	private void populatePathAccessedAndNewBlockToRoot(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
 							  Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
 		int[] accessedPathLocations = allPaths.get(pathId);
 		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);

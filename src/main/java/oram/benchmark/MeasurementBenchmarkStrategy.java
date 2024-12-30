@@ -16,10 +16,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -32,6 +29,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private final Set<Integer> clientWorkersIds;
 	private final String serverCommand;
 	private final String clientCommand;
+	private final String loadClientCommand;
+	private final String updateClientCommand;
 	private final String sarCommand;
 	private int treeHeight;
 	private int bucketSize;
@@ -43,10 +42,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private CountDownLatch measurementDeliveredCounter;
 	private String storageFileNamePrefix;
 	private String positionMapType;
+	private final Semaphore loadORAMSemaphore;
 
 
 	public MeasurementBenchmarkStrategy() {
 		this.lock = new ReentrantLock(true);
+		this.loadORAMSemaphore = new Semaphore(0);
 		this.sleepCondition = lock.newCondition();
 		this.serverWorkersIds = new HashSet<>();
 		this.clientWorkersIds = new HashSet<>();
@@ -55,6 +56,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 		this.serverCommand = initialCommand + "oram.server.ORAMServer ";
 		this.clientCommand = initialCommand + "oram.benchmark.ORAMBenchmarkClient ";
+		this.loadClientCommand = initialCommand + "oram.testers.LoadORAM ";
+		this.updateClientCommand = initialCommand + "oram.client.ManagerClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";
 	}
 
@@ -64,9 +67,15 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
 		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
+		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
+		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.load_oram"));
+		boolean isUpdateConcurrentClients = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.update_concurrent_clients"));
+		int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
+		int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
+		int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
 
 		int nServerWorkers = 3 * f + 1;
-		int nClientWorkers = workers.length - nServerWorkers;
+		int nClientWorkers = workers.length - nServerWorkers - 1;
 		int maxClientsPerProcess = 3;
 		int nRequests = 10_000_000;
 		int sleepBetweenRounds = 30;
@@ -101,6 +110,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Arrays.sort(clientWorkers, (o1, o2) -> -Integer.compare(o1.getWorkerId(), o2.getWorkerId()));
 		Arrays.stream(serverWorkers).forEach(w -> serverWorkersIds.add(w.getWorkerId()));
 		Arrays.stream(clientWorkers).forEach(w -> clientWorkersIds.add(w.getWorkerId()));
+
+		WorkerHandler updateClientWorker = workers[workers.length - 1];
 
 		printWorkersInfo();
 
@@ -153,6 +164,21 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					//Start servers
 					startServers(serverWorkers, nConcurrentClients);
 
+					//Load oram
+					if (isLoadORAM) {
+						long s = System.currentTimeMillis();
+						loadORAM(clientWorkers[0]);
+						long e = System.currentTimeMillis();
+						logger.info("Load duration: {}s", (e - s) / 1000);
+						logger.info("Waiting 5s...");
+						sleepSeconds(5);
+					}
+
+					//Start update client to update maximum number of concurrent clients
+					if (isUpdateConcurrentClients) {
+						startUpdateClients(updateInitialDelay, updatePeriod, numberOfUpdates, updateClientWorker);
+					}
+
 					//Start Clients
 					startClients(maxClientsPerProcess, nRequests, clientWorkers, clientsPerWorker);
 
@@ -166,11 +192,11 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					}
 
 					//Wait for system to stabilize
-					logger.info("Waiting 30s...");
-					sleepSeconds(30);
+					logger.info("Waiting 15s...");
+					sleepSeconds(15);
 
 					//Get measurements
-					getMeasurements(measureResources);
+					getMeasurements(measureResources, measurementDuration);
 
 					//Stop processes
 					Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
@@ -194,6 +220,32 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 
 		}
+	}
+
+	private void startUpdateClients(int updateInitialDelay, int updatePeriod, int numberOfUpdates, WorkerHandler worker) {
+		logger.info("Starting client to update concurrent clients...");
+		String command = updateClientCommand + updateInitialDelay + " " + updatePeriod + " " + numberOfUpdates;
+		ProcessInformation[] commandInfo = {
+				new ProcessInformation(
+						command,
+						"."
+				)
+		};
+		worker.startWorker(1, commandInfo, this);
+	}
+
+	private void loadORAM(WorkerHandler worker) throws InterruptedException {
+		logger.info("Loading ORAM...");
+		String command = loadClientCommand + treeHeight + " " + bucketSize + " " + blockSize;
+		ProcessInformation[] commandInfo = {
+				new ProcessInformation(
+						command,
+						"."
+				)
+		};
+		worker.startWorker(1, commandInfo, this);
+		loadORAMSemaphore.acquire();
+		worker.stopWorker();
 	}
 
 	private void startResourceMeasurements(int nServerResourceMeasurementWorkers,
@@ -283,14 +335,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		workersReadyCounter.await();
 	}
 
-	private void getMeasurements(boolean measureResources) throws InterruptedException {
+	private void getMeasurements(boolean measureResources, int measurementDuration) throws InterruptedException {
 		//Start measurements
 		logger.debug("Starting measurements...");
 		measurementWorkers.values().forEach(WorkerHandler::startProcessing);
 
 		//Wait for measurements
-		logger.info("Measuring during {}s", 60 * 2);
-		sleepSeconds(60 * 2);
+		logger.info("Measuring during {}s", measurementDuration);
+		sleepSeconds(measurementDuration);
 
 		//Stop measurements
 		measurementWorkers.values().forEach(WorkerHandler::stopProcessing);
@@ -359,8 +411,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	}
 
 	@Override
-	public void onEnded(int i) {
-
+	public void onEnded(int workerId) {
+		loadORAMSemaphore.release();
 	}
 
 	@Override

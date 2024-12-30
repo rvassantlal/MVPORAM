@@ -44,7 +44,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 	private final ArrayDeque<MessageContext> clientsQueue;
 	private final Map<Integer, ORAMMessage> clientsRequests;
 	private int activeClients;
-	private final int MAX_N_CLIENTS;
+	private int MAX_N_CLIENTS;
 	private final ConfidentialRecoverable confidentialRecoverable;
 
 	public ORAMServer(int max_clients, int processId) {
@@ -74,6 +74,12 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			ORAMMessage request;
 			senders.add(msgCtx.getSender());
 			switch (op) {
+				case UPDATE_CONCURRENT_CLIENTS:
+					request = new UpdateConcurrentClientsMessage();
+					request.readExternal(plainData, 1);
+					MAX_N_CLIENTS = ((UpdateConcurrentClientsMessage)request).getMaximumNConcurrentClients();
+					logger.info("MAX_N_CLIENTS: {}", MAX_N_CLIENTS);
+					return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 				case DEBUG:
 					request = new GetDebugMessage();
 					request.readExternal(plainData, 1);

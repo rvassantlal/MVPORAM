@@ -14,6 +14,8 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 	private static final String SERVER_READY_PATTERN = "Ready to process operations";
 	private static final String CLIENT_READY_PATTERN = "Executing experiment";
 	private static final String SAR_READY_PATTERN = "%";
+	private static final String LOAD_ORAM_ENDED_PATTERN = "LOAD ENDED";
+	private static boolean isLoadORAMEnded;
 
 	private IMeasurementEventProcessor measurementEventProcessor;
 	private boolean isReady;
@@ -35,6 +37,9 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 				isReady = true;
 				measurementEventProcessor = new ResourcesMeasurementEventProcessor();
 			}
+		}
+		if (line.contains(LOAD_ORAM_ENDED_PATTERN)) {
+			isLoadORAMEnded = true;
 		}
 		if (doMeasurement) {
 			measurementEventProcessor.process(line);
@@ -66,6 +71,11 @@ public class MeasurementEventProcessor implements IWorkerEventProcessor {
 
 	@Override
 	public boolean ended() {
-		return false;
+		boolean temp = false;
+		if (isLoadORAMEnded) {
+			temp = true;
+			isLoadORAMEnded = false;
+		}
+		return temp;
 	}
 }

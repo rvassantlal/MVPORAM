@@ -17,21 +17,18 @@ public class ORAMMessage implements RawCustomExternalizable {
 	}
 
 	public int getSerializedSize() {
-		return 4;
+		return Integer.BYTES;
 	}
 
 	@Override
 	public int writeExternal(byte[] output, int startOffset) {
-		byte[] oramIdBytes = ORAMUtils.toBytes(oramId);
-		System.arraycopy(oramIdBytes, 0, output, startOffset, 4);
-		return startOffset + 4;
+		ORAMUtils.serializeInteger(oramId, output, startOffset);
+		return startOffset + Integer.BYTES;
 	}
 
 	@Override
 	public int readExternal(byte[] input, int startOffset) {
-		byte[] oramIdBytes = new byte[4];
-		System.arraycopy(input, startOffset, oramIdBytes, 0, 4);
-		oramId = ORAMUtils.toNumber(oramIdBytes);
-		return startOffset + 4;
+		oramId = ORAMUtils.deserializeInteger(input, startOffset);
+		return startOffset + Integer.BYTES;
 	}
 }

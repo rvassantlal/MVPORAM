@@ -6,7 +6,8 @@ public enum ServerOperationType {
 	GET_POSITION_MAP,
 	GET_ORAM,
 	GET_STASH_AND_PATH,
-	EVICTION;
+	EVICTION,
+	UPDATE_CONCURRENT_CLIENTS;
 
 	public final static ServerOperationType[] values = values();
 
