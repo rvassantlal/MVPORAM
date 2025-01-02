@@ -41,7 +41,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private CountDownLatch workersReadyCounter;
 	private CountDownLatch measurementDeliveredCounter;
 	private String storageFileNamePrefix;
-	private String positionMapType;
 	private final Semaphore loadORAMSemaphore;
 
 
@@ -83,7 +82,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		for (int i = 0; i < tokens.length; i++) {
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
-		positionMapType = benchmarkParameters.getProperty("experiment.position_map_type");
+
 		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
 		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
 		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
@@ -136,7 +135,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Tree height: {}", treeHeight);
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
-			logger.info("Position map type: {}", positionMapType);
 			logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
 			logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
 			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
@@ -153,8 +151,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					logger.info("============ Round: {} ============", round);
 					int nClients = clientsPerRound[round - 1];
 					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_pm_%s_height_%d_bucket_%d_block_%d_round_%d_", f,
-							positionMapType, treeHeight, bucketSize, blockSize, nClients);
+					storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_round_%d_", f,
+							treeHeight, bucketSize, blockSize, nClients);
 					//Distribute clients per workers
 					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
 					String vector = Arrays.toString(clientsPerWorker);
@@ -322,7 +320,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + positionMapType + " " + treeHeight + " "
+						+ " " + nRequests + " " + treeHeight + " "
 						+ bucketSize + " " + blockSize + " " + isMeasurementWorker;
 				commandInfo[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;

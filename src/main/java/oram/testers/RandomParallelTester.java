@@ -4,7 +4,6 @@ import oram.client.ORAMManager;
 import oram.client.ORAMObject;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
-import oram.utils.PositionMapType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
@@ -29,8 +28,8 @@ public class RandomParallelTester {
 	static int maxAddress;
 
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
-		if (args.length != 6) {
-			System.out.println("Usage: oram.testers.RandomParallelTester <initial client id> <nClients> <testSize> <treeHeight> <nBlocksPerBucket> <full | triple>");
+		if (args.length != 5) {
+			System.out.println("Usage: oram.testers.RandomParallelTester <initial client id> <nClients> <testSize> <treeHeight> <nBlocksPerBucket>");
 			System.exit(-1);
 		}
 		rnd = new SecureRandom();
@@ -41,17 +40,7 @@ public class RandomParallelTester {
 		int nBlocksPerBucket = Integer.parseInt(args[4]);
 		int blockSize = 20;
 		int oramId = 1;
-		PositionMapType oramType;
-		switch (args[5]) {
-			case "full":
-				oramType = PositionMapType.FULL_POSITION_MAP;
-				break;
-			case "triple":
-				oramType = PositionMapType.TRIPLE_POSITION_MAP;
-				break;
-			default:
-				throw new IllegalArgumentException("Invalid ORAM type");
-		}
+
 		List<ORAMManager> oramManagerList = new ArrayList<>();
 		List<Thread> threads = new ArrayList<>();
 		for (int i = 0; i < nClients; i++) {
@@ -60,7 +49,7 @@ public class RandomParallelTester {
 
 		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
 
-		oramManagerList.get(0).createORAM(oramId, oramType, treeHeight, nBlocksPerBucket, blockSize);
+		oramManagerList.get(0).createORAM(oramId, treeHeight, nBlocksPerBucket, blockSize);
 
 		for (ORAMManager oramManager : oramManagerList) {
 			ORAMObject oram = oramManager.getORAM(oramId);

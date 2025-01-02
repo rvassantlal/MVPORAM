@@ -9,7 +9,10 @@ import oram.messages.ORAMMessage;
 import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
-import oram.utils.*;
+import oram.utils.ORAMContext;
+import oram.utils.ORAMUtils;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import vss.facade.SecretSharingException;
 
 import java.io.ByteArrayInputStream;
@@ -26,16 +29,15 @@ public class ORAMManager {
 		this.encryptionManager = new EncryptionManager();
 	}
 
-	public ORAMObject createORAM(int oramId, PositionMapType positionMapType, int treeHeight, int bucketSize,
-								 int blockSize) {
+	public ORAMObject createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) {
 		try {
 			String password = encryptionManager.generatePassword();
 			encryptionManager.createSecretKey(password);
 
 			EncryptedPathMap encryptedPathMap = initializeEmptyPathMap();
 			EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
-			CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType,
-					treeHeight, bucketSize, blockSize, encryptedPathMap, encryptedStash);
+			CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
+					encryptedPathMap, encryptedStash);
 			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 			Response response = serviceProxy.invokeOrdered(serializedRequest, password.getBytes());
 			if (response == null || response.getPlainData() == null) {
@@ -47,7 +49,7 @@ public class ORAMManager {
 				return null;
 			}
 
-			ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
+			ORAMContext oramContext = new ORAMContext(treeHeight, bucketSize, blockSize);
 
 			return new ORAMObject(serviceProxy, oramId, oramContext, encryptionManager);
 		} catch (SecretSharingException e) {
@@ -66,14 +68,13 @@ public class ORAMManager {
 
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPlainData());
 				 DataInputStream in = new DataInputStream(bis)) {
-				PositionMapType positionMapType = PositionMapType.getPositionMapType(in.readByte());
 				int treeHeight = in.readInt();
 				if (treeHeight == -1) {
 					return null;
 				}
 				int bucketSize = in.readInt();
 				int blockSize = in.readInt();
-				ORAMContext oramContext = new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
+				ORAMContext oramContext = new ORAMContext(treeHeight, bucketSize, blockSize);
 				String password = new String(response.getConfidentialData()[0]);
 				encryptionManager.createSecretKey(password);
 

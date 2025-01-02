@@ -8,7 +8,10 @@ import confidential.server.ConfidentialRecoverable;
 import confidential.statemanagement.ConfidentialSnapshot;
 import oram.messages.*;
 import oram.server.structure.*;
-import oram.utils.*;
+import oram.utils.ORAMContext;
+import oram.utils.ORAMUtils;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
@@ -260,13 +263,11 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		} else {
 			ORAMContext oramContext = oram.getOramContext();
 			VerifiableShare encryptionKeyShare = oram.getEncryptionKeyShare();
-			PositionMapType positionMapType = oramContext.getPositionMapType();
 			int treeHeight = oramContext.getTreeHeight();
 			int nBlocksPerBucket = oramContext.getBucketSize();
 			int blockSize = oramContext.getBlockSize();
 			try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
 				 DataOutputStream out = new DataOutputStream(bos)) {
-				out.writeByte(positionMapType.ordinal());
 				out.writeInt(treeHeight);
 				out.writeInt(nBlocksPerBucket);
 				out.writeInt(blockSize);
@@ -309,7 +310,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 
 	private ConfidentialMessage createORAM(CreateORAMMessage request, VerifiableShare encryptionKeyShare) {
 		int oramId = request.getOramId();
-		PositionMapType positionMapType = request.getPositionMapType();
 		int treeHeight = request.getTreeHeight();
 		int nBlocksPerBucket = request.getBucketSize();
 		int blockSize = request.getBlockSize();
@@ -320,8 +320,8 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 		} else {
 			logger.debug("Created an ORAM with id {} of {} levels", oramId, treeHeight + 1);
-			ORAM oram = new ORAM(oramId, encryptionKeyShare, positionMapType, treeHeight,
-					nBlocksPerBucket, blockSize, encryptedPathMap, encryptedStash);
+			ORAM oram = new ORAM(oramId, encryptionKeyShare, treeHeight, nBlocksPerBucket, blockSize,
+					encryptedPathMap, encryptedStash);
 			orams.put(oramId, oram);
 			return new ConfidentialMessage(new byte[]{(byte) Status.SUCCESS.ordinal()});
 		}

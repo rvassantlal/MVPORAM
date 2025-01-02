@@ -17,7 +17,6 @@ import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class ORAMObject {
 	protected final Logger logger = LoggerFactory.getLogger("oram");

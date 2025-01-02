@@ -1,8 +1,6 @@
 package oram.testers;
 
 import oram.utils.ORAMUtils;
-import org.apache.commons.math3.distribution.PoissonDistribution;
-import org.apache.commons.math3.distribution.UniformIntegerDistribution;
 import org.apache.commons.math3.distribution.ZipfDistribution;
 
 import java.util.HashSet;

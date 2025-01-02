@@ -8,12 +8,18 @@ import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
-import oram.utils.*;
+import oram.utils.ORAMContext;
+import oram.utils.ORAMUtils;
+import oram.utils.ServerOperationType;
+import oram.utils.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class LoadORAM {
 	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
@@ -351,12 +357,10 @@ public class LoadORAM {
 		String password = encryptionManager.generatePassword();
 		encryptionManager.createSecretKey(password);
 
-		PositionMapType positionMapType = PositionMapType.TRIPLE_POSITION_MAP;
-
 		EncryptedPathMap encryptedPathMap = initializeEmptyPathMap();
 		EncryptedStash encryptedStash = initializeEmptyStash(blockSize);
-		CreateORAMMessage request = new CreateORAMMessage(oramId, positionMapType,
-				treeHeight, bucketSize, blockSize, encryptedPathMap, encryptedStash);
+		CreateORAMMessage request = new CreateORAMMessage(oramId, treeHeight, bucketSize, blockSize,
+				encryptedPathMap, encryptedStash);
 		byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.CREATE_ORAM, request);
 		Response response = serviceProxy.invokeOrdered(serializedRequest, password.getBytes());
 		if (response == null || response.getPlainData() == null) {
@@ -368,7 +372,7 @@ public class LoadORAM {
 			throw new IllegalStateException("Failed to create an ORAM");
 		}
 
-		return new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
+		return new ORAMContext(treeHeight, bucketSize, blockSize);
 	}
 
 	private EncryptedStash initializeEmptyStash(int blockSize) {

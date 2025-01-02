@@ -4,7 +4,6 @@ import oram.messages.GetPathMaps;
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
 import oram.utils.ORAMUtils;
-import oram.utils.PositionMapType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.secretsharing.VerifiableShare;
@@ -24,14 +23,13 @@ public class ORAM {
 	protected final ORAMTreeManager oramTreeManager;
 	private final Map<Integer, int[]> preComputedPathLocations;
 
-	public ORAM(int oramId, VerifiableShare encryptionKeyShare, PositionMapType positionMapType, int treeHeight,
-				int bucketSize, int blockSize, EncryptedPathMap encryptedPathMap,
-				EncryptedStash encryptedStash) {
+	public ORAM(int oramId, VerifiableShare encryptionKeyShare, int treeHeight, int bucketSize, int blockSize,
+				EncryptedPathMap encryptedPathMap, EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.encryptionKeyShare = encryptionKeyShare;
-		this.oramContext = new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
-		logger.info("ORAM tree capacity: {} blocks", oramContext.getTreeSize());
-		logger.info("ORAM tree size: {} slots", oramContext.getTreeSize() * oramContext.getBucketSize());
+		this.oramContext = new ORAMContext(treeHeight, bucketSize, blockSize);
+		logger.info("ORAM size: {} blocks", oramContext.getTreeSize());
+		logger.info("Number of slots: {}", oramContext.getTreeSize() * oramContext.getBucketSize());
 		this.pathMaps = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
