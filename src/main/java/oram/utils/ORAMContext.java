@@ -6,13 +6,15 @@ public class ORAMContext {
 	private final int TREE_SIZE; // Number of buckets in the tree
 	private final int BUCKET_SIZE;
 	private final int BLOCK_SIZE;
+	private final int K;
 
-	public ORAMContext(PositionMapType positionMapType, int treeHeight, int treeSize, int bucketSize, int blockSize) {
+	public ORAMContext(PositionMapType positionMapType, int treeHeight, int bucketSize, int blockSize) {
 		this.positionMapType = positionMapType;
 		this.TREE_HEIGHT = treeHeight;
-		this.TREE_SIZE = treeSize;
+		this.TREE_SIZE = ORAMUtils.computeNumberOfNodes(treeHeight);
 		this.BUCKET_SIZE = bucketSize;
 		this.BLOCK_SIZE = blockSize;
+		this.K = bucketSize;
 	}
 
 	public PositionMapType getPositionMapType() {
@@ -37,5 +39,9 @@ public class ORAMContext {
 
 	public int getBlockSize() {
 		return BLOCK_SIZE;
+	}
+
+	public int getK() {
+		return K;
 	}
 }

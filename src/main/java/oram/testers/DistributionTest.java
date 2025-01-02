@@ -1,11 +1,8 @@
 package oram.testers;
 
-import oram.utils.ORAMUtils;
 import org.apache.commons.math3.distribution.PoissonDistribution;
-import org.apache.commons.math3.distribution.ZipfDistribution;
+import org.apache.commons.math3.distribution.UniformIntegerDistribution;
 
-import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -14,10 +11,12 @@ public class DistributionTest {
 		int nClients = 5;
 		long duration = 30 * 24 * 60 * 60;
 		System.out.println(duration);
-		long nTests = 1000 * duration;
+		long nTests = 1000;
 		System.out.println(nTests);
-		int height = 15;
+		int height = 3;
 		int bucketSize = 4;
+		int pathCapacity = bucketSize * (height + 1);
+		int k = bucketSize;
 
 		int poissonDistributionMean = 1;
 		PoissonDistribution poissonDistribution = new PoissonDistribution(poissonDistributionMean, nClients);
@@ -31,6 +30,7 @@ public class DistributionTest {
 		}
 		System.out.println(samples.size());
 		System.out.println(samples);
+
 
 		/*int treeSize = ORAMUtils.computeTreeSize(height, bucketSize);
 		System.out.println("Tree size: " + treeSize);

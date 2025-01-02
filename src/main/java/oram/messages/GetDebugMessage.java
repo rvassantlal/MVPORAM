@@ -24,19 +24,14 @@ public class GetDebugMessage extends ORAMMessage {
 	@Override
 	public int writeExternal(byte[] output, int startOffset) {
 		int offset = super.writeExternal(output, startOffset);
-		byte[] clientIdBytes = ORAMUtils.toBytes(clientId);
-		System.arraycopy(clientIdBytes, 0, output, offset, clientIdBytes.length);
-		offset += clientIdBytes.length;
-		return offset;
+		ORAMUtils.serializeInteger(clientId, output, offset);
+		return offset + Integer.BYTES;
 	}
 
 	@Override
 	public int readExternal(byte[] input, int startOffset) {
 		int offset = super.readExternal(input, startOffset);
-		byte[] clientIdBytes = new byte[4];
-		System.arraycopy(input, offset, clientIdBytes, 0, 4);
-		offset += 4;
-		clientId = ORAMUtils.toNumber(clientIdBytes);
-		return offset;
+		clientId = ORAMUtils.deserializeInteger(input, offset);
+		return offset + Integer.BYTES;
 	}
 }

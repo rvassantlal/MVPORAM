@@ -162,7 +162,7 @@ public class EncryptionManager {
 
 	public EncryptedBucket encryptBucket(ORAMContext oramContext, Bucket bucket) {
 		prepareBucket(oramContext, bucket);
-		Block[] bucketContents = bucket.readBucket();
+		Block[] bucketContents = bucket.getBlocks();
 		byte[][] encryptedBlocks = new byte[bucketContents.length][];
 		for (int i = 0; i < bucketContents.length; i++) {
 			Block block = bucketContents[i];
@@ -178,14 +178,14 @@ public class EncryptionManager {
 			return null;
 		byte[][] blocks = encryptedBucket.getBlocks();
 		Bucket newBucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), encryptedBucket.getLocation());
-
-		for (byte[] block : blocks) {
+		for (int i = 0; i < blocks.length; i++) {
+			byte[] block = blocks[i];
 			byte[] serializedBlock = encryptionAbstraction.decrypt(block);
 			Block deserializedBlock = new Block(oramContext.getBlockSize());
 			deserializedBlock.readExternal(serializedBlock, 0);
 			if (deserializedBlock.getAddress() != ORAMUtils.DUMMY_ADDRESS
 					&& !Arrays.equals(deserializedBlock.getContent(), ORAMUtils.DUMMY_BLOCK)) {
-				newBucket.putBlock(deserializedBlock);
+				newBucket.putBlock(i, deserializedBlock);
 			}
 		}
 		return newBucket;
@@ -232,7 +232,7 @@ public class EncryptionManager {
 	}
 
 	private void prepareBucket(ORAMContext oramContext, Bucket bucket) {
-		Block[] blocks = bucket.readBucket();
+		Block[] blocks = bucket.getBlocks();
 		for (int i = 0; i < blocks.length; i++) {
 			if (blocks[i] == null) {
 				blocks[i] = new Block(oramContext.getBlockSize(), ORAMUtils.DUMMY_ADDRESS, ORAMUtils.DUMMY_VERSION,

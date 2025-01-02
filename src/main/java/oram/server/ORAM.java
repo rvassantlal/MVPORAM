@@ -29,10 +29,9 @@ public class ORAM {
 				EncryptedStash encryptedStash) {
 		this.oramId = oramId;
 		this.encryptionKeyShare = encryptionKeyShare;
-		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-		int nBuckets = ORAMUtils.computeNumberOfNodes(treeHeight);
-		this.oramContext = new ORAMContext(positionMapType, treeHeight, treeSize, bucketSize, blockSize);
-		logger.info("ORAM tree capacity: {} blocks ({} buckets)", treeSize, nBuckets);
+		this.oramContext = new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
+		logger.info("ORAM tree capacity: {} blocks", oramContext.getTreeSize());
+		logger.info("ORAM tree size: {} slots", oramContext.getTreeSize() * oramContext.getBucketSize());
 		this.pathMaps = new HashMap<>();
 		int numberOfPaths = 1 << oramContext.getTreeHeight();
 		this.preComputedPathLocations = new HashMap<>(numberOfPaths);

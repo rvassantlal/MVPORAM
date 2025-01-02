@@ -25,30 +25,18 @@ public class PositionMap implements RawCustomExternalizable {
 	}
 
 	public int getLocation(int address) {
-		if (address < 0 || address >= locations.length) {
-			return ORAMUtils.DUMMY_LOCATION;
-		}
 		return locations[address];
 	}
 
 	public int getAccess(int address) {
-		if (address < 0 || address >= locations.length) {
-			return ORAMUtils.DUMMY_VERSION;
-		}
 		return accesses[address];
 	}
 
 	public int getVersion(int address) {
-		if (address < 0 || address >= locations.length) {
-			return ORAMUtils.DUMMY_VERSION;
-		}
 		return versions[address];
 	}
 
 	public int getLocationUpdateAccess(int address) {
-		if (address < 0 || address >= locations.length) {
-			return ORAMUtils.DUMMY_VERSION;
-		}
 		return locationUpdateAccesses[address];
 	}
 

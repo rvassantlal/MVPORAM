@@ -10,6 +10,7 @@ public class ORAMUtils {
 	public static final int DUMMY_VERSION = -1;
 	public static final int DUMMY_LOCATION = -1;
 	public static final int DUMMY_ADDRESS = -1;
+	public static final int BLOCK_IN_STASH = -2;
 	public static final byte[] DUMMY_BLOCK = new byte[0];
 
 	public static String generateRandomPassword(SecureRandom rndGenerator) {
@@ -22,7 +23,7 @@ public class ORAMUtils {
 		return pwd.toString();
 	}
 
-	public static int computeTreeSize(int treeHeight, int bucketSize) {
+	public static int computeNumberOfSlots(int treeHeight, int bucketSize) {
 		return computeNumberOfNodes(treeHeight) * bucketSize;
 	}
 
@@ -110,8 +111,8 @@ public class ORAMUtils {
 		return (treeHeight + 1) * bucketSize * blockSize;
 	}
 
-	public static long computeDatabaseSize(int treeHeight, int bucketSize, int blockSize) {
-		return (long) computeTreeSize(treeHeight, bucketSize) * blockSize;
+	public static long computeDatabaseSize(int treeHeight, int blockSize) {
+		return (long) computeNumberOfNodes(treeHeight) * blockSize;
 	}
 
 	public static void serializeInteger(int value, byte[] output, int startOffset) {

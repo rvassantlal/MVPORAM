@@ -3,21 +3,21 @@ package oram.client;
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
 import oram.client.structure.*;
-import oram.messages.EvictionORAMMessage;
-import oram.messages.GetPathMaps;
-import oram.messages.ORAMMessage;
-import oram.messages.StashPathORAMMessage;
+import oram.messages.*;
 import oram.security.EncryptionManager;
 import oram.server.structure.EncryptedBucket;
 import oram.server.structure.EncryptedPathMap;
 import oram.server.structure.EncryptedStash;
 import oram.utils.*;
+import org.apache.commons.math3.distribution.UniformIntegerDistribution;
+import org.apache.commons.math3.util.FastMath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ORAMObject {
 	protected final Logger logger = LoggerFactory.getLogger("oram");
@@ -27,6 +27,7 @@ public class ORAMObject {
 	protected final ORAMContext oramContext;
 	protected final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
+	private final UniformIntegerDistribution uniformDistribution;
 	private Map<Integer, int[]> allPaths;
 	private Map<Integer, int[]> bucketToPaths;
 	private int latestAccess;
@@ -34,6 +35,7 @@ public class ORAMObject {
 	private final PositionMap positionMap;
 	private OngoingAccessContext ongoingAccessContext;
 	protected long globalDelayRemoteInvocation;
+	private StringBuilder debugTracer;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) {
@@ -41,10 +43,12 @@ public class ORAMObject {
 		this.oramId = oramId;
 		this.oramContext = oramContext;
 		this.encryptionManager = encryptionManager;
-		this.rndGenerator = new SecureRandom("oram".getBytes());
+		this.rndGenerator = new SecureRandom();
 		this.positionMap = new PositionMap(oramContext.getTreeSize());
 		this.latestAccess = 0; //server stores the initial position map and stash with version 1
 		this.missingTriples = new HashSet<>();
+		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
+		this.uniformDistribution = new UniformIntegerDistribution(0, pathCapacity - 1);// -1 because upper bound is inclusive
 		preComputeTreeLocations(oramContext.getTreeHeight());
 	}
 
@@ -99,8 +103,9 @@ public class ORAMObject {
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
-
+		debugTracer = new StringBuilder();
 		ongoingAccessContext = new OngoingAccessContext();
+		debugTracer.append("========= ").append(op).append(" ").append(address).append(" =========\n");
 
 		//Reading path maps and obtaining a sequence/version number
 		long start, end, delay;
@@ -111,11 +116,14 @@ public class ORAMObject {
 			return null;
 		}
 		int opSequence = pathMapsHistory.getOperationSequence();
+		debugTracer.append("Op seq: ").append(opSequence).append("\n");
+
 		ongoingAccessContext.setOperationSequence(opSequence);
 		ongoingAccessContext.setPathMapsHistory(pathMapsHistory);
 
 		//Merging path maps to build tree map
 		consolidatePathMaps(pathMapsHistory);
+
 
 		end = System.nanoTime();
 		delay = end - start;
@@ -124,7 +132,8 @@ public class ORAMObject {
 		measurementLogger.info("M-map: {}", delay);
 
 		//Translating address into bucket id
-		int bucketId = positionMap.getLocation(address);
+		int slot = positionMap.getLocation(address);
+		int bucketId = (int) Math.floor((double) slot / oramContext.getBucketSize());
 		ongoingAccessContext.setAccessedAddressBucket(bucketId);
 
 		//Extending bucket id to a path that include that bucket
@@ -133,6 +142,8 @@ public class ORAMObject {
 
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getVersion(address), positionMap.getAccess(address));
+
+		getORAMSnapshot();
 
 		start = System.nanoTime();
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
@@ -153,6 +164,8 @@ public class ORAMObject {
 		boolean isEvicted = evict(pathId, address, mergedStash, positionMap);
 		end = System.nanoTime();
 		delay = end - start;
+
+		logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
 		measurementLogger.info("M-eviction: {}", delay);
 		measurementLogger.info("M-serviceCall: {}", globalDelayRemoteInvocation);
 		if (!isEvicted) {
@@ -161,6 +174,31 @@ public class ORAMObject {
 
 		return oldData;
 	}
+
+	public void getORAMSnapshot() {
+		try {
+			ORAMMessage request = new GetDebugMessage(oramId, serviceProxy.getProcessId());
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.DEBUG, request);
+
+			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			if (response == null || response.getPlainData() == null) {
+				return;
+			}
+			DebugSnapshot snapshot = encryptionManager.decryptDebugSnapshot(oramContext, response.getPlainData());
+			analiseSnapshot(snapshot);
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private void analiseSnapshot(DebugSnapshot snapshot) {
+		for (ArrayList<Bucket> buckets : snapshot.getTree()) {
+			for (Bucket bucket : buckets) {
+				debugTracer.append("Bucket ").append(bucket.getLocation()).append(": ").append(bucket).append("\n");
+			}
+		}
+	}
+
 
 	private PathMaps getPathMaps() {
 		try {
@@ -219,6 +257,9 @@ public class ORAMObject {
 			}
 		}
 		latestAccess = maxReceivedSequenceNumber;
+
+		debugTracer.append("Position map:\n");
+		debugTracer.append(positionMap);
 	}
 
 	public int getPathId(int bucketId) {
@@ -226,6 +267,10 @@ public class ORAMObject {
 			ongoingAccessContext.setIsRealAccess(false);
 			return generateRandomPathId();
 		}
+		if (bucketId == ORAMUtils.BLOCK_IN_STASH) {
+			return generateRandomPathId();
+		}
+
 		int[] possiblePaths = bucketToPaths.get(bucketId);
 		return possiblePaths[rndGenerator.nextInt(possiblePaths.length)];
 	}
@@ -260,7 +305,11 @@ public class ORAMObject {
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 
 		mergeStashes(mergedStash, stashes);
+		debugTracer.append("Outstanding versions: ")
+				.append(stashes.keySet().stream().sorted().collect(Collectors.toList())).append("\n");
+		debugTracer.append("Merged stash: ").append(mergedStash).append("\n");
 		mergePaths(mergedStash, paths);
+		debugTracer.append("Stash + Path: ").append(mergedStash).append("\n");
 
 		return mergedStash;
 	}
@@ -273,6 +322,7 @@ public class ORAMObject {
 				logger.warn("Stash is null");
 				continue;
 			}
+			debugTracer.append("Stash ").append(stashEntry.getKey()).append(": ").append(stash).append("\n");
 
 			for (Map.Entry<Integer, Block> blockEntry : stash.getBlocks().entrySet()) {
 				int address = blockEntry.getKey();
@@ -288,7 +338,7 @@ public class ORAMObject {
 							block, positionMapVersion, positionMapAccess);
 					throw new IllegalStateException("Block in stash has a higher version than the position map");
 				}
-				if (positionMapLocation == ORAMUtils.DUMMY_LOCATION && positionMapVersion == version
+				if (positionMapLocation == ORAMUtils.BLOCK_IN_STASH && positionMapVersion == version
 						&& positionMapAccess == access) {
 					mergedStash.putBlock(block);
 				}
@@ -300,23 +350,27 @@ public class ORAMObject {
 		for (Bucket bucket : paths) {
 			if (bucket == null)
 				continue;
-			for (Block block : bucket.readBucket()) {
+			Block[] blocks = bucket.getBlocks();
+			for (int index = 0; index < blocks.length; index++) {
+				Block block = blocks[index];
 				if (block == null)
 					continue;
 				int address = block.getAddress();
 				int version = block.getVersion();
 				int access = block.getAccess();
 				int positionMapLocation = positionMap.getLocation(address);
+				int bucketId = (int)Math.floor((double) positionMapLocation / oramContext.getBucketSize());
+				int slotIndex = positionMapLocation % oramContext.getBucketSize();
 				int positionMapVersion = positionMap.getVersion(address);
 				int positionMapAccess = positionMap.getAccess(address);
 				if (version > positionMapVersion
 						|| (version == positionMapVersion && access > positionMapAccess)) {
 					logger.warn("Block {} in path has a higher version than the position map (V: {}, A: {})",
-							block, version, access);
+							block, positionMapVersion, positionMapAccess);
 					throw new IllegalStateException("Block's version in path is higher than in position map");
 				}
 
-				if (positionMapLocation == bucket.getLocation() && positionMapVersion == version
+				if (bucketId == bucket.getLocation() && slotIndex == index && positionMapVersion == version
 						&& positionMapAccess == access) {
 					mergedStash.putBlock(block);
 				}
@@ -331,6 +385,7 @@ public class ORAMObject {
 		if (ongoingAccessContext.isRealAccess() && op == Operation.READ) {
 			if (block == null) {
 				String debugInfo = buildDebugInfo(address, stash);
+				logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
 				logger.error("[Client {} - Error] {}", serviceProxy.getProcessId(), debugInfo);
 				System.exit(-1);
 				throw new IllegalStateException("Block is null");
@@ -356,219 +411,157 @@ public class ORAMObject {
 		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
 		PathMap pathMap = new PathMap(pathCapacity);
 
-		populatePathAccessedAndNewBlockToRoot(pathId, accessedAddress, stash, positionMap, path, pathMap);
+		Stash newStash = populatePathAccessedBlockToStash(pathId, accessedAddress, stash, positionMap, path, pathMap);
 
-		for (Block block : stash.getBlocks().values()) {
-			pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(), block.getAccess());
+		debugTracer.append("New stash size: ").append(newStash.size()).append("\n");
+		debugTracer.append("New stash: ").append(newStash).append("\n");
+		if (serviceProxy.getProcessId() == 100) {
+			logger.info("{}", newStash.size());
 		}
-
-		EncryptedStash encryptedStash = encryptionManager.encryptStash(stash);
+		EncryptedStash encryptedStash = encryptionManager.encryptStash(newStash);
 		EncryptedPathMap encryptedPositionMap = encryptionManager.encryptPathMap(pathMap);
 
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private void populatePathAccessedBlockToRoot(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
-									 Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
+	private Stash populatePathAccessedBlockToStash(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
+												   Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
 		int[] accessedPathLocations = allPaths.get(pathId);
-		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
-		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
-		for (int i = 0; i < accessedPathLocations.length; i++) {
-			int pathLocation = accessedPathLocations[i];
-			bucketToIndex.put(pathLocation, i);
-			bucketWithAvailableCapacity.add(pathLocation);
-			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
-		}
+		Arrays.sort(accessedPathLocations);
+		debugTracer.append("Path ").append(pathId).append(": ").append(Arrays.toString(accessedPathLocations)).append("\n");
 
-		//Move accessed block to the root bucket
-		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
-		if (accessedBlock != null) {
-			int location = positionMap.getLocation(accessedAddress);
-			int newLocation;
-			if (location == ORAMUtils.DUMMY_LOCATION) {
-				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
-			} else {
-				newLocation = 0;//accessedPathLocations[Math.min(oramContext.getTreeHeight(), bucketToIndex.get(location) + 1)];
-			}
-
-			Bucket bucket = pathToPopulate.get(newLocation);
-			bucket.putBlock(accessedBlock);
-			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(newLocation);
-			}
-		}
-
-		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
-
-		for (int address : blocksToEvict) {
-			if (bucketWithAvailableCapacity.isEmpty()) {
-				break;
-			}
-			Block block = stash.getAndRemoveBlock(address);
-			int bucketId = positionMap.getLocation(address);
-
-			//if it was not allocated to root bucket or the root bucket does not have space
-			if (!bucketWithAvailableCapacity.contains(bucketId)) {
-				bucketId = bucketWithAvailableCapacity.iterator().next();
-			}
-			Bucket bucket = pathToPopulate.get(bucketId);
-			bucket.putBlock(block);
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(bucketId);
-			}
-			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
-		}
-	}
-
-	private void populatePathAccessedBlockUp(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
-											 Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
-		int[] accessedPathLocations = allPaths.get(pathId);
-		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
-		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
-		for (int i = 0; i < accessedPathLocations.length; i++) {
-			int pathLocation = accessedPathLocations[i];
-			bucketToIndex.put(pathLocation, i);
-			bucketWithAvailableCapacity.add(pathLocation);
-			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
-		}
-
-		//Move accessed block to the root bucket
-		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
-		if (accessedBlock != null) {
-			int location = positionMap.getLocation(accessedAddress);
-			int newLocation;
-			if (location == ORAMUtils.DUMMY_LOCATION) {
-				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
-			} else {
-				int currentLevel = bucketToIndex.get(location);
-				int newLevel = rndGenerator.nextInt(accessedPathLocations.length - currentLevel) + currentLevel;
-				newLocation = accessedPathLocations[newLevel];
-			}
-
-			Bucket bucket = pathToPopulate.get(newLocation);
-			bucket.putBlock(accessedBlock);
-			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(newLocation);
-			}
-		}
-
-		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
-
-		for (int address : blocksToEvict) {
-			if (bucketWithAvailableCapacity.isEmpty()) {
-				break;
-			}
-			Block block = stash.getAndRemoveBlock(address);
-			int bucketId = positionMap.getLocation(address);
-
-			//if it was not allocated to root bucket or the root bucket does not have space
-			if (!bucketWithAvailableCapacity.contains(bucketId)) {
-				bucketId = bucketWithAvailableCapacity.iterator().next();
-			}
-			Bucket bucket = pathToPopulate.get(bucketId);
-			bucket.putBlock(block);
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(bucketId);
-			}
-			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
-		}
-	}
-
-	private void populatePathAccessedBlockLevelUp(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
-							  Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
-		int[] accessedPathLocations = allPaths.get(pathId);
-		Map<Integer, Integer> bucketToIndex = new HashMap<>(accessedPathLocations.length);
-		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
-		for (int i = 0; i < accessedPathLocations.length; i++) {
-			int pathLocation = accessedPathLocations[i];
-			bucketToIndex.put(pathLocation, i);
-			bucketWithAvailableCapacity.add(pathLocation);
-			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
-		}
-
-		//Move accessed block to the root bucket
-		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
-		if (accessedBlock != null) {
-			int location = positionMap.getLocation(accessedAddress);
-			int newLocation;
-			if (location == ORAMUtils.DUMMY_LOCATION) {
-				newLocation = accessedPathLocations[rndGenerator.nextInt(accessedPathLocations.length)];
-			} else {
-				newLocation = accessedPathLocations[Math.min(oramContext.getTreeHeight(), bucketToIndex.get(location) + 1)];
-			}
-
-			Bucket bucket = pathToPopulate.get(newLocation);
-			bucket.putBlock(accessedBlock);
-			pathMap.setLocation(accessedAddress, newLocation, accessedBlock.getVersion(), accessedBlock.getAccess());
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(newLocation);
-			}
-		}
-
-		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
-
-		for (int address : blocksToEvict) {
-			if (bucketWithAvailableCapacity.isEmpty()) {
-				break;
-			}
-			Block block = stash.getAndRemoveBlock(address);
-			int bucketId = positionMap.getLocation(address);
-
-			//if it was not allocated to root bucket or the root bucket does not have space
-			if (!bucketWithAvailableCapacity.contains(bucketId)) {
-				bucketId = bucketWithAvailableCapacity.iterator().next();
-			}
-			Bucket bucket = pathToPopulate.get(bucketId);
-			bucket.putBlock(block);
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(bucketId);
-			}
-			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
-		}
-	}
-
-	private void populatePathAccessedAndNewBlockToRoot(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
-							  Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
-		int[] accessedPathLocations = allPaths.get(pathId);
-		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
 		for (int pathLocation : accessedPathLocations) {
-			bucketWithAvailableCapacity.add(pathLocation);
-			pathToPopulate.put(pathLocation, new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
-		}
-
-		//Move accessed block to the root bucket
-		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
-		if (accessedBlock != null) {
-			pathToPopulate.get(0).putBlock(accessedBlock);
-			pathMap.setLocation(accessedAddress, 0, accessedBlock.getVersion(), accessedBlock.getAccess());
-			if (pathToPopulate.get(0).isFull()) {
-				bucketWithAvailableCapacity.remove(0);
-			}
+			pathToPopulate.put(pathLocation,
+					new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation));
 		}
 
 		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
-
 		for (int address : blocksToEvict) {
-			if (bucketWithAvailableCapacity.isEmpty()) {
-				break;
+			Block block = stash.getBlock(address);
+			int location = positionMap.getLocation(address);
+			if (location >= 0) {
+				int bucketId = (int)Math.floor((double) location / oramContext.getBucketSize());
+				int slotIndex = location % oramContext.getBucketSize();
+				Bucket bucket = pathToPopulate.get(bucketId);
+				Block blockInBucket = bucket.getBlock(slotIndex);
+				if (blockInBucket == null || positionMap.getLocationUpdateAccess(block.getAddress()) >
+						positionMap.getLocationUpdateAccess(blockInBucket.getAddress())) {
+					bucket.putBlock(slotIndex, block);
+					stash.getAndRemoveBlock(address);
+					if (blockInBucket != null) {
+						stash.putBlock(blockInBucket);
+					}
+				}
 			}
-			Block block = stash.getAndRemoveBlock(address);
-			int bucketId = positionMap.getLocation(address);
-
-			//if it was not allocated to root bucket or the root bucket does not have space
-			if (bucketId != 0 || !bucketWithAvailableCapacity.contains(0)) {
-				bucketId = bucketWithAvailableCapacity.iterator().next();
-			}
-			Bucket bucket = pathToPopulate.get(bucketId);
-			bucket.putBlock(block);
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(bucketId);
-			}
-			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
 		}
+		debugTracer.append("Path before substitution:\n");
+		for (int accessedPathLocation : accessedPathLocations) {
+			debugTracer.append("\tBucket ").append(accessedPathLocation)
+					.append(": ").append(pathToPopulate.get(accessedPathLocation)).append("\n");
+		}
+
+		//Sample K random slots from path to substitute
+		int accessedBlockLocation = positionMap.getLocation(accessedAddress);
+		Set<Integer> slots = new HashSet<>(oramContext.getBucketSize());
+		if (accessedBlockLocation >= 0) {
+			int bucketId = (int)Math.floor((double) accessedBlockLocation / oramContext.getBucketSize());
+			int level = (int) FastMath.log(2, bucketId + 1);
+			int slotIndex = accessedBlockLocation % oramContext.getBucketSize();
+			int accessedBlockSlot = level * oramContext.getBucketSize() + slotIndex;
+			debugTracer.append("Accessed block location:\n");
+			debugTracer.append("\tLocation: ").append(accessedBlockLocation).append("\n");
+			debugTracer.append("\tBucket: ").append(bucketId).append("\n");
+			debugTracer.append("\tLevel: ").append(level).append("\n");
+			debugTracer.append("\tSlot index: ").append(slotIndex).append("\n");
+			slots.add(accessedBlockSlot);
+		}
+
+		Integer[] slotsToSubstitute = selectRandomSlots(slots, oramContext.getK());
+		debugTracer.append("Slots to substitute: ").append(Arrays.toString(slotsToSubstitute)).append("\n");
+
+		//Evict accessed block to new stash
+		Stash newStash = new Stash(oramContext.getBlockSize());
+		Block accessedBlock = stash.getAndRemoveBlock(accessedAddress);
+		if (accessedBlock != null) {
+			newStash.putBlock(accessedBlock);
+			pathMap.setLocation(accessedBlock.getAddress(), ORAMUtils.BLOCK_IN_STASH, accessedBlock.getVersion(),
+					accessedBlock.getAccess());
+		}
+
+		//Select min(K, |stash|) random blocks from stash to evict to path
+		int nBlocks = Math.min(stash.size(), oramContext.getK());
+		Block[] blocksToEvictToPath = selectRandomBlocks(stash, nBlocks);
+		Iterator<Block> blocksToEvictToPathIterator = Arrays.stream(blocksToEvictToPath).iterator();
+
+		//Substitute blocks in path
+		for (int slot : slotsToSubstitute) {
+			int level = slot / oramContext.getBucketSize();
+			int index = slot % oramContext.getBucketSize();
+			int bucketId = accessedPathLocations[level];
+			int reverseSlot = bucketId * oramContext.getBucketSize() + index;
+
+			Bucket bucket = pathToPopulate.get(bucketId);
+			Block block = bucket.getBlock(index);
+			if (block != null) {
+				newStash.putBlock(block);
+				pathMap.setLocation(block.getAddress(), ORAMUtils.BLOCK_IN_STASH, block.getVersion(), block.getAccess());
+			}
+
+			if (blocksToEvictToPathIterator.hasNext()) {
+				Block blockToEvictToPath = blocksToEvictToPathIterator.next();
+				bucket.putBlock(index, blockToEvictToPath);
+				pathMap.setLocation(blockToEvictToPath.getAddress(), reverseSlot,
+						blockToEvictToPath.getVersion(), blockToEvictToPath.getAccess());
+			}
+		}
+
+		if (blocksToEvictToPathIterator.hasNext()) {
+			throw new IllegalStateException("I should have evicted all K blocks from stash to path");
+		}
+
+		debugTracer.append("Path after substitution:\n");
+		for (int accessedPathLocation : accessedPathLocations) {
+			debugTracer.append("\tBucket ").append(accessedPathLocation)
+					.append(": ").append(pathToPopulate.get(accessedPathLocation)).append("\n");
+		}
+
+		//Add remaining blocks in stash to new stash
+		for (Block block : stash.getBlocks().values()) {
+			newStash.putBlock(block);
+			pathMap.setLocation(block.getAddress(), ORAMUtils.BLOCK_IN_STASH, block.getVersion(), block.getAccess());
+		}
+
+		return newStash;
+	}
+
+	private Block[] selectRandomBlocks(Stash stash, int nBlocks) {
+		int[] blocksAddressesInStash = ORAMUtils.convertSetIntoOrderedArray(stash.getBlocks().keySet());
+		Set<Integer> selectedBlocksIndexes = new HashSet<>();
+		while (selectedBlocksIndexes.size() < nBlocks) {
+			selectedBlocksIndexes.add(rndGenerator.nextInt(blocksAddressesInStash.length));
+		}
+		Block[] blocks = new Block[nBlocks];
+		int index = 0;
+		for (int selectedBlockIndex : selectedBlocksIndexes) {
+			int selectedBlockAddress = blocksAddressesInStash[selectedBlockIndex];
+			blocks[index] = stash.getAndRemoveBlock(selectedBlockAddress);
+			index++;
+		}
+		return blocks;
+	}
+
+	private Integer[] selectRandomSlots(Set<Integer> slots, int nSlots) {
+		while (slots.size() < nSlots) {
+			slots.add(uniformDistribution.sample());
+		}
+		Integer[] result = new Integer[slots.size()];
+		int i = 0;
+		for (Integer slot : slots) {
+			result[i++] = slot;
+		}
+		Arrays.sort(result, Collections.reverseOrder());
+		return result;
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,

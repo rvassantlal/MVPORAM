@@ -6,7 +6,6 @@ public class Bucket {
 	private final Block[] blocks;
 	private final int blockSize;
 	private final int location;
-	private int index;
 
 	public Bucket(int bucketSize, int blockSize, int location) {
 		blocks = new Block[bucketSize];
@@ -14,22 +13,19 @@ public class Bucket {
 		this.location = location;
 	}
 
-	public boolean isFull() {
-		return index >= blocks.length;
+	public Block getBlock(int index) {
+		return blocks[index];
 	}
 
-	public boolean putBlock(Block block) {
-		if (index >= blocks.length)
-			return false;
-		blocks[index++] = block;
-		return true;
+	public void putBlock(int index, Block block) {
+		blocks[index] = block;
 	}
 
 	public int getBlockSize() {
 		return blockSize;
 	}
 
-	public Block[] readBucket() {
+	public Block[] getBlocks() {
 		return this.blocks;
 	}
 

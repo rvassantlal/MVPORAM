@@ -33,7 +33,7 @@ public class RandomParallelTester {
 			System.out.println("Usage: oram.testers.RandomParallelTester <initial client id> <nClients> <testSize> <treeHeight> <nBlocksPerBucket> <full | triple>");
 			System.exit(-1);
 		}
-		rnd = new SecureRandom("oram".getBytes());
+		rnd = new SecureRandom();
 		int initialClientId = Integer.parseInt(args[0]);
 		int nClients = Integer.parseInt(args[1]);
 		testSize = Integer.parseInt(args[2]);
@@ -58,7 +58,7 @@ public class RandomParallelTester {
 			oramManagerList.add(new ORAMManager(initialClientId + i));
 		}
 
-		maxAddress = ORAMUtils.computeTreeSize(treeHeight, nBlocksPerBucket);
+		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
 
 		oramManagerList.get(0).createORAM(oramId, oramType, treeHeight, nBlocksPerBucket, blockSize);
 

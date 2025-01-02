@@ -2,8 +2,6 @@ package oram.testers;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.ORAMManager;
-import oram.client.ORAMObject;
 import oram.client.structure.*;
 import oram.messages.*;
 import oram.security.EncryptionManager;
@@ -35,7 +33,7 @@ public class LoadORAM {
 
 		LoadORAM oramLoader = new LoadORAM(initialClientId, oramId, treeHeight, bucketSize, blockSize);
 
-		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
+		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 
 		long start = System.currentTimeMillis();
 		oramLoader.load();
@@ -59,7 +57,6 @@ public class LoadORAM {
 	private final PositionMap positionMap;
 	private int nextBlockAddress;
 	private final Logger loaderLogger = LoggerFactory.getLogger("benchmarking");
-	private int nBlocksToFillPerPath;
 
 	private LoadORAM(int clientId, int oramId, int treeHeight, int bucketSize, int blockSize) throws SecretSharingException {
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
@@ -72,9 +69,9 @@ public class LoadORAM {
 
 	public void load() {
 		int nPaths = 2 << (oramContext.getTreeHeight() - 1);
-		int treeSize = oramContext.getTreeSize();
+		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 
-		nBlocksToFillPerPath = (oramContext.getTreeSize() / (oramContext.getTreeHeight() + 1)) / nPaths;
+		int nBlocksToFillPerPath = (treeSize / (oramContext.getTreeHeight() + 1)) / nPaths;
 		for (int pathId = 0; pathId < nPaths; pathId++) {
 			PathMaps pathMapsHistory = getPathMaps();
 			if (pathMapsHistory == null) {
@@ -214,7 +211,7 @@ public class LoadORAM {
 		for (Bucket bucket : paths) {
 			if (bucket == null)
 				continue;
-			for (Block block : bucket.readBucket()) {
+			for (Block block : bucket.getBlocks()) {
 				if (block == null)
 					continue;
 				int address = block.getAddress();
@@ -267,10 +264,11 @@ public class LoadORAM {
 		}
 
 		Bucket bucket = pathToPopulate.get(accessedPathLocations[0]);
-		while (!bucket.isFull()) {
+		for (int i = 0; i < oramContext.getBucketSize(); i++) {
 			Block newBlock = new Block(oramContext.getBlockSize(), nextBlockAddress, opSequence,
 					String.valueOf(nextBlockAddress).getBytes());
-			bucket.putBlock(newBlock);
+
+			bucket.putBlock(i, newBlock);
 			pathMap.setLocation(nextBlockAddress, accessedPathLocations[0], opSequence, opSequence);
 			nextBlockAddress++;
 		}
@@ -369,9 +367,8 @@ public class LoadORAM {
 		if (status == Status.FAILED) {
 			throw new IllegalStateException("Failed to create an ORAM");
 		}
-		int treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize);
-		return new ORAMContext(positionMapType, treeHeight,
-				treeSize, bucketSize, blockSize);
+
+		return new ORAMContext(positionMapType, treeHeight, bucketSize, blockSize);
 	}
 
 	private EncryptedStash initializeEmptyStash(int blockSize) {

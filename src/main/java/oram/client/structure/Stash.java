@@ -15,6 +15,10 @@ public class Stash implements RawCustomExternalizable {
 		this.blocks = new HashMap<>();
 	}
 
+	public int size() {
+		return blocks.size();
+	}
+
 	public void putBlock(Block block) {
 		blocks.put(block.getAddress(), block);
 	}

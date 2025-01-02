@@ -17,8 +17,8 @@ public class ORAMTreeManager {
 		this.oramContext = oramContext;
 		this.unusedOutstandingTreesPool = new ArrayDeque<>();
 		this.getBucketsBuffer = new HashMap<>();
-		int nBuckets = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
-		this.currentOutstandingTree = new OutstandingTree(nBuckets, oramContext.getTreeLevels(), versionId,
+		int treeSize = oramContext.getTreeSize();
+		this.currentOutstandingTree = new OutstandingTree(treeSize, oramContext.getTreeLevels(), versionId,
 				encryptedStash);
 		this.allOutstandingTreesObjects = new ArrayList<>();
 		allOutstandingTreesObjects.add(currentOutstandingTree);

@@ -137,10 +137,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Bucket size: {}", bucketSize);
 			logger.info("Block size: {}", blockSize);
 			logger.info("Position map type: {}", positionMapType);
-			logger.info("Number of buckets: {}", ORAMUtils.computeNumberOfNodes(treeHeight));
-			logger.info("ORAM size: {} blocks", ORAMUtils.computeTreeSize(treeHeight, bucketSize));
-			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, bucketSize, blockSize));
-			logger.info("Path length: {} blocks", ORAMUtils.computePathLength(treeHeight, bucketSize));
+			logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
+			logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
+			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
+			logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
 			logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
 			logger.info("Concurrent clients: {} clients", nConcurrentClients);
 
