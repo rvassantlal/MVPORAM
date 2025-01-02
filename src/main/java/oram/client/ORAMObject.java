@@ -165,7 +165,7 @@ public class ORAMObject {
 		end = System.nanoTime();
 		delay = end - start;
 
-		logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
+		//logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
 		measurementLogger.info("M-eviction: {}", delay);
 		measurementLogger.info("M-serviceCall: {}", globalDelayRemoteInvocation);
 		if (!isEvicted) {
@@ -477,7 +477,7 @@ public class ORAMObject {
 			slots.add(accessedBlockSlot);
 		}
 
-		Integer[] slotsToSubstitute = selectRandomSlots(slots, oramContext.getK());
+		int[] slotsToSubstitute = selectRandomSlots(slots, oramContext.getK());
 		debugTracer.append("Slots to substitute: ").append(Arrays.toString(slotsToSubstitute)).append("\n");
 
 		//Evict accessed block to new stash
@@ -529,7 +529,9 @@ public class ORAMObject {
 		//Add remaining blocks in stash to new stash
 		for (Block block : stash.getBlocks().values()) {
 			newStash.putBlock(block);
-			pathMap.setLocation(block.getAddress(), ORAMUtils.BLOCK_IN_STASH, block.getVersion(), block.getAccess());
+			if (positionMap.getLocation(block.getAddress()) != ORAMUtils.BLOCK_IN_STASH) {
+				pathMap.setLocation(block.getAddress(), ORAMUtils.BLOCK_IN_STASH, block.getVersion(), block.getAccess());
+			}
 		}
 
 		return newStash;
@@ -551,17 +553,11 @@ public class ORAMObject {
 		return blocks;
 	}
 
-	private Integer[] selectRandomSlots(Set<Integer> slots, int nSlots) {
+	private int[] selectRandomSlots(Set<Integer> slots, int nSlots) {
 		while (slots.size() < nSlots) {
 			slots.add(uniformDistribution.sample());
 		}
-		Integer[] result = new Integer[slots.size()];
-		int i = 0;
-		for (Integer slot : slots) {
-			result[i++] = slot;
-		}
-		Arrays.sort(result, Collections.reverseOrder());
-		return result;
+		return ORAMUtils.convertSetIntoOrderedArray(slots);
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
