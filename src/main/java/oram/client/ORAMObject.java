@@ -35,7 +35,6 @@ public class ORAMObject {
 	private final PositionMap positionMap;
 	private OngoingAccessContext ongoingAccessContext;
 	protected long globalDelayRemoteInvocation;
-	private StringBuilder debugTracer;
 
 	public ORAMObject(ConfidentialServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
 					  EncryptionManager encryptionManager) {
@@ -103,9 +102,7 @@ public class ORAMObject {
 
 	private byte[] access(Operation op, int address, byte[] newContent) {
 		reset();
-		debugTracer = new StringBuilder();
 		ongoingAccessContext = new OngoingAccessContext();
-		debugTracer.append("========= ").append(op).append(" ").append(address).append(" =========\n");
 
 		//Reading path maps and obtaining a sequence/version number
 		long start, end, delay;
@@ -116,7 +113,6 @@ public class ORAMObject {
 			return null;
 		}
 		int opSequence = pathMapsHistory.getOperationSequence();
-		debugTracer.append("Op seq: ").append(opSequence).append("\n");
 
 		ongoingAccessContext.setOperationSequence(opSequence);
 		ongoingAccessContext.setPathMapsHistory(pathMapsHistory);
@@ -142,8 +138,6 @@ public class ORAMObject {
 
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getVersion(address), positionMap.getAccess(address));
-
-		getORAMSnapshot();
 
 		start = System.nanoTime();
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
@@ -192,11 +186,13 @@ public class ORAMObject {
 	}
 
 	private void analiseSnapshot(DebugSnapshot snapshot) {
+		StringBuilder debugTracer = new StringBuilder();
 		for (ArrayList<Bucket> buckets : snapshot.getTree()) {
 			for (Bucket bucket : buckets) {
 				debugTracer.append("Bucket ").append(bucket.getLocation()).append(": ").append(bucket).append("\n");
 			}
 		}
+		logger.info("{}", debugTracer);
 	}
 
 
@@ -257,9 +253,6 @@ public class ORAMObject {
 			}
 		}
 		latestAccess = maxReceivedSequenceNumber;
-
-		debugTracer.append("Position map:\n");
-		debugTracer.append(positionMap);
 	}
 
 	public int getPathId(int bucketId) {
@@ -305,12 +298,7 @@ public class ORAMObject {
 		Stash mergedStash = new Stash(oramContext.getBlockSize());
 
 		mergeStashes(mergedStash, stashes);
-		debugTracer.append("Outstanding versions: ")
-				.append(stashes.keySet().stream().sorted().collect(Collectors.toList())).append("\n");
-		debugTracer.append("Merged stash: ").append(mergedStash).append("\n");
 		mergePaths(mergedStash, paths);
-		debugTracer.append("Stash + Path: ").append(mergedStash).append("\n");
-
 		return mergedStash;
 	}
 
@@ -322,7 +310,6 @@ public class ORAMObject {
 				logger.warn("Stash is null");
 				continue;
 			}
-			debugTracer.append("Stash ").append(stashEntry.getKey()).append(": ").append(stash).append("\n");
 
 			for (Map.Entry<Integer, Block> blockEntry : stash.getBlocks().entrySet()) {
 				int address = blockEntry.getKey();
@@ -385,7 +372,6 @@ public class ORAMObject {
 		if (ongoingAccessContext.isRealAccess() && op == Operation.READ) {
 			if (block == null) {
 				String debugInfo = buildDebugInfo(address, stash);
-				logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
 				logger.error("[Client {} - Error] {}", serviceProxy.getProcessId(), debugInfo);
 				System.exit(-1);
 				throw new IllegalStateException("Block is null");
@@ -413,11 +399,6 @@ public class ORAMObject {
 
 		Stash newStash = populatePathAccessedBlockToStash(pathId, accessedAddress, stash, positionMap, path, pathMap);
 
-		debugTracer.append("New stash size: ").append(newStash.size()).append("\n");
-		debugTracer.append("New stash: ").append(newStash).append("\n");
-		if (serviceProxy.getProcessId() == 100) {
-			logger.info("{}", newStash.size());
-		}
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(newStash);
 		EncryptedPathMap encryptedPositionMap = encryptionManager.encryptPathMap(pathMap);
 
@@ -429,7 +410,6 @@ public class ORAMObject {
 												   Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
 		int[] accessedPathLocations = allPaths.get(pathId);
 		Arrays.sort(accessedPathLocations);
-		debugTracer.append("Path ").append(pathId).append(": ").append(Arrays.toString(accessedPathLocations)).append("\n");
 
 		for (int pathLocation : accessedPathLocations) {
 			pathToPopulate.put(pathLocation,
@@ -455,11 +435,6 @@ public class ORAMObject {
 				}
 			}
 		}
-		debugTracer.append("Path before substitution:\n");
-		for (int accessedPathLocation : accessedPathLocations) {
-			debugTracer.append("\tBucket ").append(accessedPathLocation)
-					.append(": ").append(pathToPopulate.get(accessedPathLocation)).append("\n");
-		}
 
 		//Sample K random slots from path to substitute
 		int accessedBlockLocation = positionMap.getLocation(accessedAddress);
@@ -469,16 +444,10 @@ public class ORAMObject {
 			int level = (int) FastMath.log(2, bucketId + 1);
 			int slotIndex = accessedBlockLocation % oramContext.getBucketSize();
 			int accessedBlockSlot = level * oramContext.getBucketSize() + slotIndex;
-			debugTracer.append("Accessed block location:\n");
-			debugTracer.append("\tLocation: ").append(accessedBlockLocation).append("\n");
-			debugTracer.append("\tBucket: ").append(bucketId).append("\n");
-			debugTracer.append("\tLevel: ").append(level).append("\n");
-			debugTracer.append("\tSlot index: ").append(slotIndex).append("\n");
 			slots.add(accessedBlockSlot);
 		}
 
 		int[] slotsToSubstitute = selectRandomSlots(slots, oramContext.getK());
-		debugTracer.append("Slots to substitute: ").append(Arrays.toString(slotsToSubstitute)).append("\n");
 
 		//Evict accessed block to new stash
 		Stash newStash = new Stash(oramContext.getBlockSize());
@@ -518,12 +487,6 @@ public class ORAMObject {
 
 		if (blocksToEvictToPathIterator.hasNext()) {
 			throw new IllegalStateException("I should have evicted all K blocks from stash to path");
-		}
-
-		debugTracer.append("Path after substitution:\n");
-		for (int accessedPathLocation : accessedPathLocations) {
-			debugTracer.append("\tBucket ").append(accessedPathLocation)
-					.append(": ").append(pathToPopulate.get(accessedPathLocation)).append("\n");
 		}
 
 		//Add remaining blocks in stash to new stash

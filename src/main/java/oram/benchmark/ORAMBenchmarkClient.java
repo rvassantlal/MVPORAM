@@ -88,7 +88,7 @@ public class ORAMBenchmarkClient {
 
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			//treeSize = ORAMUtils.computeTreeSize(treeHeight, bucketSize) / 4;
+
 			treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 			this.address = clientId % treeSize;
 			this.rndGenerator = new SecureRandom();
@@ -98,7 +98,7 @@ public class ORAMBenchmarkClient {
 		public void run() {
 			try {
 				latch.countDown();
-				oram.writeMemory(address, blockContent);
+
 				long t1, t2, delay;
 				byte[] oldContent;
 				boolean isWrite;
