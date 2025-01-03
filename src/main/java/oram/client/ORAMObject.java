@@ -356,10 +356,12 @@ public class ORAMObject {
 		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
 		PathMap pathMap = new PathMap(pathCapacity);
 
-		populatePathAccessedAndNewBlockToRoot(pathId, accessedAddress, stash, positionMap, path, pathMap);
+		populatePathAccessedBlockLevelUp(pathId, accessedAddress, stash, positionMap, path, pathMap);
 
 		for (Block block : stash.getBlocks().values()) {
-			pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(), block.getAccess());
+			if (positionMap.getLocation(block.getAddress()) != ORAMUtils.DUMMY_LOCATION) {
+				pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(), block.getAccess());
+			}
 		}
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(stash);
