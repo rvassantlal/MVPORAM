@@ -13,7 +13,7 @@ public class DistributionTest {
 		System.out.println(duration);
 		long nTests = 1000;
 		System.out.println(nTests);
-		int height = 3;
+		int height = 17;
 		int bucketSize = 4;
 		int pathCapacity = bucketSize * (height + 1);
 		int k = bucketSize;
@@ -26,6 +26,7 @@ public class DistributionTest {
 				0.01,
 				0.1,
 				0.5,
+				0.9,
 				1,
 				2,
 				4

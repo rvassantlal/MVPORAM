@@ -124,8 +124,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
 		}
 
+		long startTime = System.currentTimeMillis();
 		for (int i = 0; i < treeHeights.length; i++) {
-			long startTime = System.currentTimeMillis();
 			logger.info("============ Strategy Parameters ============");
 			treeHeight = treeHeights[i];
 			bucketSize = bucketSizes[i];
@@ -214,10 +214,17 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				}
 			}
 
-			long endTime = System.currentTimeMillis();
-			logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
-
+			if (i < treeHeights.length - 1) {
+				logger.info("Waiting {}s before new setting", sleepBetweenRounds);
+				try {
+					sleepSeconds(sleepBetweenRounds);
+				} catch (InterruptedException e) {
+					throw new RuntimeException(e);
+				}
+			}
 		}
+		long endTime = System.currentTimeMillis();
+		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 	}
 
 	private void startUpdateClients(int updateInitialDelay, int updatePeriod, int numberOfUpdates, WorkerHandler worker) {
