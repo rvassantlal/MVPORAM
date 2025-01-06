@@ -16,10 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.security.SecureRandom;
+import java.util.*;
 
 public class LoadORAM {
 	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
@@ -63,6 +61,7 @@ public class LoadORAM {
 	private final PositionMap positionMap;
 	private int nextBlockAddress;
 	private final Logger loaderLogger = LoggerFactory.getLogger("benchmarking");
+	private final SecureRandom rndGenerator;
 
 	private LoadORAM(int clientId, int oramId, int treeHeight, int bucketSize, int blockSize) throws SecretSharingException {
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
@@ -71,13 +70,13 @@ public class LoadORAM {
 		this.missingTriples = new HashSet<>();
 		this.oramContext = createORAM(oramId, treeHeight, bucketSize, blockSize);
 		this.positionMap = new PositionMap(oramContext.getTreeSize());
+		this.rndGenerator = new SecureRandom();
 	}
 
 	public void load() {
-		int nPaths = 2 << (oramContext.getTreeHeight() - 1);
+		int nPaths = 1 << oramContext.getTreeHeight();
 		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
 
-		int nBlocksToFillPerPath = (treeSize / (oramContext.getTreeHeight() + 1)) / nPaths;
 		for (int pathId = 0; pathId < nPaths; pathId++) {
 			PathMaps pathMapsHistory = getPathMaps();
 			if (pathMapsHistory == null) {
@@ -86,6 +85,8 @@ public class LoadORAM {
 			int opSequence = pathMapsHistory.getOperationSequence();
 
 			consolidatePathMaps(pathMapsHistory);
+
+			//getORAMSnapshot();
 
 			StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 			if (stashesAndPaths == null) {
@@ -100,7 +101,7 @@ public class LoadORAM {
 			}
 			loaderLogger.info("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
 					(pathId + 1), nPaths, (int)(((pathId + 1) * 100.0) / nPaths),
-					nextBlockAddress, treeSize, (int)((nextBlockAddress * 100.0) / treeSize),
+					nextBlockAddress, treeSize + 1, (int)(((nextBlockAddress) * 100.0) / (treeSize + 1)),
 					mergedStash.getBlocks().size());
 		}
 	}
@@ -205,7 +206,7 @@ public class LoadORAM {
 							block, positionMapVersion, positionMapAccess);
 					throw new IllegalStateException("Block in stash has a higher version than the position map");
 				}
-				if (positionMapLocation == ORAMUtils.DUMMY_LOCATION && positionMapVersion == version
+				if (positionMapLocation == ORAMUtils.BLOCK_IN_STASH && positionMapVersion == version
 						&& positionMapAccess == access) {
 					mergedStash.putBlock(block);
 				}
@@ -217,23 +218,27 @@ public class LoadORAM {
 		for (Bucket bucket : paths) {
 			if (bucket == null)
 				continue;
-			for (Block block : bucket.getBlocks()) {
+			Block[] blocks = bucket.getBlocks();
+			for (int index = 0; index < blocks.length; index++) {
+				Block block = blocks[index];
 				if (block == null)
 					continue;
 				int address = block.getAddress();
 				int version = block.getVersion();
 				int access = block.getAccess();
 				int positionMapLocation = positionMap.getLocation(address);
+				int bucketId = (int)Math.floor((double) positionMapLocation / oramContext.getBucketSize());
+				int slotIndex = positionMapLocation % oramContext.getBucketSize();
 				int positionMapVersion = positionMap.getVersion(address);
 				int positionMapAccess = positionMap.getAccess(address);
 				if (version > positionMapVersion
 						|| (version == positionMapVersion && access > positionMapAccess)) {
 					logger.warn("Block {} in path has a higher version than the position map (V: {}, A: {})",
-							block, version, access);
+							block, positionMapVersion, positionMapAccess);
 					throw new IllegalStateException("Block's version in path is higher than in position map");
 				}
 
-				if (positionMapLocation == bucket.getLocation() && positionMapVersion == version
+				if (bucketId == bucket.getLocation() && slotIndex == index && positionMapVersion == version
 						&& positionMapAccess == access) {
 					mergedStash.putBlock(block);
 				}
@@ -246,72 +251,74 @@ public class LoadORAM {
 		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
 		PathMap pathMap = new PathMap(pathCapacity);
 
-		populatePath(accessedPathLocations, stash, path, pathMap, opSequence);
+		Stash newStash = populatePath(accessedPathLocations, stash, path, pathMap, opSequence);
 
-		for (Block block : stash.getBlocks().values()) {
-			pathMap.setLocation(block.getAddress(), ORAMUtils.DUMMY_LOCATION, block.getVersion(),
-					block.getAccess());
-		}
-
-		EncryptedStash encryptedStash = encryptionManager.encryptStash(stash);
+		EncryptedStash encryptedStash = encryptionManager.encryptStash(newStash);
 		EncryptedPathMap encryptedPositionMap = encryptionManager.encryptPathMap(pathMap);
 
 		Map<Integer, EncryptedBucket> encryptedPath = encryptionManager.encryptPath(oramContext, path);
 		return sendEvictionRequest(encryptedStash, encryptedPositionMap, encryptedPath);
 	}
 
-	private void populatePath(int[] accessedPathLocations, Stash stash, Map<Integer, Bucket> pathToPopulate,
-							  PathMap pathMap, int opSequence) {
-		Set<Integer> bucketWithAvailableCapacity = new HashSet<>(accessedPathLocations.length);
+	private Stash populatePath(int[] accessedPathLocations, Stash stash, Map<Integer, Bucket> pathToPopulate,
+							   PathMap pathMap, int opSequence) {
 		for (int pathLocation : accessedPathLocations) {
-			bucketWithAvailableCapacity.add(pathLocation);
 			Bucket bucket = new Bucket(oramContext.getBucketSize(), oramContext.getBlockSize(), pathLocation);
 			pathToPopulate.put(pathLocation, bucket);
 		}
 
-		Bucket bucket = pathToPopulate.get(accessedPathLocations[0]);
-		for (int i = 0; i < oramContext.getBucketSize(); i++) {
+		Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
+		for (int address : blocksToEvict) {
+			Block block = stash.getBlock(address);
+			int location = positionMap.getLocation(address);
+			if (location >= 0) {
+				int bucketId = (int)Math.floor((double) location / oramContext.getBucketSize());
+				int slotIndex = location % oramContext.getBucketSize();
+				Bucket bucket = pathToPopulate.get(bucketId);
+				Block blockInBucket = bucket.getBlock(slotIndex);
+				if (blockInBucket == null || positionMap.getLocationUpdateAccess(block.getAddress()) >
+						positionMap.getLocationUpdateAccess(blockInBucket.getAddress())) {
+					bucket.putBlock(slotIndex, block);
+					stash.getAndRemoveBlock(address);
+					if (blockInBucket != null) {
+						stash.putBlock(blockInBucket);
+					}
+				}
+			}
+		}
+
+		int[] emptySlots = selectEmptySlots(2, accessedPathLocations, pathToPopulate);
+		for (int emptySlot : emptySlots) {
+			int bucketId = (int) Math.floor((double) emptySlot / oramContext.getBucketSize());
+			int index = emptySlot % oramContext.getBucketSize();
+			Bucket bucket = pathToPopulate.get(bucketId);
 			Block newBlock = new Block(oramContext.getBlockSize(), nextBlockAddress, opSequence,
 					String.valueOf(nextBlockAddress).getBytes());
-
-			bucket.putBlock(i, newBlock);
-			pathMap.setLocation(nextBlockAddress, accessedPathLocations[0], opSequence, opSequence);
+			bucket.putBlock(index, newBlock);
+			pathMap.setLocation(nextBlockAddress, emptySlot, opSequence, opSequence);
 			nextBlockAddress++;
 		}
 
+		return new Stash(oramContext.getBlockSize());
+	}
 
-		/*Set<Integer> blocksToEvict = new HashSet<>(stash.getBlocks().keySet());
-
-		for (int address : blocksToEvict) {
-			if (bucketWithAvailableCapacity.isEmpty()) {
-				break;
-			}
-			Block block = stash.getAndRemoveBlock(address);
-			int bucketId = positionMap.getLocation(address);
-
-			//if it was not allocated to root bucket or the root bucket does not have space
-			if (!bucketWithAvailableCapacity.contains(bucketId)) {
-				throw new IllegalStateException("This should not happen");
-			}
-
+	private int[] selectEmptySlots(int nSlots, int[] pathLocations, Map<Integer, Bucket> pathToPopulate) {
+		int[] slots = new int[nSlots];
+		int i = 0;
+		Set<Integer> selectedSlots = new HashSet<>(nSlots);
+		while (i < slots.length) {
+			int level = rndGenerator.nextInt(pathLocations.length);
+			int bucketId = pathLocations[level];
 			Bucket bucket = pathToPopulate.get(bucketId);
-			bucket.putBlock(block);
-			if (bucket.isFull()) {
-				bucketWithAvailableCapacity.remove(bucketId);
+			int index = rndGenerator.nextInt(oramContext.getBucketSize());
+			int reverseSlot = bucketId * oramContext.getBucketSize() + index;
+			if (bucket.getBlock(index) == null && !selectedSlots.contains(reverseSlot)) {
+				slots[i] = reverseSlot;
+				i++;
+				selectedSlots.add(reverseSlot);
 			}
-			pathMap.setLocation(address, bucketId, block.getVersion(), block.getAccess());
 		}
-
-		for (int bucketId : bucketWithAvailableCapacity) {
-			Bucket bucket = pathToPopulate.get(bucketId);
-			while (!bucket.isFull()) {
-				Block newBlock = new Block(oramContext.getBlockSize(), nextBlockAddress, opSequence,
-						String.valueOf(nextBlockAddress).getBytes());
-				bucket.putBlock(newBlock);
-				pathMap.setLocation(nextBlockAddress, bucketId,opSequence, opSequence);
-				nextBlockAddress++;
-			}
-		}*/
+		return slots;
 	}
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
@@ -387,5 +394,31 @@ public class LoadORAM {
 
 	public void close() {
 		serviceProxy.close();
+	}
+
+	public void getORAMSnapshot() {
+		try {
+			ORAMMessage request = new GetDebugMessage(oramId, serviceProxy.getProcessId());
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.DEBUG, request);
+
+			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
+			if (response == null || response.getPlainData() == null) {
+				return;
+			}
+			DebugSnapshot snapshot = encryptionManager.decryptDebugSnapshot(oramContext, response.getPlainData());
+			analiseSnapshot(snapshot);
+		} catch (SecretSharingException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private void analiseSnapshot(DebugSnapshot snapshot) {
+		StringBuilder debugTracer = new StringBuilder();
+		for (ArrayList<Bucket> buckets : snapshot.getTree()) {
+			for (Bucket bucket : buckets) {
+				debugTracer.append("Bucket ").append(bucket.getLocation()).append(": ").append(bucket).append("\n");
+			}
+		}
+		logger.info("{}", debugTracer);
 	}
 }

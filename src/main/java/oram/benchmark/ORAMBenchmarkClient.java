@@ -113,6 +113,7 @@ public class ORAMBenchmarkClient {
 						measurementLogger.info("M-global: {}", delay);
 						logger.info("Access latency: {} ms", delay / 1_000_000.0);
 					}
+					System.gc();
 				}
 			} finally {
 				oramManager.close();
