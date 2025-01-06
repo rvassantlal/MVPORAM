@@ -35,6 +35,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private int treeHeight;
 	private int bucketSize;
 	private int blockSize;
+	private double zipfParameter;
 	private WorkerHandler[] clientWorkers;
 	private WorkerHandler[] serverWorkers;
 	private final Map<Integer,WorkerHandler> measurementWorkers;
@@ -72,6 +73,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
 		int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
 		int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
+		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
 
 		int nServerWorkers = 3 * f + 1;
 		int nClientWorkers = workers.length - nServerWorkers - 1;
@@ -141,6 +143,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
 			logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
 			logger.info("Concurrent clients: {} clients", nConcurrentClients);
+			logger.info("Zipf parameter: {}", zipfParameter);
 
 			int nRounds = clientsPerRound.length;
 
@@ -328,7 +331,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
 				String command = clientCommand + clientInitialId + " " + clientsPerProcess
 						+ " " + nRequests + " " + treeHeight + " "
-						+ bucketSize + " " + blockSize + " " + isMeasurementWorker;
+						+ bucketSize + " " + blockSize + " " + zipfParameter + " " + isMeasurementWorker;
 				commandInfo[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
