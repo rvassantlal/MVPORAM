@@ -27,8 +27,6 @@ public class ORAMObject {
 	protected final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 	private final UniformIntegerDistribution uniformDistribution;
-	private Map<Integer, int[]> allPaths;
-	private Map<Integer, int[]> bucketToPaths;
 	private int latestAccess;
 	private final Set<Integer> missingTriples;
 	private final PositionMap positionMap;
@@ -47,31 +45,6 @@ public class ORAMObject {
 		this.missingTriples = new HashSet<>();
 		int pathCapacity = oramContext.getTreeLevels() * oramContext.getBucketSize();
 		this.uniformDistribution = new UniformIntegerDistribution(0, pathCapacity - 1);// -1 because upper bound is inclusive
-		preComputeTreeLocations(oramContext.getTreeHeight());
-	}
-
-	private void preComputeTreeLocations(int treeHeight) {
-		int nPaths = 1 << treeHeight;
-		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
-		allPaths = new HashMap<>(nPaths);
-		Map<Integer, Set<Integer>> tempBucketToPaths = new HashMap<>(treeSize);
-		for (int pathId = 0; pathId < nPaths; pathId++) {
-			int[] pathLocations = ORAMUtils.computePathLocations(pathId, treeHeight);
-			allPaths.put(pathId, pathLocations);
-			for (int pathLocation : pathLocations) {
-				tempBucketToPaths.computeIfAbsent(pathLocation, k -> new HashSet<>()).add(pathId);
-			}
-		}
-		bucketToPaths = new HashMap<>(treeSize);
-		for (int i = 0; i < treeSize; i++) {
-			Set<Integer> possiblePaths = tempBucketToPaths.get(i);
-			int[] possiblePathsArray = new int[possiblePaths.size()];
-			int j = 0;
-			for (int possiblePath : possiblePaths) {
-				possiblePathsArray[j++] = possiblePath;
-			}
-			bucketToPaths.put(i, possiblePathsArray);
-		}
 	}
 
 	/**
@@ -262,9 +235,24 @@ public class ORAMObject {
 		if (bucketId == ORAMUtils.BLOCK_IN_STASH) {
 			return generateRandomPathId();
 		}
+		return randomWalkToLeafFrom(bucketId);
+	}
 
-		int[] possiblePaths = bucketToPaths.get(bucketId);
-		return possiblePaths[rndGenerator.nextInt(possiblePaths.length)];
+	private int randomWalkToLeafFrom(int node) {
+		int currentNode = node + 1;
+		while (true) {
+			int left = currentNode * 2;
+			int right = left + 1;
+			if (left >= oramContext.getTreeSize()) {
+				return currentNode % (1 << oramContext.getTreeHeight());
+			}
+			boolean choice = rndGenerator.nextBoolean();
+			if (choice) {
+				currentNode = left;
+			} else {
+				currentNode = right;
+			}
+		}
 	}
 
 	private int generateRandomPathId() {
@@ -407,7 +395,7 @@ public class ORAMObject {
 
 	private Stash populatePathAccessedBlockToStash(int pathId, int accessedAddress, Stash stash, PositionMap positionMap,
 												   Map<Integer, Bucket> pathToPopulate, PathMap pathMap) {
-		int[] accessedPathLocations = allPaths.get(pathId);
+		int[] accessedPathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
 		Arrays.sort(accessedPathLocations);
 
 		for (int pathLocation : accessedPathLocations) {
