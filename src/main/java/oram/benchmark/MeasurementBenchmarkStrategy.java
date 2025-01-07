@@ -74,6 +74,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		//int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
 		//int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
 		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
+		int nLoadClients = Integer.parseInt(benchmarkParameters.getProperty("experiment.load_clients"));
 
 		int nServerWorkers = 3 * f + 1;
 		int nClientWorkers = workers.length - nServerWorkers;//-1 (for update client)
@@ -168,7 +169,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					//Load oram
 					if (isLoadORAM) {
 						long s = System.currentTimeMillis();
-						loadORAM(clientWorkers[0]);
+						loadORAM(nLoadClients, clientWorkers[0]);
 						long e = System.currentTimeMillis();
 						logger.info("Load duration: {}s", (e - s) / 1000);
 						logger.info("Waiting 5s...");
@@ -242,9 +243,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		worker.startWorker(1, commandInfo, this);
 	}
 
-	private void loadORAM(WorkerHandler worker) throws InterruptedException {
+	private void loadORAM(int nLoadClients, WorkerHandler worker) throws InterruptedException {
 		logger.info("Loading ORAM...");
-		String command = loadClientCommand + treeHeight + " " + bucketSize + " " + blockSize;
+		String command = loadClientCommand + nLoadClients + " " + treeHeight + " " + bucketSize + " " + blockSize;
 		ProcessInformation[] commandInfo = {
 				new ProcessInformation(
 						command,

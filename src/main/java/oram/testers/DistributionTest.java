@@ -11,7 +11,7 @@ public class DistributionTest {
 		int nClients = 5;
 		long duration = 30 * 24 * 60 * 60;
 		System.out.println(duration);
-		long nTests = 1000;
+		long nTests = 10000;
 		System.out.println(nTests);
 		int height = 17;
 		int bucketSize = 4;
@@ -23,7 +23,7 @@ public class DistributionTest {
 		System.out.println("Tree size: " + treeSize);
 		System.out.println("Tree size / 2: " + treeSize / 2);
 		double[] zipfParameters = {
-				0.01,
+				0.000001,
 				0.1,
 				0.5,
 				0.9,

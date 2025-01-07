@@ -2,6 +2,7 @@ package oram.testers;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
+import oram.client.ORAMObject;
 import oram.client.structure.*;
 import oram.messages.*;
 import oram.security.EncryptionManager;
@@ -16,68 +17,120 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import vss.facade.SecretSharingException;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.*;
 
 public class LoadORAM {
 	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
 
-	public static void main(String[] args) throws SecretSharingException {
-		if (args.length != 3) {
-			System.out.println("Usage: ... oram.testers.LoadORAM <treeHeight> <bucketSize> <blockSize>");
+	public static void main(String[] args) throws SecretSharingException, InterruptedException {
+		if (args.length != 4) {
+			System.out.println("Usage: ... oram.testers.LoadORAM <nLoadClients> <treeHeight> <bucketSize> <blockSize>");
 			System.exit(-1);
 		}
 
 		int oramId = 1;
 		int initialClientId = 1000;
+		int nLoadClients = Integer.parseInt(args[0]);
+		int treeHeight = Integer.parseInt(args[1]);
+		int bucketSize = Integer.parseInt(args[2]);
+		int blockSize = Integer.parseInt(args[3]);
 
-		int treeHeight = Integer.parseInt(args[0]);
-		int bucketSize = Integer.parseInt(args[1]);
-		int blockSize = Integer.parseInt(args[2]);
-
-		LoadORAM oramLoader = new LoadORAM(initialClientId, oramId, treeHeight, bucketSize, blockSize);
+		if (nLoadClients > 1 && nLoadClients % 2 != 0) {
+			logger.error("Number of load clients must be one or even");
+			System.exit(-1);
+		}
 
 		int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+		int nPaths = 1 << treeHeight;
+		int nPathsPerClient = nPaths / nLoadClients;
+		logger.info("Number of paths per client: {}", nPathsPerClient);
+		int addressesPerClient = nPathsPerClient * 2;
+		int initialPathId = 0;
+		int maxPathId = nPathsPerClient;
+		int initialAddress = 0;
+		int maxAddressToLoad = addressesPerClient;
+
+		Thread[] threads = new Thread[nLoadClients];
+		LoadORAM[] loadClients = new LoadORAM[nLoadClients];
 
 		long start = System.currentTimeMillis();
-		oramLoader.load();
+		for (int i = 0; i < nLoadClients; i++) {
+			int clientId = initialClientId + i;
+			LoadORAM oramLoader = new LoadORAM(clientId, oramId, treeHeight, bucketSize, blockSize, initialPathId,
+					maxPathId, initialAddress, maxAddressToLoad);
+			loadClients[i] = oramLoader;
+			threads[i] = new Thread(oramLoader::load);
+			initialPathId += nPathsPerClient;
+			maxPathId += nPathsPerClient;
+			initialAddress += addressesPerClient;
+			maxAddressToLoad = Math.min(maxAddressToLoad + addressesPerClient, treeSize);
+		}
+
+
+		for (Thread thread : threads) {
+			thread.start();
+		}
+
+		for (Thread thread : threads) {
+			thread.join();
+		}
 		long end = System.currentTimeMillis();
 
-		oramLoader.close();
+		for (LoadORAM loadClient : loadClients) {
+			loadClient.close();
+		}
 
 		long delay = end - start;
 		long delayInSeconds = delay / 1000;
 		long delayInMinutes = delayInSeconds / 60;
-		logger.info("Took {} seconds ({} minutes) to write to {} addresses", delayInSeconds, delayInMinutes, treeSize);
+		logger.info("Took {} seconds ({} minutes) to write {} addresses", delayInSeconds, delayInMinutes, treeSize);
 		logger.info("LOAD ENDED");
 	}
 
 	private final ConfidentialServiceProxy serviceProxy;
 	private final int oramId;
+	private final int initialPathId;
+	private final int maxPathId;
 	private final EncryptionManager encryptionManager;
 	private final ORAMContext oramContext;
 	private int latestAccess;
 	private final Set<Integer> missingTriples;
 	private final PositionMap positionMap;
-	private int nextBlockAddress;
 	private final Logger loaderLogger = LoggerFactory.getLogger("benchmarking");
 	private final SecureRandom rndGenerator;
+	private int addressToLoad;
+	private final int maxAddressToLoad;
+	private int addressCounter;
 
-	private LoadORAM(int clientId, int oramId, int treeHeight, int bucketSize, int blockSize) throws SecretSharingException {
+	private LoadORAM(int clientId, int oramId, int treeHeight, int bucketSize, int blockSize,
+					 int initialPathId, int maxPathId,
+					 int initialAddress, int maxAddress) throws SecretSharingException {
+		int nPaths = maxPathId - initialPathId;
+		int nAddresses = maxAddress - initialAddress;
+		logger.info("Client {}:\npaths ({}): {} -> {}\naddresses ({}): {} -> {}", clientId, nPaths, initialPathId,
+				maxPathId - 1, nAddresses, initialAddress, maxAddress - 1);
 		this.serviceProxy = new ConfidentialServiceProxy(clientId);
 		this.oramId = oramId;
+		this.initialPathId = initialPathId;
+		this.maxPathId = maxPathId;
 		this.encryptionManager = new EncryptionManager();
 		this.missingTriples = new HashSet<>();
 		this.oramContext = createORAM(oramId, treeHeight, bucketSize, blockSize);
 		this.positionMap = new PositionMap(oramContext.getTreeSize());
 		this.rndGenerator = new SecureRandom();
+		this.addressToLoad = initialAddress;
+		this.maxAddressToLoad = maxAddress;
 	}
 
 	public void load() {
-		int nPaths = 1 << oramContext.getTreeHeight();
-		int treeSize = ORAMUtils.computeNumberOfNodes(oramContext.getTreeHeight());
-
-		for (int pathId = 0; pathId < nPaths; pathId++) {
+		Set<Integer> percentagePrinted = new HashSet<>();
+		int nPaths = maxPathId - initialPathId;
+		int nAddresses = maxAddressToLoad - addressToLoad;
+		for (int pathId = initialPathId, counter = 1; pathId < maxPathId; pathId++, counter++) {
 			PathMaps pathMapsHistory = getPathMaps();
 			if (pathMapsHistory == null) {
 				throw new IllegalStateException("Position map of oram " + oramId + " is null");
@@ -99,10 +152,15 @@ public class LoadORAM {
 			if (!isEvicted) {
 				throw new IllegalStateException("Failed to do eviction on oram " + oramId);
 			}
-			loaderLogger.info("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
-					(pathId + 1), nPaths, (int)(((pathId + 1) * 100.0) / nPaths),
-					nextBlockAddress, treeSize, (int)((nextBlockAddress * 100.0) / treeSize),
-					mergedStash.getBlocks().size());
+
+			int pathPercentage = (int)((counter * 100.0) / nPaths);
+			int addressPercentage = (int)((addressCounter * 100.0) / nAddresses);
+			if ((pathPercentage % 25 == 0) && !percentagePrinted.contains(pathPercentage)) {
+				percentagePrinted.add(pathPercentage);
+				loaderLogger.error("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %)",
+						counter, nPaths, pathPercentage,
+						addressCounter, nAddresses, addressPercentage);
+			}
 		}
 	}
 
@@ -127,6 +185,7 @@ public class LoadORAM {
 		Map<Integer, PathMap> pathMaps = recentPathMaps.getPathMaps();
 
 		int maxReceivedSequenceNumber = ORAMUtils.DUMMY_VERSION;
+
 		for (Map.Entry<Integer, PathMap> entry : pathMaps.entrySet()) {
 			int updateVersion = entry.getKey();
 			maxReceivedSequenceNumber = Math.max(maxReceivedSequenceNumber, updateVersion);
@@ -287,20 +346,40 @@ public class LoadORAM {
 			}
 		}
 
-		int nSlots = Math.min(2, oramContext.getTreeSize() - nextBlockAddress);
-		int[] emptySlots = selectEmptySlots(nSlots, accessedPathLocations, pathToPopulate);
+		int nSlots = Math.min(2, maxAddressToLoad - addressToLoad);
+		int maxBucket = accessedPathLocations[0];
+		Bucket bucket = pathToPopulate.get(maxBucket);
+		int[] emptySlots = selectEmptySlots(nSlots, bucket);
+
 		for (int emptySlot : emptySlots) {
-			int bucketId = (int) Math.floor((double) emptySlot / oramContext.getBucketSize());
-			int index = emptySlot % oramContext.getBucketSize();
-			Bucket bucket = pathToPopulate.get(bucketId);
-			Block newBlock = new Block(oramContext.getBlockSize(), nextBlockAddress, opSequence,
-					String.valueOf(nextBlockAddress).getBytes());
-			bucket.putBlock(index, newBlock);
-			pathMap.setLocation(nextBlockAddress, emptySlot, opSequence, opSequence);
-			nextBlockAddress++;
+			//int bucketId = (int) Math.floor((double) emptySlot / oramContext.getBucketSize());
+			//int index = emptySlot % oramContext.getBucketSize();
+			//Bucket bucket = pathToPopulate.get(bucketId);
+			int reverseSlot = maxBucket * oramContext.getBucketSize() + emptySlot;
+			Block newBlock = new Block(oramContext.getBlockSize(), addressToLoad, opSequence,
+					String.valueOf(addressToLoad).getBytes());
+			bucket.putBlock(emptySlot, newBlock);
+			pathMap.setLocation(addressToLoad, reverseSlot, opSequence, opSequence);
+			addressToLoad++;
+			addressCounter++;
 		}
 
 		return new Stash(oramContext.getBlockSize());
+	}
+
+	private int[] selectEmptySlots(int nSlots, Bucket bucket) {
+		int[] slots = new int[nSlots];
+		int i = 0;
+		Set<Integer> selectedSlots = new HashSet<>(nSlots);
+		while (i < slots.length) {
+			int index = rndGenerator.nextInt(oramContext.getBucketSize());
+			if (bucket.getBlock(index) == null && !selectedSlots.contains(index)) {
+				slots[i] = index;
+				i++;
+				selectedSlots.add(index);
+			}
+		}
+		return slots;
 	}
 
 	private int[] selectEmptySlots(int nSlots, int[] pathLocations, Map<Integer, Bucket> pathToPopulate) {
@@ -377,10 +456,38 @@ public class LoadORAM {
 
 		Status status = Status.getStatus(response.getPlainData()[0]);
 		if (status == Status.FAILED) {
-			throw new IllegalStateException("Failed to create an ORAM");
+			return getORAM(oramId);
 		}
 
 		return new ORAMContext(treeHeight, bucketSize, blockSize);
+	}
+
+	public ORAMContext getORAM(int oramId) {
+		try {
+			ORAMMessage request = new ORAMMessage(oramId);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_ORAM, request);
+			Response response = serviceProxy.invokeUnordered(serializedRequest);
+			if (response == null || response.getPlainData() == null || response.getConfidentialData() == null) {
+				return null;
+			}
+
+			try (ByteArrayInputStream bis = new ByteArrayInputStream(response.getPlainData());
+				 DataInputStream in = new DataInputStream(bis)) {
+				int treeHeight = in.readInt();
+				if (treeHeight == -1) {
+					return null;
+				}
+				int bucketSize = in.readInt();
+				int blockSize = in.readInt();
+				ORAMContext oramContext = new ORAMContext(treeHeight, bucketSize, blockSize);
+				String password = new String(response.getConfidentialData()[0]);
+				encryptionManager.createSecretKey(password);
+
+				return oramContext;
+			}
+		} catch (SecretSharingException | IOException e) {
+			return null;
+		}
 	}
 
 	private EncryptedStash initializeEmptyStash(int blockSize) {

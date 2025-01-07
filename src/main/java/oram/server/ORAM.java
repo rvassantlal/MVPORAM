@@ -21,7 +21,7 @@ public class ORAM {
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
 	protected int sequenceNumber;
 	protected final ORAMTreeManager oramTreeManager;
-	private final Map<Integer, int[]> preComputedPathLocations;
+	private final Map<Integer, EncryptedPathMap> resultedPositionMap;
 
 	public ORAM(int oramId, VerifiableShare encryptionKeyShare, int treeHeight, int bucketSize, int blockSize,
 				EncryptedPathMap encryptedPathMap, EncryptedStash encryptedStash) {
@@ -31,11 +31,7 @@ public class ORAM {
 		logger.info("ORAM size: {} blocks", oramContext.getTreeSize());
 		logger.info("Number of slots: {}", oramContext.getTreeSize() * oramContext.getBucketSize());
 		this.pathMaps = new HashMap<>();
-		int numberOfPaths = 1 << oramContext.getTreeHeight();
-		this.preComputedPathLocations = new HashMap<>(numberOfPaths);
-		for (int i = 0; i < numberOfPaths; i++) {
-			preComputedPathLocations.put(i, ORAMUtils.computePathLocations(i, oramContext.getTreeHeight()));
-		}
+		this.resultedPositionMap = new HashMap<>();
 		this.oramClientContexts = new HashMap<>();
 		int versionId = ++sequenceNumber;
 		this.oramTreeManager = new ORAMTreeManager(oramContext, versionId, encryptedStash);
@@ -70,7 +66,8 @@ public class ORAM {
 
 		OutstandingTree outstandingTree = oramTreeManager.getOutstandingTree();
 		Set<Integer> outstandingVersions = outstandingTree.getOutstandingVersions();
-		Map<Integer, EncryptedPathMap> resultedPositionMap = new HashMap<>(sequenceNumber - lastVersion);
+
+		resultedPositionMap.clear();
 
 		for (int i : missingTriples) {
 			EncryptedPathMap encryptedPathMap = pathMaps.get(i);
@@ -107,7 +104,7 @@ public class ORAM {
 		}
 		oramClientContext.setPathId(pathId);
 
-		int[] pathLocations = preComputedPathLocations.get(pathId);
+		int[] pathLocations = ORAMUtils.computePathLocations(pathId, oramContext.getTreeHeight());
 
 		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
 		Map<Integer, EncryptedStash> outstandingStashes = new HashMap<>(outstandingTree.getStashes());
