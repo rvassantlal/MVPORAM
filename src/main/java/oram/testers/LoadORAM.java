@@ -99,9 +99,9 @@ public class LoadORAM {
 			if (!isEvicted) {
 				throw new IllegalStateException("Failed to do eviction on oram " + oramId);
 			}
-			loaderLogger.info("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
+			loaderLogger.error("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
 					(pathId + 1), nPaths, (int)(((pathId + 1) * 100.0) / nPaths),
-					nextBlockAddress, treeSize + 1, (int)(((nextBlockAddress) * 100.0) / (treeSize + 1)),
+					nextBlockAddress, treeSize, (int)((nextBlockAddress * 100.0) / treeSize),
 					mergedStash.getBlocks().size());
 		}
 	}
@@ -287,7 +287,8 @@ public class LoadORAM {
 			}
 		}
 
-		int[] emptySlots = selectEmptySlots(2, accessedPathLocations, pathToPopulate);
+		int nSlots = Math.min(2, oramContext.getTreeSize() - nextBlockAddress);
+		int[] emptySlots = selectEmptySlots(nSlots, accessedPathLocations, pathToPopulate);
 		for (int emptySlot : emptySlots) {
 			int bucketId = (int) Math.floor((double) emptySlot / oramContext.getBucketSize());
 			int index = emptySlot % oramContext.getBucketSize();

@@ -29,7 +29,7 @@ public class ORAMBenchmarkClient {
 		int bucketSize = Integer.parseInt(args[4]);
 		int blockSize = Integer.parseInt(args[5]);
 		double zipfParameter = Double.parseDouble(args[6]);
-		boolean measurementLeader = Boolean.parseBoolean(args[6]);
+		boolean measurementLeader = Boolean.parseBoolean(args[7]);
 
 		CountDownLatch latch = new CountDownLatch(nClients);
 		Client[] clients = new Client[nClients];
@@ -113,7 +113,6 @@ public class ORAMBenchmarkClient {
 						measurementLogger.info("M-global: {}", delay);
 						logger.info("Access latency: {} ms", delay / 1_000_000.0);
 					}
-					System.gc();
 				}
 			} finally {
 				oramManager.close();
