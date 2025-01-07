@@ -69,14 +69,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
 		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
 		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.load_oram"));
-		boolean isUpdateConcurrentClients = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.update_concurrent_clients"));
-		int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
-		int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
-		int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
+		//boolean isUpdateConcurrentClients = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.update_concurrent_clients"));
+		//int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
+		//int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
+		//int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
 		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
 
 		int nServerWorkers = 3 * f + 1;
-		int nClientWorkers = workers.length - nServerWorkers - 1;
+		int nClientWorkers = workers.length - nServerWorkers;//-1 (for update client)
 		int maxClientsPerProcess = 3;
 		int nRequests = 10_000_000;
 		int sleepBetweenRounds = 30;
@@ -112,7 +112,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Arrays.stream(serverWorkers).forEach(w -> serverWorkersIds.add(w.getWorkerId()));
 		Arrays.stream(clientWorkers).forEach(w -> clientWorkersIds.add(w.getWorkerId()));
 
-		WorkerHandler updateClientWorker = workers[workers.length - 1];
+		//WorkerHandler updateClientWorker = workers[workers.length - 1];
 
 		printWorkersInfo();
 
@@ -176,9 +176,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 					}
 
 					//Start update client to update maximum number of concurrent clients
-					if (isUpdateConcurrentClients) {
+					/*if (isUpdateConcurrentClients) {
 						startUpdateClients(updateInitialDelay, updatePeriod, numberOfUpdates, updateClientWorker);
-					}
+					}*/
 
 					//Start Clients
 					startClients(maxClientsPerProcess, nRequests, clientWorkers, clientsPerWorker);
