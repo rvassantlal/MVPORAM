@@ -99,7 +99,7 @@ public class LoadORAM {
 			if (!isEvicted) {
 				throw new IllegalStateException("Failed to do eviction on oram " + oramId);
 			}
-			loaderLogger.error("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
+			loaderLogger.info("Populated path {} out of {} ({} %) | Wrote addresses {} out of {} ({} %) | Stash: {}",
 					(pathId + 1), nPaths, (int)(((pathId + 1) * 100.0) / nPaths),
 					nextBlockAddress, treeSize, (int)((nextBlockAddress * 100.0) / treeSize),
 					mergedStash.getBlocks().size());
