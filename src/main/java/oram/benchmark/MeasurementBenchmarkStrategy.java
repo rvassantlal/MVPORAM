@@ -500,7 +500,11 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private void saveResourcesMeasurements(String fileName, long[]... data) {
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
-			int size = data[0].length;
+			OptionalInt min = Arrays.stream(data).mapToInt(v -> v.length).min();
+			if (!min.isPresent() || min.getAsInt() == 0) {
+				throw new IllegalStateException("Resources measurements are empty");
+			}
+			int size = min.getAsInt();
 			int i = 0;
 			while (i < size) {
 				StringBuilder sb = new StringBuilder();
