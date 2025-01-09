@@ -158,8 +158,6 @@ public class ORAM {
 				encryptedStash);
 
 		cleanPositionMaps(outstandingVersions);
-
-		logger.debug("{}\n", oramTreeManager);
 		return true;
 	}
 
