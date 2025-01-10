@@ -79,7 +79,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		int nServerWorkers = 3 * f + 1;
 		int nClientWorkers = workers.length - nServerWorkers;//-1 (for update client)
 		int maxClientsPerProcess = 3;
-		int nRequests = 10_000_000;
+		int nRequests = 2_000_000_000;
 		int sleepBetweenRounds = 30;
 		int[] clientsPerRound = new int[tokens.length];
 		for (int i = 0; i < tokens.length; i++) {
