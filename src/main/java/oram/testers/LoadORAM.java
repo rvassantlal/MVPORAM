@@ -105,6 +105,7 @@ public class LoadORAM {
 	private int addressToLoad;
 	private final int maxAddressToLoad;
 	private int addressCounter;
+	private final byte[] blockContent;
 
 	private LoadORAM(int clientId, int oramId, int treeHeight, int bucketSize, int blockSize,
 					 int initialPathId, int maxPathId,
@@ -124,6 +125,8 @@ public class LoadORAM {
 		this.rndGenerator = new SecureRandom();
 		this.addressToLoad = initialAddress;
 		this.maxAddressToLoad = maxAddress;
+		this.blockContent = new byte[blockSize];
+		Arrays.fill(blockContent, (byte) 'a');
 	}
 
 	public void load() {
@@ -356,8 +359,7 @@ public class LoadORAM {
 			//int index = emptySlot % oramContext.getBucketSize();
 			//Bucket bucket = pathToPopulate.get(bucketId);
 			int reverseSlot = maxBucket * oramContext.getBucketSize() + emptySlot;
-			Block newBlock = new Block(oramContext.getBlockSize(), addressToLoad, opSequence,
-					String.valueOf(addressToLoad).getBytes());
+			Block newBlock = new Block(oramContext.getBlockSize(), addressToLoad, opSequence, blockContent);
 			bucket.putBlock(emptySlot, newBlock);
 			pathMap.setLocation(addressToLoad, reverseSlot, opSequence, opSequence);
 			addressToLoad++;
