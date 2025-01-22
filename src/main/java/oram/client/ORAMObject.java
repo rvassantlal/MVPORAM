@@ -386,6 +386,31 @@ public class ORAMObject {
 
 		Stash newStash = populatePathAccessedBlockToStash(pathId, accessedAddress, stash, positionMap, path, pathMap);
 
+		// Reordering of blocks in slots
+		Stash workingSet = new Stash(oramContext.getBlockSize());
+		for (Bucket bucket : path.values()) {
+			Block[] blocks = bucket.getBlocks();
+			for (Block block : blocks) {
+				if (block != null) {
+					workingSet.putBlock(block);
+				}
+			}
+		}
+
+		Iterator<Block> orderedBlocks = workingSet.getBlocks().values().stream().sorted(Comparator.comparingInt(Block::getAccess)).iterator();
+		path.keySet().stream().sorted().forEach(bk -> {
+			Bucket bucket = path.get(bk);
+			Block[] blocks = bucket.getBlocks();
+			for (int i = 0; i < blocks.length; i++) {
+				if (blocks[i] != null) {
+					Block orderedBlock = orderedBlocks.next();
+					blocks[i] = orderedBlock;
+					int location = bk * oramContext.getBucketSize() + i;
+					pathMap.setLocation(orderedBlock.getAddress(), location, orderedBlock.getVersion(), orderedBlock.getAccess());
+				}
+			}
+		});
+
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(newStash);
 		EncryptedPathMap encryptedPositionMap = encryptionManager.encryptPathMap(pathMap);
 

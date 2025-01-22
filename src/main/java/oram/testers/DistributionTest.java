@@ -17,19 +17,16 @@ public class DistributionTest {
 		int bucketSize = 4;
 		int pathCapacity = bucketSize * (height + 1);
 		int k = bucketSize;
-
+		System.out.println("Path capacity: " + pathCapacity);
 
 		int treeSize = ORAMUtils.computeNumberOfNodes(height);
 		System.out.println("Tree size: " + treeSize);
-		System.out.println("Tree size / 2: " + treeSize / 2);
 		double[] zipfParameters = {
 				0.000001,
-				0.1,
-				0.5,
 				0.9,
 				1,
 				2,
-				4
+				1.5,
 		};
 
 		for (int i = 0; i < nClients; i++) {
@@ -45,5 +42,28 @@ public class DistributionTest {
 			}
 		}
 
+		System.out.println("Accumulative");
+		System.out.println("Tree size: " + treeSize);
+		double[] percentage = {
+				0.0001,
+				0.00015,
+				0.0002,
+				0.00027,
+				0.000276,
+				0.27,
+				0.46,
+				0.9,
+		};
+
+		for (double zipfParameter : zipfParameters) {
+			ZipfDistribution distribution = new ZipfDistribution(treeSize, zipfParameter);
+			System.out.println("Zipf: " + zipfParameter);
+			for (double p : percentage) {
+				int values = (int) (treeSize * p);
+				double v = distribution.cumulativeProbability(values);
+				System.out.println("\t" + (Math.round(p*100)) + "% -> " + values + " -> " + Math.round(v*100) + "%");
+			}
+		}
+		System.out.println(72.0/treeSize);
 	}
 }
