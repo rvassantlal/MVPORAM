@@ -97,7 +97,7 @@ public class ORAM {
 		return new EncryptedPathMaps(newVersionId, resultedPositionMap);
 	}
 
-	public EncryptedStashesAndPaths getStashesAndPaths(int pathId, int clientId) {
+	public EncryptedStashesAndPaths getPS(int pathId, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.get(clientId);
 		if (oramClientContext == null) {
 			return null;
@@ -108,7 +108,6 @@ public class ORAM {
 
 		OutstandingTree outstandingTree = oramClientContext.getOutstandingTree();
 		Map<Integer, EncryptedStash> outstandingStashes = new HashMap<>(outstandingTree.getStashes());
-		//EncryptedStash[] outstandingStashes = getOrderedStashesArray(outstandingTree.getStashes());
 
 		logger.debug("Client {} is reading path {} ({}) with {} outstanding stashes", clientId, pathId, pathLocations,
 				outstandingStashes.size());
@@ -130,8 +129,8 @@ public class ORAM {
 		return new EncryptedStashesAndPaths(outstandingStashes, encryptedBuckets);
 	}
 
-	public boolean performEviction(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
-								   Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
+	public boolean evict(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
+						 Map<Integer, EncryptedBucket> encryptedPath, int clientId) {
 		ORAMClientContext oramClientContext = oramClientContexts.remove(clientId);
 		if (oramClientContext == null) {
 			logger.debug("Client {} doesn't have any client context", clientId);

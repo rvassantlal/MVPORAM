@@ -85,9 +85,9 @@ public class ORAMObject {
 			return null;
 		}
 		int opSequence = pathMapsHistory.getOperationSequence();
+		logger.debug("Operation sequence: {}", opSequence);
 
-		ongoingAccessContext.setOperationSequence(opSequence);
-		ongoingAccessContext.setPathMapsHistory(pathMapsHistory);
+		//ongoingAccessContext.setPathMapsHistory(pathMapsHistory);
 
 		//Merging path maps to build tree map
 		consolidatePathMaps(pathMapsHistory);
@@ -102,11 +102,9 @@ public class ORAMObject {
 		//Translating address into bucket id
 		int slot = positionMap.getLocation(address);
 		int bucketId = (int) Math.floor((double) slot / oramContext.getBucketSize());
-		ongoingAccessContext.setAccessedAddressBucket(bucketId);
 
 		//Extending bucket id to a path that include that bucket
 		int pathId = getPathId(bucketId);
-		ongoingAccessContext.setAccessedPathId(pathId);
 
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getVersion(address), positionMap.getAccess(address));
@@ -171,7 +169,7 @@ public class ORAMObject {
 	private PathMaps getPathMaps() {
 		try {
 			ORAMMessage request = new GetPathMaps(oramId, latestAccess, missingTriples);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_PM, request);
 
 			long start, end, delay;
 			start = System.nanoTime();
@@ -262,7 +260,7 @@ public class ORAMObject {
 	private StashesAndPaths getStashesAndPaths(int pathId) {
 		try {
 			ORAMMessage request = new StashPathORAMMessage(oramId, pathId);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_STASH_AND_PATH, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_PS, request);
 
 			long start, end, delay;
 			start = System.nanoTime();
@@ -539,7 +537,7 @@ public class ORAMObject {
 										Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
 			EvictionORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPathMap, encryptedPath);
-			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
+			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICT, request);
 
 			long start, end, delay;
 			start = System.nanoTime();
@@ -552,7 +550,7 @@ public class ORAMObject {
 
 			int hash = serviceProxy.getProcessId() + ORAMUtils.computeHashCode(serializedDataRequest) * 32;
 			ORAMMessage dataHashRequest = new ORAMMessage(hash);//Sending request hash as oramId (not ideal implementation)
-			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, dataHashRequest);
+			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICT, dataHashRequest);
 
 			start = System.nanoTime();
 			Response response = serviceProxy.invokeOrdered(serializedEvictionRequest);
@@ -573,13 +571,8 @@ public class ORAMObject {
 
 	private String buildDebugInfo(int address, Stash mergedStash) {
 		StringBuilder errorMessageBuilder = new StringBuilder();
-		PathMaps pathMapsHistory = ongoingAccessContext.getPathMapsHistory();
-		errorMessageBuilder.append("Reading address ").append(address).append(" from bucket ")
-				.append(ongoingAccessContext.getAccessedAddressBucket())
-				.append(" (path ").append(ongoingAccessContext.getAccessedPathId()).append(")\n");
-		errorMessageBuilder.append("Operation sequence: ").append(ongoingAccessContext.getOperationSequence()).append("\n");
 		errorMessageBuilder.append("Path maps history:\n");
-		for (Map.Entry<Integer, PathMap> entry : pathMapsHistory.getPathMaps().entrySet()) {
+		/*for (Map.Entry<Integer, PathMap> entry : pathMapsHistory.getPathMaps().entrySet()) {
 			PathMap currentPM = entry.getValue();
 			Set<Integer> storedAddresses = currentPM.getStoredAddresses();
 			errorMessageBuilder.append("\t").append(entry.getKey()).append(":");
@@ -590,7 +583,7 @@ public class ORAMObject {
 					.append(", A: ").append(currentPM.getAccess(a))
 					.append(")"));
 			errorMessageBuilder.append("\n");
-		}
+		}*/
 
 		errorMessageBuilder.append("Position map:\n").append(positionMap.toStringNonNull()).append("\n");
 

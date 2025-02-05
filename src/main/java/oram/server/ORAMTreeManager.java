@@ -2,7 +2,6 @@ package oram.server;
 
 import oram.server.structure.*;
 import oram.utils.ORAMContext;
-import oram.utils.ORAMUtils;
 
 import java.util.*;
 

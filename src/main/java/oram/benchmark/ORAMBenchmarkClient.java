@@ -57,11 +57,9 @@ public class ORAMBenchmarkClient {
 		private final int nRequests;
 		private ORAMObject oram;
 		private final byte[] blockContent;
-		private int address;
 		private final boolean measurementLeader;
 		private final SecureRandom rndGenerator;
 		private final ZipfDistribution zipfDistribution;
-		private final int treeSize;
 
 		private Client(int oramId, int initialClientId, int clientId, int treeHeight, int bucketSize, int blockSize,
 					   CountDownLatch latch, int nRequests, boolean measurementLeader, double zipfParameter) throws SecretSharingException {
@@ -78,8 +76,7 @@ public class ORAMBenchmarkClient {
 
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
-			this.address = clientId % treeSize;
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 			this.rndGenerator = new SecureRandom();
 			this.zipfDistribution = new ZipfDistribution(treeSize, zipfParameter);
 		}
@@ -90,12 +87,13 @@ public class ORAMBenchmarkClient {
 				latch.countDown();
 
 				long t1, t2, delay;
+				int address;
 				byte[] oldContent;
 				boolean isWrite;
 				for (int i = 0; i < nRequests; i++) {
 					isWrite = rndGenerator.nextBoolean();
 					address = zipfDistribution.sample() - 1;
-					//address = rndGenerator.nextInt(treeSize);
+
 					t1 = System.nanoTime();
 
 					if (isWrite) {

@@ -96,7 +96,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					request = new ORAMMessage();
 					request.readExternal(plainData, 1);
 					return getORAM(request);
-				case GET_POSITION_MAP:
+				case GET_PM:
 					logger.debug("Received getPM request from {}", msgCtx.getSender());
 					request = new GetPathMaps();
 					request.readExternal(plainData, 1);
@@ -105,12 +105,12 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					clientsRequests.put(msgCtx.getSender(), request);
 					processQueuedGetPMRequests();
 					return null;
-				case GET_STASH_AND_PATH:
+				case GET_PS:
 					logger.debug("Received getPS request from {}", msgCtx.getSender());
 					request = new StashPathORAMMessage();
 					request.readExternal(plainData, 1);
-					return getStashesAndPaths((StashPathORAMMessage) request, msgCtx.getSender());
-				case EVICTION:
+					return getPS((StashPathORAMMessage) request, msgCtx.getSender());
+				case EVICT:
 					logger.debug("Received eviction request from {}", msgCtx.getSender());
 					evictionLock.lock();
 					request = new ORAMMessage();
@@ -131,7 +131,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 					} while (request == null);
 					evictionLock.unlock();
 					evictionBytesReceived += plainData.length;
-					ConfidentialMessage evictionResponse = performEviction((EvictionORAMMessage) request, msgCtx);
+					ConfidentialMessage evictionResponse = evict((EvictionORAMMessage) request, msgCtx);
 					activeClients--;
 					//process requests from the queue
 					processQueuedGetPMRequests();
@@ -154,7 +154,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			logger.debug("Processing getPM request from queue from {} | active clients: {}", nextClientMsgCtx.getSender(),
 					activeClients);
 			ORAMMessage nextRequest = clientsRequests.remove(nextClientMsgCtx.getSender());
-			ConfidentialMessage pmResponse = getPositionMap((GetPathMaps) nextRequest, nextClientMsgCtx);
+			ConfidentialMessage pmResponse = getPM((GetPathMaps) nextRequest, nextClientMsgCtx);
 			if (pmResponse == null) {
 				logger.error("Failed to process getPM request from {}", nextClientMsgCtx.getSender());
 				break;
@@ -172,7 +172,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 				request = new ORAMMessage();
 				request.readExternal(plainData, 1);
 				return getORAM(request);
-			case EVICTION:
+			case EVICT:
 				request = new EvictionORAMMessage();
 				request.readExternal(plainData, 1);
 				evictionLock.lock();
@@ -186,19 +186,18 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		throw new RuntimeException("Unknown operation type");
 	}
 
-	private ConfidentialMessage performEviction(EvictionORAMMessage request, MessageContext msgCtx) {
+	private ConfidentialMessage evict(EvictionORAMMessage request, MessageContext msgCtx) {
 		logger.debug("Processing eviction request from {}", msgCtx.getSender());
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
 		if (oram == null)
 			return null;
 		long start = System.nanoTime();
-		boolean isEvicted = oram.performEviction(request.getEncryptedStash(), request.getEncryptedPathMap(),
+		boolean isEvicted = oram.evict(request.getEncryptedStash(), request.getEncryptedPathMap(),
 				request.getEncryptedPath(), msgCtx.getSender());
 		long end = System.nanoTime();
 		long delay = end - start;
 		evictionLatencies.add(delay);
-		//measurementLogger.debug("eviction[ns]: {}", delay);
 		evictCounter++;
 
 		nOutstandingTreeObjects = oram.getNOutstandingTreeObjects();
@@ -208,7 +207,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return new ConfidentialMessage(new byte[]{(byte) Status.FAILED.ordinal()});
 	}
 
-	private ConfidentialMessage getStashesAndPaths(StashPathORAMMessage request, int clientId) {
+	private ConfidentialMessage getPS(StashPathORAMMessage request, int clientId) {
 		logger.debug("Processing getPS request from {}", clientId);
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
@@ -216,7 +215,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 			return null;
 		}
 		long start = System.nanoTime();
-		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(request.getPathId(), clientId);
+		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getPS(request.getPathId(), clientId);
 		byte[] serializedPathAndStash = null;
 		if (encryptedStashesAndPaths != null) {
 			int dataSize = encryptedStashesAndPaths.getSerializedSize();
@@ -230,7 +229,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		getPSLatencies.add(delay);
-		//measurementLogger.debug("getPathStash[ns]: {}", delay);
 		getPSCounter++;
 
 		if (serializedPathAndStash == null)
@@ -281,7 +279,7 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		}
 	}
 
-	private ConfidentialMessage getPositionMap(GetPathMaps request, MessageContext msgCtx) {
+	private ConfidentialMessage getPM(GetPathMaps request, MessageContext msgCtx) {
 		logger.debug("Processing getPM request from {}", msgCtx.getSender());
 		int oramId = request.getOramId();
 		ORAM oram = orams.get(oramId);
@@ -302,7 +300,6 @@ public class ORAMServer implements ConfidentialSingleExecutable {
 		long end = System.nanoTime();
 		long delay = end - start;
 		getPMLatencies.add(delay);
-		//measurementLogger.debug("getPositionMap[ns]: {}", delay);
 		getPMCounter++;
 		getPMBytesSent += serializedPositionMaps.length;
 		return new ConfidentialMessage(serializedPositionMaps);

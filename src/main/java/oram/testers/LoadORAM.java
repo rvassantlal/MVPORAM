@@ -2,7 +2,6 @@ package oram.testers;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.ORAMObject;
 import oram.client.structure.*;
 import oram.messages.*;
 import oram.security.EncryptionManager;
@@ -170,7 +169,7 @@ public class LoadORAM {
 	private PathMaps getPathMaps() {
 		try {
 			ORAMMessage request = new GetPathMaps(oramId, latestAccess, missingTriples);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_PM, request);
 
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
 			if (response == null || response.getPlainData() == null) {
@@ -223,7 +222,7 @@ public class LoadORAM {
 	private StashesAndPaths getStashesAndPaths(int pathId) {
 		try {
 			ORAMMessage request = new StashPathORAMMessage(oramId, pathId);
-			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_STASH_AND_PATH, request);
+			byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_PS, request);
 
 			Response response = serviceProxy.invokeOrderedHashed(serializedRequest);
 			if (response == null || response.getPlainData() == null) {
@@ -407,7 +406,7 @@ public class LoadORAM {
 										Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
 			EvictionORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPathMap, encryptedPath);
-			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
+			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICT, request);
 
 			boolean isSuccessful = sendRequestData(serializedDataRequest);
 			if (!isSuccessful) {
@@ -416,7 +415,7 @@ public class LoadORAM {
 
 			int hash = serviceProxy.getProcessId() + ORAMUtils.computeHashCode(serializedDataRequest) * 32;
 			ORAMMessage dataHashRequest = new ORAMMessage(hash);//Sending request hash as oramId (not ideal implementation)
-			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, dataHashRequest);
+			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICT, dataHashRequest);
 
 			Response response = serviceProxy.invokeOrdered(serializedEvictionRequest);
 
