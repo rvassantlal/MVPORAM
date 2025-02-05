@@ -81,7 +81,7 @@ public class ORAMObject {
 		start = System.nanoTime();
 		PathMaps pathMapsHistory = getPathMaps();
 		if (pathMapsHistory == null) {
-			logger.error("Position map of oram {} is null", oramId);
+			logger.error("Path maps of oram {} is null", oramId);
 			return null;
 		}
 		int opSequence = pathMapsHistory.getOperationSequence();
@@ -183,7 +183,7 @@ public class ORAMObject {
 			globalDelayRemoteInvocation += delay;
 			measurementLogger.info("M-getPM: {}", delay);
 
-			return encryptionManager.decryptPositionMaps(response.getPlainData());
+			return encryptionManager.decryptPathMaps(response.getPlainData());
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;

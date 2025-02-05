@@ -176,7 +176,7 @@ public class LoadORAM {
 				return null;
 			}
 
-			return encryptionManager.decryptPositionMaps(response.getPlainData());
+			return encryptionManager.decryptPathMaps(response.getPlainData());
 		} catch (SecretSharingException e) {
 			logger.error("Error while decrypting position maps", e);
 			return null;
