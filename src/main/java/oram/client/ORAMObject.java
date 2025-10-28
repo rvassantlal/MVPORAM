@@ -448,7 +448,7 @@ public class ORAMObject {
 
 		//Sample K random slots from path to substitute
 		int accessedBlockLocation = positionMap.getLocation(accessedAddress);
-		Set<Integer> slots = new HashSet<>(oramContext.getBucketSize());
+		Set<Integer> slots = new HashSet<>(oramContext.getBucketSize());//TODO use oramContext.getK()
 		if (accessedBlockLocation >= 0) {
 			int bucketId = (int)Math.floor((double) accessedBlockLocation / oramContext.getBucketSize());
 			int level = (int) FastMath.log(2, bucketId + 1);
@@ -481,7 +481,7 @@ public class ORAMObject {
 			int reverseSlot = bucketId * oramContext.getBucketSize() + index;
 
 			Bucket bucket = pathToPopulate.get(bucketId);
-			Block block = bucket.getBlock(index);
+			Block block = bucket.getBlock(index);//TODO have to remove!
 			if (block != null) {
 				newStash.putBlock(block);
 				pathMap.setLocation(block.getAddress(), ORAMUtils.BLOCK_IN_STASH, block.getVersion(), block.getAccess());

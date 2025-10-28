@@ -13,7 +13,7 @@ public class DistributionTest {
 		System.out.println(duration);
 		long nTests = 10000;
 		System.out.println(nTests);
-		int height = 17;
+		int height = 4;
 		int bucketSize = 4;
 		int pathCapacity = bucketSize * (height + 1);
 		int k = bucketSize;
@@ -53,6 +53,7 @@ public class DistributionTest {
 				0.27,
 				0.46,
 				0.9,
+				1
 		};
 
 		for (double zipfParameter : zipfParameters) {
@@ -65,5 +66,10 @@ public class DistributionTest {
 			}
 		}
 		System.out.println(72.0/treeSize);
+		ZipfDistribution distribution = new ZipfDistribution(treeSize, 0.9);
+		for (int i = 1; i <= treeSize; i++) {
+			System.out.println("P(" + i + ") = " + distribution.probability(i) + " | " + distribution.cumulativeProbability(i));
+		}
+
 	}
 }
