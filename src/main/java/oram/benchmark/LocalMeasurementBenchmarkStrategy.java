@@ -98,7 +98,7 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 			clientCommand = initialCommand + "oram.benchmark.MultiServerBenchmarkClient ";
 		}
 
-		File resultsDir = new File(resultsPath);
+		File resultsDir = new File(resultsPath, "data");
 		if (!resultsDir.exists()) {
 			boolean isCreated = resultsDir.mkdirs();
 			if (!isCreated) {
