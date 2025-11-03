@@ -313,7 +313,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		for (int i = 0; i < serverWorkers.length; i++) {
 			WorkerHandler serverWorker = serverWorkers[i];
 			logger.debug("Using server worker {}", serverWorker.getWorkerId());
-			String command = serverCommand + nConcurrentClients + " " + i;
+			String command;
+			if (faultThreshold == 0) {
+				command = serverCommand + nConcurrentClients + " " + singleServerIp + " " + singleServerPort + " " + i;
+			} else {
+				command = serverCommand + nConcurrentClients + " " + i;
+			}
 			ProcessInformation[] commandInfo = {
 					new ProcessInformation(command, ".")
 			};
@@ -342,9 +347,16 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
-				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + treeHeight + " "
-						+ bucketSize + " " + blockSize + " " + zipfParameter + " " + isMeasurementWorker;
+				String command;
+				if (faultThreshold == 0) {
+					command = clientCommand + clientInitialId + " " + clientsPerProcess
+							+ " " + nRequests + " " + treeHeight + " " + bucketSize + " " + blockSize + " "
+							+ zipfParameter + " " + singleServerIp + " " + singleServerPort + " " + isMeasurementWorker;
+				} else {
+					command = clientCommand + clientInitialId + " " + clientsPerProcess
+							+ " " + nRequests + " " + treeHeight + " " + bucketSize + " " + blockSize + " "
+							+ zipfParameter + " " + isMeasurementWorker;
+				}
 				commandInfo[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
