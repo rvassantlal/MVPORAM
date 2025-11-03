@@ -1,43 +1,43 @@
-package oram.client;
+package oram.benchmark.direct;
 
+import oram.benchmark.OngoingDirectAccessContext;
 import oram.client.structure.*;
-import oram.messages.*;
+import oram.messages.GetPathMaps;
 import oram.security.EncryptionManager;
-import oram.server.structure.EncryptedBucket;
-import oram.server.structure.EncryptedPathMap;
-import oram.server.structure.EncryptedStash;
-import oram.utils.*;
+import oram.server.ORAM;
+import oram.server.structure.*;
+import oram.utils.ORAMContext;
+import oram.utils.ORAMUtils;
+import oram.utils.Operation;
 import org.apache.commons.math3.distribution.UniformIntegerDistribution;
 import org.apache.commons.math3.util.FastMath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
 import java.util.*;
 
-public class ORAMObject {
+public class DirectORAMObject {
 	protected final Logger logger = LoggerFactory.getLogger("oram");
 	protected final Logger measurementLogger = LoggerFactory.getLogger("measurement");
-	protected final ORAMServiceProxy serviceProxy;
 	protected final int oramId;
 	protected final ORAMContext oramContext;
 	protected final EncryptionManager encryptionManager;
 	private final SecureRandom rndGenerator;
 	private final UniformIntegerDistribution uniformDistribution;
+	private final ORAM oram;
 	private int latestAccess;
 	private final Set<Integer> missingTriples;
 	private final PositionMap positionMap;
-	private OngoingAccessContext ongoingAccessContext;
+	private OngoingDirectAccessContext ongoingAccessContext;
 	protected long globalDelayRemoteInvocation;
 	private final int clientId;
 
-	public ORAMObject(ORAMServiceProxy serviceProxy, int oramId, ORAMContext oramContext,
-					  EncryptionManager encryptionManager) {
-		this.clientId = serviceProxy.getProcessId();
-		this.serviceProxy = serviceProxy;
+	public DirectORAMObject(ORAM oram, int oramId, int clientId, EncryptionManager encryptionManager) {
+		this.oram = oram;
 		this.oramId = oramId;
-		this.oramContext = oramContext;
+		this.clientId = clientId;
+		this.oramContext = oram.getOramContext();
 		this.encryptionManager = encryptionManager;
 		this.rndGenerator = new SecureRandom();
 		this.positionMap = new PositionMap(oramContext.getTreeSize());
@@ -56,7 +56,9 @@ public class ORAMObject {
 	public byte[] readMemory(int address) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		return access(Operation.READ, address, null);
+		accessStepOne(Operation.READ, address, null);
+		accessStepTwo();
+		return accessStepThree();
 	}
 
 	/**
@@ -69,20 +71,19 @@ public class ORAMObject {
 	public byte[] writeMemory(int address, byte[] content) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		return access(Operation.WRITE, address, content);
+		accessStepOne(Operation.WRITE, address, content);
+		accessStepTwo();
+		return accessStepThree();
 	}
 
-	private byte[] access(Operation op, int address, byte[] newContent) {
+	public void accessStepOne(Operation op, int address, byte[] newContent) {
 		reset();
-		ongoingAccessContext = new OngoingAccessContext();
+		ongoingAccessContext = new OngoingDirectAccessContext(op, address, newContent);
 
 		//Reading path maps and obtaining a sequence/version number
-		long start, end, delay;
-		start = System.nanoTime();
 		PathMaps pathMapsHistory = getPathMaps();
 		if (pathMapsHistory == null) {
-			logger.error("Position map of oram {} is null", oramId);
-			return null;
+			throw new IllegalStateException("Position map is null");
 		}
 		int opSequence = pathMapsHistory.getOperationSequence();
 
@@ -92,11 +93,7 @@ public class ORAMObject {
 		//Merging path maps to build tree map
 		consolidatePathMaps(pathMapsHistory);
 
-		end = System.nanoTime();
-		delay = end - start;
-
 		measurementLogger.info("M-receivedPM: {}", pathMapsHistory.getPathMaps().size());
-		measurementLogger.info("M-map: {}", delay);
 
 		//Translating address into bucket id
 		int slot = positionMap.getLocation(address);
@@ -117,77 +114,44 @@ public class ORAMObject {
 
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getVersion(address), positionMap.getAccess(address));
+	}
 
-		start = System.nanoTime();
+	public void accessStepTwo() {
+		int pathId = ongoingAccessContext.getAccessedPathId();
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
-			logger.error("States and paths of oram {} are null", oramId);
-			return null;
+			throw new IllegalStateException("States and paths are null");
 		}
 
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths());
-		end = System.nanoTime();
-		delay = end - start;
+		ongoingAccessContext.setMergedStash(mergedStash);
 
-		measurementLogger.info("M-ps: {}", delay);
+		int address = ongoingAccessContext.getAddress();
+		Operation op = ongoingAccessContext.getOperation();
+		int opSequence = ongoingAccessContext.getOperationSequence();
+		byte[] newContent = ongoingAccessContext.getNewContent();
 
 		byte[] oldData = accessBlockAndPerformOperation(address, op, opSequence, newContent, mergedStash);
+		ongoingAccessContext.setOldData(oldData);
+	}
 
-		start = System.nanoTime();
+	public byte[] accessStepThree() {
+		int pathId = ongoingAccessContext.getAccessedPathId();
+		int address = ongoingAccessContext.getAddress();
+		Stash mergedStash = ongoingAccessContext.getMergedStash();
 		boolean isEvicted = evict(pathId, address, mergedStash, positionMap);
-		end = System.nanoTime();
-		delay = end - start;
 
-		//logger.info("[Client {}] {}", serviceProxy.getProcessId(), debugTracer);
-		measurementLogger.info("M-eviction: {}", delay);
-		measurementLogger.info("M-serviceCall: {}", globalDelayRemoteInvocation);
 		if (!isEvicted) {
-			logger.error("Failed to do eviction on oram {}", oramId);
+			throw new IllegalStateException("Failed to do eviction");
 		}
 
-		return oldData;
+		return ongoingAccessContext.getOldData();
 	}
-
-	public void getORAMSnapshot() {
-		ORAMMessage request = new GetDebugMessage(oramId, clientId);
-		byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.DEBUG, request);
-
-		byte[] response = serviceProxy.getDebugSnapshot(serializedRequest);
-		if (response == null) {
-			return;
-		}
-		DebugSnapshot snapshot = encryptionManager.decryptDebugSnapshot(oramContext, response);
-		analiseSnapshot(snapshot);
-	}
-
-	private void analiseSnapshot(DebugSnapshot snapshot) {
-		StringBuilder debugTracer = new StringBuilder();
-		for (ArrayList<Bucket> buckets : snapshot.getTree()) {
-			for (Bucket bucket : buckets) {
-				debugTracer.append("Bucket ").append(bucket.getLocation()).append(": ").append(bucket).append("\n");
-			}
-		}
-		logger.info("{}", debugTracer);
-	}
-
 
 	private PathMaps getPathMaps() {
-		ORAMMessage request = new GetPathMaps(oramId, latestAccess, missingTriples);
-		byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_POSITION_MAP, request);
-
-		long start, end, delay;
-		start = System.nanoTime();
-		byte[] response = serviceProxy.getPathMaps(serializedRequest);
-		end = System.nanoTime();
-		if (response == null) {
-			return null;
-		}
-
-		delay = end - start;
-		globalDelayRemoteInvocation += delay;
-		measurementLogger.info("M-getPM: {}", delay);
-
-		return encryptionManager.decryptPositionMaps(response);
+		GetPathMaps request = new GetPathMaps(oramId, latestAccess, missingTriples);
+		EncryptedPathMaps encryptedPathMaps = oram.getPositionMaps(clientId, request);
+		return encryptionManager.decryptPositionMaps(encryptedPathMaps);
 	}
 
 	private void consolidatePathMaps(PathMaps recentPathMaps) {
@@ -261,21 +225,8 @@ public class ORAMObject {
 	}
 
 	private StashesAndPaths getStashesAndPaths(int pathId) {
-		ORAMMessage request = new StashPathORAMMessage(oramId, pathId);
-		byte[] serializedRequest = ORAMUtils.serializeRequest(ServerOperationType.GET_STASH_AND_PATH, request);
-
-		long start, end, delay;
-		start = System.nanoTime();
-		byte[] response = serviceProxy.getStashesAndPaths(serializedRequest);
-		end = System.nanoTime();
-		if (response == null) {
-			return null;
-		}
-		delay = end - start;
-		globalDelayRemoteInvocation += delay;
-		measurementLogger.info("M-getPS: {}", delay);
-
-		return encryptionManager.decryptStashesAndPaths(oramContext, response);
+		EncryptedStashesAndPaths encryptedStashesAndPaths = oram.getStashesAndPaths(pathId, clientId);
+		return encryptionManager.decryptStashesAndPaths(oramContext, encryptedStashesAndPaths);
 	}
 
 	private Stash mergeStashesAndPaths(Map<Integer, Stash> stashes, Bucket[] paths) {
@@ -536,38 +487,7 @@ public class ORAMObject {
 
 	private boolean sendEvictionRequest(EncryptedStash encryptedStash, EncryptedPathMap encryptedPathMap,
 										Map<Integer, EncryptedBucket> encryptedPath) {
-		try {
-			EvictionORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPathMap, encryptedPath);
-			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION_PAYLOAD, request);
-
-			long start, end, delay;
-			start = System.nanoTime();
-			boolean isSuccessful = sendRequestData(serializedDataRequest);
-			end = System.nanoTime();
-			delay = end - start;
-			if (!isSuccessful) {
-				return false;
-			}
-
-			int hash = clientId + ORAMUtils.computeHashCode(serializedDataRequest) * 32;
-			ORAMMessage dataHashRequest = new ORAMMessage(hash);//Sending request hash as oramId (not ideal implementation)
-			byte[] serializedEvictionRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, dataHashRequest);
-
-			start = System.nanoTime();
-			byte[] response = serviceProxy.evict(serializedEvictionRequest);
-			end = System.nanoTime();
-			delay += end - start;
-
-			if (response == null) {
-				return false;
-			}
-			globalDelayRemoteInvocation += delay;
-			measurementLogger.info("M-evict: {}", delay);
-			Status status = Status.getStatus(response[0]);
-			return status != Status.FAILED;
-		} catch (SecretSharingException e) {
-			return false;
-		}
+		return oram.performEviction(encryptedStash, encryptedPathMap, encryptedPath, clientId);
 	}
 
 	private String buildDebugInfo(int address, Stash mergedStash) {
@@ -595,18 +515,6 @@ public class ORAMObject {
 
 		errorMessageBuilder.append("Merged stash:\n").append(mergedStash).append("\n");
 		return errorMessageBuilder.toString();
-	}
-
-	private boolean sendRequestData(byte[] serializedDataRequest) throws SecretSharingException {
-		if (serializedDataRequest == null) {
-			return false;
-		}
-		byte[] response = serviceProxy.sendEvictionPayload(serializedDataRequest);
-		if (response == null) {
-			return false;
-		}
-		Status status = Status.getStatus(response[0]);
-		return status != Status.FAILED;
 	}
 
 	protected void reset() {

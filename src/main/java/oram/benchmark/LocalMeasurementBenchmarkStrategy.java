@@ -12,7 +12,10 @@ import util.Storage;
 import worker.IProcessingResult;
 import worker.ProcessInformation;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -21,7 +24,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatusListener {
+public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatusListener {
 	private final Logger logger = LoggerFactory.getLogger("benchmarking");
 	private final Lock lock;
 	private final Condition sleepCondition;
@@ -31,10 +34,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private String serverCommand;
 	private String clientCommand;
 	private final String loadClientCommand;
-	private final String updateClientCommand;
 	private final String sarCommand;
 	private int treeHeight;
 	private int bucketSize;
+	private final int dataBinSize;
 	private int blockSize;
 	private double zipfParameter;
 	private WorkerHandler[] clientWorkers;
@@ -43,40 +46,47 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private CountDownLatch workersReadyCounter;
 	private CountDownLatch measurementDeliveredCounter;
 	private String storageFileNamePrefix;
+	private String stashFileNamePrefix;
 	private final Semaphore loadORAMSemaphore;
+	private int round;
+	private String resultsPath;
+	private int measurementDuration;
 	private int faultThreshold;
 	private String singleServerIp;
 	private int singleServerPort;
 
-	public MeasurementBenchmarkStrategy() {
+	//Storing data for plotting
+	private double[] latencyValues;
+	private double[] latencyStdValues;
+	private double[] throughputValues;
+	private double[] throughputStdValues;
+
+	public LocalMeasurementBenchmarkStrategy() {
 		this.lock = new ReentrantLock(true);
 		this.loadORAMSemaphore = new Semaphore(0);
 		this.sleepCondition = lock.newCondition();
 		this.serverWorkersIds = new HashSet<>();
 		this.clientWorkersIds = new HashSet<>();
 		this.measurementWorkers = new HashMap<>();
-		this.initialCommand = "java -Xmx60g -Djava.security.properties=./config/java" +
+		initialCommand = "java -Xmx60g -Djava.security.properties=./config/java" +
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 
 		this.loadClientCommand = initialCommand + "oram.testers.LoadORAM ";
-		this.updateClientCommand = initialCommand + "oram.client.ManagerClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";
+		this.dataBinSize = 5;
 	}
 
 	@Override
 	public void executeBenchmark(WorkerHandler[] workers, Properties benchmarkParameters) {
 		faultThreshold = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
-		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
 		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
-		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
+		measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
 		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.load_oram"));
-		//boolean isUpdateConcurrentClients = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.update_concurrent_clients"));
-		//int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
-		//int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
-		//int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
-		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
+		String zipfParameterStr = benchmarkParameters.getProperty("experiment.zipf_parameter");
+		zipfParameter = Double.parseDouble(zipfParameterStr);
 		int nLoadClients = Integer.parseInt(benchmarkParameters.getProperty("experiment.load_clients"));
+		resultsPath = benchmarkParameters.getProperty("experiment.results.path");
 
 		if (faultThreshold == 0) {
 			serverCommand = initialCommand + "oram.single.server.ORAMSingleServer ";
@@ -86,6 +96,15 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		} else {
 			serverCommand = initialCommand + "oram.server.ORAMServer ";
 			clientCommand = initialCommand + "oram.benchmark.MultiServerBenchmarkClient ";
+		}
+
+		File resultsDir = new File(resultsPath);
+		if (!resultsDir.exists()) {
+			boolean isCreated = resultsDir.mkdirs();
+			if (!isCreated) {
+				logger.error("Could not create results directory: {}", resultsDir);
+				return;
+			}
 		}
 
 		int nServerWorkers = 3 * faultThreshold + 1;
@@ -98,22 +117,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			clientsPerRound[i] = Integer.parseInt(tokens[i]);
 		}
 
-		String[] treeHeightTokens = benchmarkParameters.getProperty("experiment.tree_heights").split(" ");
-		String[] bucketSizeTokens = benchmarkParameters.getProperty("experiment.bucket_sizes").split(" ");
-		String[] blockSizeTokens = benchmarkParameters.getProperty("experiment.block_sizes").split(" ");
-		String[] nConcurrentClientsTokens = benchmarkParameters.getProperty("experiment.concurrent_clients").split(" ");
-
-		//Parse parameters
-		int[] treeHeights = new int[treeHeightTokens.length];
-		int[] bucketSizes = new int[bucketSizeTokens.length];
-		int[] blockSizes = new int[blockSizeTokens.length];
-		int[] nAllConcurrentClients = new int[nConcurrentClientsTokens.length];
-		for (int i = 0; i < treeHeightTokens.length; i++) {
-			treeHeights[i] = Integer.parseInt(treeHeightTokens[i]);
-			bucketSizes[i] = Integer.parseInt(bucketSizeTokens[i]);
-			blockSizes[i] = Integer.parseInt(blockSizeTokens[i]);
-			nAllConcurrentClients[i] = Integer.parseInt(nConcurrentClientsTokens[i]);
-		}
+		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
+		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
+		blockSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.block_size"));
+		int nConcurrentClients = Integer.parseInt(benchmarkParameters.getProperty("experiment.concurrent_clients"));
 
 		//Separate workers
 		serverWorkers = new WorkerHandler[nServerWorkers];
@@ -130,129 +137,116 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		printWorkersInfo();
 
 		//Setup workers
-		if (hostFile != null) {
-			logger.info("Setting up workers...");
-			String hosts = loadHosts(hostFile);
-			if (hosts == null)
-				return;
-			String setupInformation = String.format("%b\t%d\t%s", true, faultThreshold, hosts);
-			Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
-		}
+		String hosts = generateLocalHosts(nServerWorkers);
+		logger.info("Setting up workers...");
+		String setupInformation = String.format("%b\t%d\t%s", true, faultThreshold, hosts);
+		Arrays.stream(workers).forEach(w -> w.setupWorker(setupInformation));
 
 		long startTime = System.currentTimeMillis();
-		for (int i = 0; i < treeHeights.length; i++) {
-			logger.info("============ Strategy Parameters ============");
-			treeHeight = treeHeights[i];
-			bucketSize = bucketSizes[i];
-			blockSize = blockSizes[i];
-			int nConcurrentClients = nAllConcurrentClients[i];
+		logger.info("============ Strategy Parameters ============");
+		logger.info("Tree height: {}", treeHeight);
+		logger.info("Bucket size: {}", bucketSize);
+		logger.info("Block size: {}", blockSize);
+		logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
+		logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
+		logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
+		logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
+		logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
+		logger.info("Concurrent clients: {} clients", nConcurrentClients);
+		logger.info("Zipf parameter: {}", zipfParameter);
 
-			logger.info("Tree height: {}", treeHeight);
-			logger.info("Bucket size: {}", bucketSize);
-			logger.info("Block size: {}", blockSize);
-			logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
-			logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
-			logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
-			logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
-			logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
-			logger.info("Concurrent clients: {} clients", nConcurrentClients);
-			logger.info("Zipf parameter: {}", zipfParameter);
+		int nRounds = clientsPerRound.length;
+		latencyValues = new double[nRounds];
+		latencyStdValues = new double[nRounds];
+		throughputValues = new double[nRounds];
+		throughputStdValues = new double[nRounds];
 
-			int nRounds = clientsPerRound.length;
+		round = 1;
+		while (true) {
+			try {
+				lock.lock();
+				logger.info("============ Round: {} ============", round);
+				int nClients = clientsPerRound[round - 1];
+				measurementWorkers.clear();
+				storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_zipf_%s_clients_%d_", faultThreshold,
+						treeHeight, bucketSize, blockSize, zipfParameterStr, nClients);
+				stashFileNamePrefix = String.format("height_%d_bucket_%d_zipf_%s_clients_%d_", treeHeight, bucketSize,
+						zipfParameterStr, nClients);
+				//Distribute clients per workers
+				int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
+				String vector = Arrays.toString(clientsPerWorker);
+				int total = Arrays.stream(clientsPerWorker).sum();
+				logger.info("Clients per worker: {} -> Total: {}", vector, total);
 
-			int round = 1;
-			while (true) {
-				try {
-					lock.lock();
-					logger.info("============ Round: {} ============", round);
-					int nClients = clientsPerRound[round - 1];
-					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_round_%d_", faultThreshold,
-							treeHeight, bucketSize, blockSize, nClients);
-					//Distribute clients per workers
-					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
-					String vector = Arrays.toString(clientsPerWorker);
-					int total = Arrays.stream(clientsPerWorker).sum();
-					logger.info("Clients per worker: {} -> Total: {}", vector, total);
+				//Start servers
+				startServers(serverWorkers, nConcurrentClients);
 
-					//Start servers
-					startServers(serverWorkers, nConcurrentClients);
+				//Load oram
+				if (isLoadORAM) {
+					long s = System.currentTimeMillis();
+					loadORAM(nLoadClients, clientWorkers[0]);
+					long e = System.currentTimeMillis();
+					logger.info("Load duration: {}s", (e - s) / 1000);
+					logger.info("Waiting 5s...");
+					sleepSeconds(5);
+				}
 
-					//Load oram
-					if (isLoadORAM) {
-						long s = System.currentTimeMillis();
-						loadORAM(nLoadClients, clientWorkers[0]);
-						long e = System.currentTimeMillis();
-						logger.info("Load duration: {}s", (e - s) / 1000);
-						logger.info("Waiting 5s...");
-						sleepSeconds(5);
-					}
+				//Start Clients
+				startClients(maxClientsPerProcess, nRequests, clientWorkers, clientsPerWorker);
 
-					//Start update client to update maximum number of concurrent clients
-					/*if (isUpdateConcurrentClients) {
-						startUpdateClients(updateInitialDelay, updatePeriod, numberOfUpdates, updateClientWorker);
-					}*/
+				//Start resource measurement
+				if (measureResources) {
+					int nServerResourceMeasurementWorkers = serverWorkers.length > 1 ? 2 : 1;
+					int nClientResourceMeasurementWorkers = clientWorkers.length > 1 ? 2 : 1;
+					nClientResourceMeasurementWorkers = Math.min(nClientResourceMeasurementWorkers,
+							clientsPerWorker.length); // this is to account for 1 client
+					startResourceMeasurements(nServerResourceMeasurementWorkers, nClientResourceMeasurementWorkers);
+				}
 
-					//Start Clients
-					startClients(maxClientsPerProcess, nRequests, clientWorkers, clientsPerWorker);
+				//Wait for system to stabilize
+				logger.info("Waiting 15s...");
+				sleepSeconds(15);
 
-					//Start resource measurement
-					if (measureResources) {
-						int nServerResourceMeasurementWorkers = serverWorkers.length > 1 ? 2 : 1;
-						int nClientResourceMeasurementWorkers = clientWorkers.length > 1 ? 2 : 1;
-						nClientResourceMeasurementWorkers = Math.min(nClientResourceMeasurementWorkers,
-								clientsPerWorker.length); // this is to account for 1 client
-						startResourceMeasurements(nServerResourceMeasurementWorkers, nClientResourceMeasurementWorkers);
-					}
+				//Get measurements
+				getMeasurements(measureResources, measurementDuration);
 
-					//Wait for system to stabilize
-					logger.info("Waiting 15s...");
-					sleepSeconds(15);
+				//Stop processes
+				Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
 
-					//Get measurements
-					getMeasurements(measureResources, measurementDuration);
-
-					//Stop processes
-					Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
-
-					if (round == nRounds) {
-						break;
-					}
-
-					//Wait between round
-					logger.info("Waiting {}s before new round", sleepBetweenRounds);
-					sleepSeconds(sleepBetweenRounds);
-					round++;
-				} catch (InterruptedException e) {
+				if (round == nRounds) {
 					break;
-				} finally {
-					lock.unlock();
 				}
-			}
 
-			if (i < treeHeights.length - 1) {
-				logger.info("Waiting {}s before new setting", sleepBetweenRounds);
-				try {
-					sleepSeconds(sleepBetweenRounds);
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
+				//Wait between round
+				logger.info("Waiting {}s before new round", sleepBetweenRounds);
+				sleepSeconds(sleepBetweenRounds);
+				round++;
+			} catch (InterruptedException e) {
+				break;
+			} finally {
+				lock.unlock();
 			}
 		}
 		long endTime = System.currentTimeMillis();
+
+		storeProcessedResults(clientsPerRound, faultThreshold);
+
 		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 	}
 
-	private void startUpdateClients(int updateInitialDelay, int updatePeriod, int numberOfUpdates, WorkerHandler worker) {
-		logger.info("Starting client to update concurrent clients...");
-		String command = updateClientCommand + updateInitialDelay + " " + updatePeriod + " " + numberOfUpdates;
-		ProcessInformation[] commandInfo = {
-				new ProcessInformation(
-						command,
-						"."
-				)
-		};
-		worker.startWorker(1, commandInfo, this);
+	private void storeProcessedResults(int[] clientsPerRound, int f) {
+		String fileName = "f_" + f + "_throughput_latency_results.dat";
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
+				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
+			resultFile.write("#clients throughput[ops/s] throughput_dev[ops/s] latency[ms] latency_dev[ms]\n");
+			for (int i = 0; i < clientsPerRound.length; i++) {
+				resultFile.write(String.format("%d %.3f %.3f %.3f %.3f\n", clientsPerRound[i],
+						throughputValues[i], throughputStdValues[i],
+						latencyValues[i], latencyStdValues[i]));
+			}
+		} catch (IOException e) {
+			logger.error("Error while storing processed results", e);
+		}
 	}
 
 	private void loadORAM(int nLoadClients, WorkerHandler worker) throws InterruptedException {
@@ -313,7 +307,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		for (int i = 0; i < serverWorkers.length; i++) {
 			WorkerHandler serverWorker = serverWorkers[i];
 			logger.debug("Using server worker {}", serverWorker.getWorkerId());
-			String command = serverCommand + nConcurrentClients + " " + i;
+			String command;
+			if (faultThreshold == 0) {
+				command = serverCommand + nConcurrentClients + " " + singleServerIp + " " + singleServerPort + " " + i;
+			} else {
+				command = serverCommand + nConcurrentClients + " " + i;
+			}
 			ProcessInformation[] commandInfo = {
 					new ProcessInformation(command, ".")
 			};
@@ -342,9 +341,16 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 			for (int j = 0; j < nProcesses; j++) {
 				int clientsPerProcess = Math.min(totalClientsPerWorker, maxClientsPerProcess);
-				String command = clientCommand + clientInitialId + " " + clientsPerProcess
-						+ " " + nRequests + " " + treeHeight + " "
-						+ bucketSize + " " + blockSize + " " + zipfParameter + " " + isMeasurementWorker;
+				String command;
+				if (faultThreshold == 0) {
+					command = clientCommand + clientInitialId + " " + clientsPerProcess
+							+ " " + nRequests + " " + treeHeight + " " + bucketSize + " " + blockSize + " "
+							+ zipfParameter + " " + singleServerIp + " " + singleServerPort + " " + isMeasurementWorker;
+				} else {
+					command = clientCommand + clientInitialId + " " + clientsPerProcess
+							+ " " + nRequests + " " + treeHeight + " "
+							+ bucketSize + " " + blockSize + " " + zipfParameter + " " + isMeasurementWorker;
+				}
 				commandInfo[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;
 				clientInitialId += clientsPerProcess;
@@ -439,9 +445,13 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	@Override
 	public void onError(int workerId, String errorMessage) {
 		if (serverWorkersIds.contains(workerId)) {
-			logger.error("Error in server worker {}: {}", workerId, errorMessage);
+			if (!errorMessage.contains("Impossible to connect to client")) {
+				logger.error("Error in server worker {}: {}", workerId, errorMessage);
+			}
 		} else if (clientWorkersIds.contains(workerId)) {
-			logger.error("Error in client worker {}: {}", workerId, errorMessage);
+			if (!errorMessage.contains("Replica disconnected. Connection reset by peer.")) {
+				logger.error("Error in client worker {}: {}", workerId, errorMessage);
+			}
 		} else {
 			logger.error("Error in unused worker {}: {}", workerId, errorMessage);
 		}
@@ -511,7 +521,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	private void saveResourcesMeasurements(String fileName, long[]... data) {
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
-				Files.newOutputStream(Paths.get(fileName))))) {
+				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
 			OptionalInt min = Arrays.stream(data).mapToInt(v -> v.length).min();
 			if (!min.isPresent() || min.getAsInt() == 0) {
 				throw new IllegalStateException("Resources measurements are empty");
@@ -553,6 +563,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		long[] sentStashBlocks = clientMeasurements.getMeasurements("sentStashBlocks");
 		long[] sentPathSize = clientMeasurements.getMeasurements("sentPathSize");
 
+		binAndStore(sentStashBlocks, measurementDuration);
+
 		Storage st = new Storage(globalLatencies);
 		Storage getPMLatenciesStorage = new Storage(pmLatencies);
 		Storage getPSLatenciesStorage = new Storage(psLatencies);
@@ -566,6 +578,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage sentStashBlocksStorage = new Storage(sentStashBlocks);
 		Storage sentPathSizeStorage = new Storage(sentPathSize);
 
+		latencyValues[round - 1] = st.getAverage(true) / 1_000_000.0;
+		latencyStdValues[round - 1] = st.getDP(true) / 1_000_000.0;
+
 		String sb = String.format("Client-side measurements [%d samples]:\n", globalLatencies.length) +
 				String.format("\tAccess latency[ms]: avg:%.3f dev:%.3f max: %d\n",
 						st.getAverage(true) / 1_000_000.0, st.getDP(true) / 1_000_000.0,
@@ -577,29 +592,29 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				String.format("\tEviction latency[ms]: avg:%.3f\n",
 						evictionLatenciesStorage.getAverage(true) / 1_000_000.0) +
 				String.format("\tReceived PMs: avg:%.3f std:%.3f max:%d\n",
-						receivedPMStorage.getAverage(false), receivedPMStorage.getDP(false),
-						receivedPMStorage.getMax(false)) +
+						receivedPMStorage.getAverage(true), receivedPMStorage.getDP(true),
+						receivedPMStorage.getMax(true)) +
 				String.format("\tReceived PM locations: avg:%.3f std:%.3f max:%d\n",
-						receivedPMLocationsStorage.getAverage(false), receivedPMLocationsStorage.getDP(false),
-						receivedPMLocationsStorage.getMax(false)) +
+						receivedPMLocationsStorage.getAverage(true), receivedPMLocationsStorage.getDP(true),
+						receivedPMLocationsStorage.getMax(true)) +
 				String.format("\tReceived stashes: avg:%.3f std:%.3f max:%d\n",
-						receivedStashesStorage.getAverage(false), receivedStashesStorage.getDP(false),
-						receivedStashesStorage.getMax(false)) +
+						receivedStashesStorage.getAverage(true), receivedStashesStorage.getDP(true),
+						receivedStashesStorage.getMax(true)) +
 				String.format("\tReceived stash blocks: avg:%.3f std:%.3f max:%d\n",
-						receivedStashBlocksStorage.getAverage(false), receivedStashBlocksStorage.getDP(false),
-						receivedStashBlocksStorage.getMax(false)) +
+						receivedStashBlocksStorage.getAverage(true), receivedStashBlocksStorage.getDP(true),
+						receivedStashBlocksStorage.getMax(true)) +
 				String.format("\tReceived path size: avg:%.3f std:%.3f max:%d\n",
-						receivedPathSizeStorage.getAverage(false), receivedPathSizeStorage.getDP(false),
-						receivedPathSizeStorage.getMax(false)) +
+						receivedPathSizeStorage.getAverage(true), receivedPathSizeStorage.getDP(true),
+						receivedPathSizeStorage.getMax(true)) +
 				String.format("\tSent PM locations: avg:%.3f std:%.3f max:%d\n",
-						sentPMLocationsStorage.getAverage(false), sentPMLocationsStorage.getDP(false),
-						sentPMLocationsStorage.getMax(false)) +
+						sentPMLocationsStorage.getAverage(true), sentPMLocationsStorage.getDP(true),
+						sentPMLocationsStorage.getMax(true)) +
 				String.format("\tSent stash blocks: avg:%.3f std:%.3f max:%d\n",
-						sentStashBlocksStorage.getAverage(false), sentStashBlocksStorage.getDP(false),
-						sentStashBlocksStorage.getMax(false)) +
+						sentStashBlocksStorage.getAverage(true), sentStashBlocksStorage.getDP(true),
+						sentStashBlocksStorage.getMax(true)) +
 				String.format("\tSent path size: avg:%.3f std:%.3f max:%d",
-						sentPathSizeStorage.getAverage(false), sentPathSizeStorage.getDP(false),
-						sentPathSizeStorage.getMax(false));
+						sentPathSizeStorage.getAverage(true), sentPathSizeStorage.getDP(true),
+						sentPathSizeStorage.getMax(true));
 		logger.info(sb);
 	}
 
@@ -641,24 +656,28 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
 		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
 		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
-		String sb = String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length) +
-				String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients) +
-				String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding) +
-				String.format("\tGet PM[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-						getPMThroughputStorage.getAverage(true), getPMThroughputStorage.getDP(true),
-						getPMThroughputStorage.getMax(true)) +
-				String.format("\tGet PS[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-						getPSThroughputStorage.getAverage(true), getPSThroughputStorage.getDP(true),
-						getPSThroughputStorage.getMax(true)) +
-				String.format("\tEviction[ops/s]: avg:%.3f dev:%.3f max: %d\n",
-						evictionThroughputStorage.getAverage(true), evictionThroughputStorage.getDP(true),
-						evictionThroughputStorage.getMax(true)) +
-				String.format("\tGet PM latency[ms]: avg:%.3f\n",
-						getPMLatenciesStorage.getAverage(true) / 1_000_000.0) +
-				String.format("\tGet PS latency[ms]: avg:%.3f\n",
-						getPSLatenciesStorage.getAverage(true) / 1_000_000.0) +
-				String.format("\tEviction latency[ms]: avg:%.3f",
-						evictionLatenciesStorage.getAverage(true) / 1_000_000.0);
+
+		throughputValues[round - 1] = evictionThroughputStorage.getAverage(true);
+		throughputStdValues[round - 1] = evictionThroughputStorage.getDP(true);
+
+		String sb = String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length);
+		sb += String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients);
+		sb += String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding);
+		sb += String.format("\tGet PM[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				getPMThroughputStorage.getAverage(true), getPMThroughputStorage.getDP(true),
+				getPMThroughputStorage.getMax(true));
+		sb += String.format("\tGet PS[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				getPSThroughputStorage.getAverage(true), getPSThroughputStorage.getDP(true),
+				getPSThroughputStorage.getMax(true));
+		sb += String.format("\tEviction[ops/s]: avg:%.3f dev:%.3f max: %d\n",
+				evictionThroughputStorage.getAverage(true), evictionThroughputStorage.getDP(true),
+				evictionThroughputStorage.getMax(true));
+		sb += String.format("\tGet PM latency[ms]: avg:%.3f\n",
+				getPMLatenciesStorage.getAverage(true) / 1_000_000.0);
+		sb += String.format("\tGet PS latency[ms]: avg:%.3f\n",
+				getPSLatenciesStorage.getAverage(true) / 1_000_000.0);
+		sb += String.format("\tEviction latency[ms]: avg:%.3f",
+				evictionLatenciesStorage.getAverage(true) / 1_000_000.0);
 
 		logger.info(sb);
 	}
@@ -765,7 +784,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	private void saveGlobalMeasurements(String fileName, String header, PrimitiveIterator.OfLong[] dataIterators) {
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
-				Files.newOutputStream(Paths.get(fileName))))) {
+				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
 			resultFile.write(header + "\n");
 			boolean hasData = true;
 			while(true) {
@@ -792,19 +811,52 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		}
 	}
 
-	private String loadHosts(String hostFile) {
-		try (BufferedReader in = new BufferedReader(new FileReader(hostFile))) {
-			StringBuilder sb = new StringBuilder();
-			String line;
-			while ((line = in.readLine()) != null) {
-				sb.append(line);
-				sb.append("\n");
+	private String generateLocalHosts(int nServers) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < nServers; i++) {
+			sb.append(i).append(" ").append("127.0.0.1").append(" ").append(11000 + i * 10).append(" ")
+					.append(11001 + i * 10).append("\n");
+		}
+		sb.append("7001 127.0.0.1 11100");
+		return sb.toString();
+	}
+
+	private void binAndStore(long[] data, int measurementTime) {
+		int samplesPerBin = dataBinSize * data.length / measurementTime;
+		if (samplesPerBin == 0) {
+			samplesPerBin = 1;
+		}
+		int nBins = data.length / samplesPerBin;
+		double[] averages = new double[nBins];
+		double[] stds = new double[nBins];
+		int startIndex = 0;
+		int endIndex = samplesPerBin;
+
+		for (int index = 0; index < nBins; index++) {
+			if (endIndex > data.length) {
+				endIndex = data.length;
 			}
-			sb.deleteCharAt(sb.length() - 1);
-			return sb.toString();
+			Storage st = new Storage(Arrays.copyOfRange(data, startIndex, endIndex));
+			averages[index] = st.getAverage(false);
+			stds[index] = st.getDP(false);
+			startIndex = endIndex;
+			endIndex = startIndex + samplesPerBin;
+		}
+
+		String fileName = stashFileNamePrefix + "stashes.dat";
+		storeTimedData(fileName, averages, stds);
+	}
+
+	private void storeTimedData(String fileName, double[] averages, double[] stds) {
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
+				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
+			resultFile.write("time average std\n");
+			for (int i = 0; i < averages.length; i++) {
+				resultFile.write(String.format("%d %.3f %.3f\n", i, averages[i], stds[i]));
+			}
+			resultFile.flush();
 		} catch (IOException e) {
-			logger.error("Failed to load hosts file", e);
-			return null;
+			logger.error("Error while storing timed data results", e);
 		}
 	}
 }

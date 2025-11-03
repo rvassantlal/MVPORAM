@@ -17,10 +17,8 @@ public class EncryptionManager {
 	private final Logger logger = LoggerFactory.getLogger("oram");
 	private final Logger measurementLogger = LoggerFactory.getLogger("measurement");
 	private final EncryptionAbstraction encryptionAbstraction;
-	private final SecureRandom rndGenerator;
 
 	public EncryptionManager() {
-		this.rndGenerator = new SecureRandom("oram".getBytes());
 		this.encryptionAbstraction = new EncryptionAbstraction();
 	}
 
@@ -33,10 +31,6 @@ public class EncryptionManager {
 		}
 
 		return decryptPositionMaps(encryptedPathMaps);
-	}
-
-	public String generatePassword() {
-		return ORAMUtils.generateRandomPassword(rndGenerator);
 	}
 
 	public void createSecretKey(String password) {

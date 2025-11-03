@@ -1,17 +1,17 @@
 package oram.testers;
 
-import oram.client.ORAMManager;
+import oram.client.manager.MultiServerORAMManager;
 import oram.client.ORAMObject;
-import vss.facade.SecretSharingException;
+import oram.client.manager.ORAMManager;
 
 import java.util.Scanner;
 
 public class InteractiveClient {
-	public static void main(String[] args) throws SecretSharingException {
+	public static void main(String[] args) {
 		Scanner scanner = new Scanner(System.in);
 		int clientId = 10000;
 		int oramId = 1;
-		ORAMManager oramManager = new ORAMManager(clientId);
+		ORAMManager oramManager = new MultiServerORAMManager(clientId);
 		ORAMObject oram = oramManager.getORAM(oramId);
 		oram.writeMemory(0, "Hello, World!".getBytes());
 		while (true) {

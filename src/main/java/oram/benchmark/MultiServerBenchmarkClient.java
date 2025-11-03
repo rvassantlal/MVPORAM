@@ -1,6 +1,7 @@
 package oram.benchmark;
 
-import oram.client.ORAMManager;
+import oram.client.manager.MultiServerORAMManager;
+import oram.client.manager.ORAMManager;
 import oram.client.ORAMObject;
 import oram.utils.ORAMUtils;
 import org.apache.commons.math3.distribution.ZipfDistribution;
@@ -12,12 +13,12 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
-public class ORAMBenchmarkClient {
+public class MultiServerBenchmarkClient {
 	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		if (args.length != 8) {
-			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> " +
-					"<nRequests> <treeHeight> <bucketSize> <blockSize> <zipf parameter> <isMeasurementLeader>");
+			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> " +
+					"<nClients> <nRequests> <treeHeight> <bucketSize> <blockSize> <zipf parameter> <isMeasurementLeader>");
 			System.exit(-1);
 		}
 
@@ -61,12 +62,11 @@ public class ORAMBenchmarkClient {
 		private final boolean measurementLeader;
 		private final SecureRandom rndGenerator;
 		private final ZipfDistribution zipfDistribution;
-		private final int treeSize;
 
 		private Client(int oramId, int initialClientId, int clientId, int treeHeight, int bucketSize, int blockSize,
-					   CountDownLatch latch, int nRequests, boolean measurementLeader, double zipfParameter) throws SecretSharingException {
+					   CountDownLatch latch, int nRequests, boolean measurementLeader, double zipfParameter) {
 			this.initialClientId = initialClientId;
-			this.oramManager = new ORAMManager(clientId);
+			this.oramManager = new MultiServerORAMManager(clientId);
 			this.clientId = clientId;
 			this.latch = latch;
 			this.nRequests = nRequests;
@@ -78,7 +78,7 @@ public class ORAMBenchmarkClient {
 
 			this.blockContent = new byte[blockSize];
 			Arrays.fill(blockContent, (byte) 'a');
-			treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
+			int treeSize = ORAMUtils.computeNumberOfNodes(treeHeight);
 			this.address = clientId % treeSize;
 			this.rndGenerator = new SecureRandom();
 			this.zipfDistribution = new ZipfDistribution(treeSize, zipfParameter);

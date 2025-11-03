@@ -15,7 +15,7 @@ import java.util.Set;
 public class ORAM {
 	protected final Logger logger = LoggerFactory.getLogger("oram");
 	private final int oramId;
-	private final VerifiableShare encryptionKeyShare;
+	private VerifiableShare encryptionKeyShare;
 	private final ORAMContext oramContext;
 	protected final Map<Integer, EncryptedPathMap> pathMaps;
 	protected final HashMap<Integer, ORAMClientContext> oramClientContexts;
@@ -23,10 +23,9 @@ public class ORAM {
 	protected final ORAMTreeManager oramTreeManager;
 	private final Map<Integer, EncryptedPathMap> resultedPositionMap;
 
-	public ORAM(int oramId, VerifiableShare encryptionKeyShare, int treeHeight, int bucketSize, int blockSize,
+	public ORAM(int oramId, int treeHeight, int bucketSize, int blockSize,
 				EncryptedPathMap encryptedPathMap, EncryptedStash encryptedStash) {
 		this.oramId = oramId;
-		this.encryptionKeyShare = encryptionKeyShare;
 		this.oramContext = new ORAMContext(treeHeight, bucketSize, blockSize);
 		logger.info("ORAM size: {} blocks", oramContext.getTreeSize());
 		logger.info("Number of slots: {}", oramContext.getTreeSize() * oramContext.getBucketSize());
@@ -36,6 +35,14 @@ public class ORAM {
 		int versionId = ++sequenceNumber;
 		this.oramTreeManager = new ORAMTreeManager(oramContext, versionId, encryptedStash);
 		this.pathMaps.put(versionId, encryptedPathMap);
+	}
+
+	public void setEncryptionKeyShare(VerifiableShare share) {
+		if (this.encryptionKeyShare == null) {
+			this.encryptionKeyShare = share;
+		} else {
+			logger.debug("ORAM {} already has an encryption key share", oramId);
+		}
 	}
 
 	public EncryptedDebugSnapshot getDebugSnapshot(int clientId) {

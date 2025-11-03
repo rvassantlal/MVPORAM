@@ -2,7 +2,6 @@ package oram.testers;
 
 import confidential.client.ConfidentialServiceProxy;
 import confidential.client.Response;
-import oram.client.ORAMObject;
 import oram.client.structure.*;
 import oram.messages.*;
 import oram.security.EncryptionManager;
@@ -407,7 +406,7 @@ public class LoadORAM {
 										Map<Integer, EncryptedBucket> encryptedPath) {
 		try {
 			EvictionORAMMessage request = new EvictionORAMMessage(oramId, encryptedStash, encryptedPathMap, encryptedPath);
-			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION, request);
+			byte[] serializedDataRequest = ORAMUtils.serializeRequest(ServerOperationType.EVICTION_PAYLOAD, request);
 
 			boolean isSuccessful = sendRequestData(serializedDataRequest);
 			if (!isSuccessful) {
@@ -443,7 +442,7 @@ public class LoadORAM {
 	}
 
 	private ORAMContext createORAM(int oramId, int treeHeight, int bucketSize, int blockSize) throws SecretSharingException {
-		String password = encryptionManager.generatePassword();
+		String password = ORAMUtils.generateRandomPassword(rndGenerator);
 		encryptionManager.createSecretKey(password);
 
 		EncryptedPathMap encryptedPathMap = initializeEmptyPathMap();

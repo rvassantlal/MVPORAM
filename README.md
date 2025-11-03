@@ -16,7 +16,7 @@ The required jar files and default configurations files will be available in ``b
 
 **Distributed testing:** Copy the ``build/install/MVPORAM`` folder into machines were the servers and clients will be executed.
 
-# Usage
+## Usage
 Since MVP-ORAM is implemented as a service on top of COBRA and BFT-SMaRt, first configure those libraries following instructions presented in their repositories.
 For default usage, configure at least ``config/hosts.config`` with the information about the servers' IPs.
 
@@ -35,7 +35,7 @@ Where ``<max concurrent clients>`` is the maximum number concurrent clients that
 Once all servers are ready, i.e., they print ``Ready to process operations``, the clients can be launched by executing the following command.
 
 ```
-./smartrun.sh oram.benchmark.ORAMBenchmarkClient <initialClientId> <nClients> <nRequests> <treeHeight> <bucketSize> <blockSize> <zipf parameter> <isMeasurementLeader>
+./smartrun.sh oram.benchmark.MultiServerBenchmarkClient <initialClientId> <nClients> <nRequests> <treeHeight> <bucketSize> <blockSize> <zipf parameter> <isMeasurementLeader>
 ```
 Where:
 - ``<initialClientId>`` is the initial client identifier, e.g., 100;
@@ -51,6 +51,21 @@ Where:
 
 When clients continuously send the requests, servers will print the throughput information
 every two seconds and client will print the access latency of each request in ms.
+
+## Benchmarking
+MVP-ORAM uses a custom benchmarking tool ([BenchmarkExecutor](https://github.com/rvassantlal/BenchmarkExecutorV2)) to automate the execution and collection of measurements.
+This tool allows to execute experiments on multiple machines, while controlling it from a single machine.
+
+The experiments are configured using a configuration file store in ``config/benchmark.config``.
+To run the benchmark, first execute the following command to start the ``controller``:
+```
+    ./smartrun.sh controller.BenchmarkControllerStartup <benchmark config file path>
+```
+Then start the ``workers`` on each machine that will run the experiments:
+```
+    ./smartrun.sh oram.benchmark.BenchmarkWorker <controller ip> <controller port>
+```
+
 
 ## Optimizations
 MVP-ORAM integrates the following optimizations:

@@ -1,12 +1,12 @@
 package oram.testers;
 
-import oram.client.ORAMManager;
+import oram.client.manager.MultiServerORAMManager;
 import oram.client.ORAMObject;
+import oram.client.manager.ORAMManager;
 import oram.utils.ORAMUtils;
 import oram.utils.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import vss.facade.SecretSharingException;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -27,7 +27,7 @@ public class RandomParallelTester {
 	static SecureRandom rnd;
 	static int maxAddress;
 
-	public static void main(String[] args) throws SecretSharingException, InterruptedException {
+	public static void main(String[] args) throws InterruptedException {
 		if (args.length != 5) {
 			System.out.println("Usage: oram.testers.RandomParallelTester <initial client id> <nClients> <testSize> <treeHeight> <nBlocksPerBucket>");
 			System.exit(-1);
@@ -44,7 +44,7 @@ public class RandomParallelTester {
 		List<ORAMManager> oramManagerList = new ArrayList<>();
 		List<Thread> threads = new ArrayList<>();
 		for (int i = 0; i < nClients; i++) {
-			oramManagerList.add(new ORAMManager(initialClientId + i));
+			oramManagerList.add(new MultiServerORAMManager(initialClientId + i));
 		}
 
 		maxAddress = ORAMUtils.computeNumberOfNodes(treeHeight);
