@@ -36,6 +36,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private int treeHeight;
 	private int bucketSize;
 	private int blockSize;
+	private final int dataBinSize;
 	private double zipfParameter;
 	private WorkerHandler[] clientWorkers;
 	private WorkerHandler[] serverWorkers;
@@ -43,10 +44,19 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private CountDownLatch workersReadyCounter;
 	private CountDownLatch measurementDeliveredCounter;
 	private String storageFileNamePrefix;
+	private String stashFileNamePrefix;
 	private final Semaphore loadORAMSemaphore;
 	private int faultThreshold;
 	private String singleServerIp;
 	private int singleServerPort;
+	private int round;
+	private int measurementDuration;
+
+	//Storing data for plotting
+	private double[] latencyValues;
+	private double[] latencyStdValues;
+	private double[] throughputValues;
+	private double[] throughputStdValues;
 
 	public MeasurementBenchmarkStrategy() {
 		this.lock = new ReentrantLock(true);
@@ -61,6 +71,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		this.loadClientCommand = initialCommand + "oram.testers.LoadORAM ";
 		this.updateClientCommand = initialCommand + "oram.client.ManagerClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";
+		this.dataBinSize = 5;
 	}
 
 	@Override
@@ -69,13 +80,14 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		String hostFile = benchmarkParameters.getProperty("experiment.hosts.file");
 		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
 		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
-		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
+		measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
 		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.load_oram"));
 		//boolean isUpdateConcurrentClients = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.update_concurrent_clients"));
 		//int updateInitialDelay = Integer.parseInt(benchmarkParameters.getProperty("experiment.initial_delay"));
 		//int updatePeriod = Integer.parseInt(benchmarkParameters.getProperty("experiment.update_period"));
 		//int numberOfUpdates = Integer.parseInt(benchmarkParameters.getProperty("experiment.number_of_updates"));
-		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
+		String zipfParameterStr = benchmarkParameters.getProperty("experiment.zipf_parameter");
+		zipfParameter = Double.parseDouble(zipfParameterStr);
 		int nLoadClients = Integer.parseInt(benchmarkParameters.getProperty("experiment.load_clients"));
 
 		if (faultThreshold == 0) {
@@ -159,16 +171,22 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 			logger.info("Zipf parameter: {}", zipfParameter);
 
 			int nRounds = clientsPerRound.length;
+			latencyValues = new double[nRounds];
+			latencyStdValues = new double[nRounds];
+			throughputValues = new double[nRounds];
+			throughputStdValues = new double[nRounds];
 
-			int round = 1;
+			round = 1;
 			while (true) {
 				try {
 					lock.lock();
 					logger.info("============ Round: {} ============", round);
 					int nClients = clientsPerRound[round - 1];
 					measurementWorkers.clear();
-					storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_round_%d_", faultThreshold,
+					storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_clients_%d_", faultThreshold,
 							treeHeight, bucketSize, blockSize, nClients);
+					stashFileNamePrefix = String.format("height_%d_bucket_%d_zipf_%s_clients_%d_", treeHeight, bucketSize,
+							zipfParameterStr, nClients);
 					//Distribute clients per workers
 					int[] clientsPerWorker = distributeClientsPerWorkers(nClientWorkers, nClients);
 					String vector = Arrays.toString(clientsPerWorker);
@@ -230,6 +248,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 				}
 			}
 
+			storeProcessedResults(clientsPerRound, faultThreshold);
+
 			if (i < treeHeights.length - 1) {
 				logger.info("Waiting {}s before new setting", sleepBetweenRounds);
 				try {
@@ -241,6 +261,21 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		}
 		long endTime = System.currentTimeMillis();
 		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
+	}
+
+	private void storeProcessedResults(int[] clientsPerRound, int f) {
+		String fileName = "f_" + f + "_throughput_latency_results.dat";
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
+				Files.newOutputStream(Paths.get(fileName))))) {
+			resultFile.write("#clients throughput[ops/s] throughput_dev[ops/s] latency[ms] latency_dev[ms]\n");
+			for (int i = 0; i < clientsPerRound.length; i++) {
+				resultFile.write(String.format("%d %.3f %.3f %.3f %.3f\n", clientsPerRound[i],
+						throughputValues[i], throughputStdValues[i],
+						latencyValues[i], latencyStdValues[i]));
+			}
+		} catch (IOException e) {
+			logger.error("Error while storing processed results", e);
+		}
 	}
 
 	private void startUpdateClients(int updateInitialDelay, int updatePeriod, int numberOfUpdates, WorkerHandler worker) {
@@ -565,6 +600,8 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		long[] sentStashBlocks = clientMeasurements.getMeasurements("sentStashBlocks");
 		long[] sentPathSize = clientMeasurements.getMeasurements("sentPathSize");
 
+		binAndStore(sentStashBlocks, measurementDuration);
+
 		Storage st = new Storage(globalLatencies);
 		Storage getPMLatenciesStorage = new Storage(pmLatencies);
 		Storage getPSLatenciesStorage = new Storage(psLatencies);
@@ -577,6 +614,9 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage sentPMLocationsStorage = new Storage(sentPMLocations);
 		Storage sentStashBlocksStorage = new Storage(sentStashBlocks);
 		Storage sentPathSizeStorage = new Storage(sentPathSize);
+
+		latencyValues[round - 1] = st.getAverage(true) / 1_000_000.0;
+		latencyStdValues[round - 1] = st.getDP(true) / 1_000_000.0;
 
 		String sb = String.format("Client-side measurements [%d samples]:\n", globalLatencies.length) +
 				String.format("\tAccess latency[ms]: avg:%.3f dev:%.3f max: %d\n",
@@ -653,6 +693,10 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		Storage getPMLatenciesStorage = new Storage(getPMLatencies);
 		Storage getPSLatenciesStorage = new Storage(getPSLatencies);
 		Storage evictionLatenciesStorage = new Storage(evictionLatencies);
+
+		throughputValues[round - 1] = evictionThroughputStorage.getAverage(true);
+		throughputStdValues[round - 1] = evictionThroughputStorage.getDP(true);
+
 		String sb = String.format("Server-side measurements [%d samples]:\n", evictionThroughput.length) +
 				String.format("\tClients[#]: min:%d max:%d\n", minClients, maxClients) +
 				String.format("\tOutstanding trees[#]: min:%d max:%d\n", minOutstanding, maxOutstanding) +
@@ -817,6 +861,45 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		} catch (IOException e) {
 			logger.error("Failed to load hosts file", e);
 			return null;
+		}
+	}
+
+	private void binAndStore(long[] data, int measurementTime) {
+		int samplesPerBin = dataBinSize * data.length / measurementTime;
+		if (samplesPerBin == 0) {
+			samplesPerBin = 1;
+		}
+		int nBins = data.length / samplesPerBin;
+		double[] averages = new double[nBins];
+		double[] stds = new double[nBins];
+		int startIndex = 0;
+		int endIndex = samplesPerBin;
+
+		for (int index = 0; index < nBins; index++) {
+			if (endIndex > data.length) {
+				endIndex = data.length;
+			}
+			Storage st = new Storage(Arrays.copyOfRange(data, startIndex, endIndex));
+			averages[index] = st.getAverage(false);
+			stds[index] = st.getDP(false);
+			startIndex = endIndex;
+			endIndex = startIndex + samplesPerBin;
+		}
+
+		String fileName = stashFileNamePrefix + "stashes.dat";
+		storeTimedData(fileName, averages, stds);
+	}
+
+	private void storeTimedData(String fileName, double[] averages, double[] stds) {
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
+				Files.newOutputStream(Paths.get(fileName))))) {
+			resultFile.write("time average std\n");
+			for (int i = 0; i < averages.length; i++) {
+				resultFile.write(String.format("%d %.3f %.3f\n", i, averages[i], stds[i]));
+			}
+			resultFile.flush();
+		} catch (IOException e) {
+			logger.error("Error while storing timed data results", e);
 		}
 	}
 }

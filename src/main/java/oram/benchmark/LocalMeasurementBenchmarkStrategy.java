@@ -227,10 +227,9 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 				lock.unlock();
 			}
 		}
-		long endTime = System.currentTimeMillis();
-
 		storeProcessedResults(clientsPerRound, faultThreshold);
 
+		long endTime = System.currentTimeMillis();
 		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 	}
 
