@@ -486,9 +486,13 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	@Override
 	public void onError(int workerId, String errorMessage) {
 		if (serverWorkersIds.contains(workerId)) {
-			logger.error("Error in server worker {}: {}", workerId, errorMessage);
+			if (!errorMessage.contains("Impossible to connect to client")) {
+				logger.error("Error in server worker {}: {}", workerId, errorMessage);
+			}
 		} else if (clientWorkersIds.contains(workerId)) {
-			logger.error("Error in client worker {}: {}", workerId, errorMessage);
+			if (!errorMessage.contains("Replica disconnected. Connection reset by peer.")) {
+				logger.error("Error in client worker {}: {}", workerId, errorMessage);
+			}
 		} else {
 			logger.error("Error in unused worker {}: {}", workerId, errorMessage);
 		}
@@ -559,18 +563,12 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private void saveResourcesMeasurements(String fileName, long[]... data) {
 		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
 				Files.newOutputStream(Paths.get(fileName))))) {
-			OptionalInt min = Arrays.stream(data).mapToInt(v -> v.length).min();
-			if (!min.isPresent() || min.getAsInt() == 0) {
-				throw new IllegalStateException("Resources measurements are empty");
-			}
-			int size = min.getAsInt();
+			int size = data[0].length;
 			int i = 0;
 			while (i < size) {
 				StringBuilder sb = new StringBuilder();
 				for (long[] datum : data) {
-					if (i < datum.length) {
-						sb.append(String.format("%.2f", datum[i] / 100.0));
-					}
+					sb.append(String.format("%.2f", datum[i] / 100.0));
 					sb.append(",");
 				}
 				sb.deleteCharAt(sb.length() - 1);
