@@ -97,11 +97,13 @@ task remoteDeploy(dependsOn: installDist) {
 }
 
 clean.doLast {
-	def fileSeparator = System.getProperty("file.separator")
 	def logsDir = file("logs")
-	println(logsDir)
+	def outputDir = file("output")
 	if (logsDir.exists()) {
 		logsDir.deleteDir()
+	}
+	if (outputDir.exists()) {
+		outputDir.deleteDir()
 	}
 }
 
