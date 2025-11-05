@@ -11,7 +11,7 @@ f_1_data = sprintf("%sf_1_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughp
 f_2_data = sprintf("%sf_2_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 f_3_data = sprintf("%sf_3_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 
-output_dir = O . "/plots"
+output_dir = O . "/output/plots"
 system "mkdir -p " . output_dir
 
 

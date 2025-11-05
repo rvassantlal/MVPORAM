@@ -34,7 +34,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 	private final String loadClientCommand;
 	private final String updateClientCommand;
 	private final String sarCommand;
-	private final int dataBinSize;
+	private int dataBinSize;
 	private WorkerHandler[] clientWorkers;
 	private WorkerHandler[] serverWorkers;
 	private final Map<Integer,WorkerHandler> measurementWorkers;
@@ -67,7 +67,6 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		this.loadClientCommand = initialCommand + "oram.testers.LoadORAM ";
 		this.updateClientCommand = initialCommand + "oram.client.ManagerClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";
-		this.dataBinSize = 5;
 	}
 
 	@Override
@@ -98,6 +97,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		createFolderIfNotExist(rawDataDir);
 		createFolderIfNotExist(processedDataDir);
 
+		this.dataBinSize = Math.max(1, (int) (60.0/3600.0 * measurementDuration));
 		int maxClientsPerProcess = 3;
 		int nRequests = 2_000_000_000;
 		int sleepBetweenRounds = 30;

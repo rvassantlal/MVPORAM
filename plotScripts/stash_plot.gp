@@ -13,7 +13,7 @@ stash_clients_1_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_1.0_c_ma
 stash_clients_2_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_1.0_c_max_%s_clients_25_stashes.dat", data_dir, L, Z, B, c_max)
 stash_clients_3_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_1.0_c_max_%s_clients_50_stashes.dat", data_dir, L, Z, B, c_max)
 
-output_dir = O . "/plots"
+output_dir = O . "/output/plots"
 system "mkdir -p " . output_dir
 
 set terminal pdf size 15cm, 6cm enhanced
