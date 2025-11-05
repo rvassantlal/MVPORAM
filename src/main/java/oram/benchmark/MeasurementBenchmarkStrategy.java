@@ -163,6 +163,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 									logger.info("============ Strategy Parameters: {} out of {} ============",
 											strategyParameterIndex, nStrategyParameters);
+									strategyParameterIndex++;
 									logger.info("Servers IPs: {}", serverIps);
 									logger.info("Tree height: {}", treeHeight);
 									logger.info("Bucket size: {}", bucketSize);
@@ -534,14 +535,20 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	@Override
 	public void onError(int workerId, String errorMessage) {
+		if (errorMessage.contains("Impossible to connect to client")) {
+			return;
+		}
+		if (errorMessage.contains("Replica disconnected. Connection reset by peer.")) {
+			return;
+		}
+		if (errorMessage.contains("Connection reset by the client")) {
+			return;
+		}
+
 		if (serverWorkersIds.contains(workerId)) {
-			if (!errorMessage.contains("Impossible to connect to client")) {
-				logger.error("Error in server worker {}: {}", workerId, errorMessage);
-			}
+			logger.error("Error in server worker {}: {}", workerId, errorMessage);
 		} else if (clientWorkersIds.contains(workerId)) {
-			if (!errorMessage.contains("Replica disconnected. Connection reset by peer.")) {
-				logger.error("Error in client worker {}: {}", workerId, errorMessage);
-			}
+			logger.error("Error in client worker {}: {}", workerId, errorMessage);
 		} else {
 			logger.error("Error in unused worker {}: {}", workerId, errorMessage);
 		}
