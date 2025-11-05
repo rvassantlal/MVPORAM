@@ -28,20 +28,42 @@ public class MeasurementSetup implements ISetupWorker {
 		String hosts = args[2];
 
 		logger.debug("Creating hosts.config");
-		String fname = "config/hosts.config";
-		writeF(fname, hosts);
+		writeHosts(hosts);
 
 		logger.debug("Creating system.config");
-		fname="config/system.config";
 		String ctx=createSystemConf(nServers, f, isBFT);
-		writeF(fname, ctx);
+		writeSystemConfig(ctx);
 
 	}
 
-	private void writeF(String fname, String content){
-		try(FileWriter myWriter = new FileWriter(fname)){
-			myWriter.write(content);
+	private void writeHosts(String servers){
+		String fName = "config/hosts.config";
+		try(FileWriter myWriter = new FileWriter(fName)){
+			String[] ips = servers.split(" ");
+			String localHostIp = "127.0.0.1";
+			String ports;
+			for(int i=0; i<ips.length;i++){
+				String ip = ips[i];
+				if (ip.equals(localHostIp)) {
+					ports = (11000 + i * 10) + " " + (11001 + i * 10);
+				} else {
+					ports = "11000 11001";
+				}
+				myWriter.write(i + " " + ip + " " + ports + "\n");
+			}
+
+			myWriter.write("7001 127.0.0.1 20000");
 			logger.debug("Successfully wrote to the file.");
+		}catch (IOException e) {
+			logger.error("An error occurred.", e);
+		}
+	}
+
+	private void writeSystemConfig(String content){
+		String fName = "config/system.config";
+		try(FileWriter myWriter = new FileWriter(fName)){
+			myWriter.write(content);
+			logger.debug("Successfully wrote to the system file.");
 		}catch (IOException e) {
 			logger.error("An error occurred.", e);
 		}

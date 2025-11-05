@@ -39,7 +39,8 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 	private int bucketSize;
 	private final int dataBinSize;
 	private int blockSize;
-	private double zipfParameter;
+	private String resultsPath;
+	private double[] zipfParameters;
 	private WorkerHandler[] clientWorkers;
 	private WorkerHandler[] serverWorkers;
 	private final Map<Integer,WorkerHandler> measurementWorkers;
@@ -49,7 +50,8 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 	private String stashFileNamePrefix;
 	private final Semaphore loadORAMSemaphore;
 	private int round;
-	private String resultsPath;
+	private File rawDataPath;
+	private File processedDataPath;
 	private int measurementDuration;
 	private int faultThreshold;
 	private String singleServerIp;
@@ -78,44 +80,37 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 
 	@Override
 	public void executeBenchmark(WorkerHandler[] workers, Properties benchmarkParameters) {
-		faultThreshold = Integer.parseInt(benchmarkParameters.getProperty("experiment.f"));
-		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
-		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
-		measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
-		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.load_oram"));
-		String zipfParameterStr = benchmarkParameters.getProperty("experiment.zipf_parameter");
-		zipfParameter = Double.parseDouble(zipfParameterStr);
-		int nLoadClients = Integer.parseInt(benchmarkParameters.getProperty("experiment.load_clients"));
-		resultsPath = benchmarkParameters.getProperty("experiment.results.path");
+		int[] faultThresholds = Arrays.stream(benchmarkParameters.getProperty("fault_thresholds").split(" ")).mapToInt(Integer::parseInt).toArray();
+		int[] clientsPerRound = Arrays.stream(benchmarkParameters.getProperty("clients_per_round").split(" ")).mapToInt(Integer::parseInt).toArray();
+		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("measure_resources"));
+		measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("measurement_duration"));
+		boolean isLoadORAM = Boolean.parseBoolean(benchmarkParameters.getProperty("load_oram"));
+		String[] zipfParametersStr = benchmarkParameters.getProperty("zipf_parameters").split(" ");
+		double[] zipfParameters = Arrays.stream(zipfParametersStr).mapToDouble(Double::parseDouble).toArray();
+		int nLoadClients = Integer.parseInt(benchmarkParameters.getProperty("load_clients"));
+		String outputPath = benchmarkParameters.getProperty("output.path");
 
 		if (faultThreshold == 0) {
 			serverCommand = initialCommand + "oram.single.server.ORAMSingleServer ";
 			clientCommand = initialCommand + "oram.benchmark.SingleServerBenchmarkClient ";
-			singleServerIp = benchmarkParameters.getProperty("experiment.server.ip");
-			singleServerPort = Integer.parseInt(benchmarkParameters.getProperty("experiment.server.port"));
+			singleServerIp = benchmarkParameters.getProperty("server.ip");
+			singleServerPort = Integer.parseInt(benchmarkParameters.getProperty("server.port"));
 		} else {
 			serverCommand = initialCommand + "oram.server.ORAMServer ";
 			clientCommand = initialCommand + "oram.benchmark.MultiServerBenchmarkClient ";
 		}
 
-		File resultsDir = new File(resultsPath, "data");
-		if (!resultsDir.exists()) {
-			boolean isCreated = resultsDir.mkdirs();
-			if (!isCreated) {
-				logger.error("Could not create results directory: {}", resultsDir);
-				return;
-			}
-		}
+		File outputDir = new File(outputPath, "output");
+		File rawDataDir = new File(outputDir, "raw_data");
+		File processedDataDir = new File(outputDir, "processed_data");
+		createFolderIfNotExist(rawDataDir);
+		createFolderIfNotExist(processedDataDir);
 
 		int nServerWorkers = 3 * faultThreshold + 1;
 		int nClientWorkers = workers.length - nServerWorkers;//-1 (for update client)
 		int maxClientsPerProcess = 3;
 		int nRequests = 2_000_000_000;
 		int sleepBetweenRounds = 30;
-		int[] clientsPerRound = new int[tokens.length];
-		for (int i = 0; i < tokens.length; i++) {
-			clientsPerRound[i] = Integer.parseInt(tokens[i]);
-		}
 
 		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
 		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
@@ -153,7 +148,7 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 		logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
 		logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
 		logger.info("Concurrent clients: {} clients", nConcurrentClients);
-		logger.info("Zipf parameter: {}", zipfParameter);
+		logger.info("Zipf parameter: {}", zipfParameters);
 
 		int nRounds = clientsPerRound.length;
 		latencyValues = new double[nRounds];
@@ -167,6 +162,7 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 				lock.lock();
 				logger.info("============ Round: {} ============", round);
 				int nClients = clientsPerRound[round - 1];
+				String zipfParameterStr = null;
 				measurementWorkers.clear();
 				storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_zipf_%s_clients_%d_", faultThreshold,
 						treeHeight, bucketSize, blockSize, zipfParameterStr, nClients);
@@ -231,6 +227,15 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 
 		long endTime = System.currentTimeMillis();
 		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
+	}
+
+	private void createFolderIfNotExist(File dir) {
+		if (!dir.exists()) {
+			boolean isCreated = dir.mkdirs();
+			if (!isCreated) {
+				logger.error("Could not create results directory: {}", dir);
+			}
+		}
 	}
 
 	private void storeProcessedResults(int[] clientsPerRound, int f) {
@@ -344,11 +349,11 @@ public class LocalMeasurementBenchmarkStrategy implements IBenchmarkStrategy, IW
 				if (faultThreshold == 0) {
 					command = clientCommand + clientInitialId + " " + clientsPerProcess
 							+ " " + nRequests + " " + treeHeight + " " + bucketSize + " " + blockSize + " "
-							+ zipfParameter + " " + singleServerIp + " " + singleServerPort + " " + isMeasurementWorker;
+							+ zipfParameters + " " + singleServerIp + " " + singleServerPort + " " + isMeasurementWorker;
 				} else {
 					command = clientCommand + clientInitialId + " " + clientsPerProcess
 							+ " " + nRequests + " " + treeHeight + " "
-							+ bucketSize + " " + blockSize + " " + zipfParameter + " " + isMeasurementWorker;
+							+ bucketSize + " " + blockSize + " " + zipfParameters + " " + isMeasurementWorker;
 				}
 				commandInfo[j] = new ProcessInformation(command, ".");
 				totalClientsPerWorker -= clientsPerProcess;

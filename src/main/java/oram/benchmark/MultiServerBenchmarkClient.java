@@ -17,7 +17,7 @@ public class MultiServerBenchmarkClient {
 	private final static Logger logger = LoggerFactory.getLogger("benchmarking");
 	public static void main(String[] args) throws SecretSharingException, InterruptedException {
 		if (args.length != 8) {
-			System.out.println("Usage: ... oram.benchmark.ORAMBenchmarkClient <initialClientId> " +
+			System.out.println("Usage: ... oram.benchmark.MultiServerBenchmarkClient <initialClientId> " +
 					"<nClients> <nRequests> <treeHeight> <bucketSize> <blockSize> <zipf parameter> <isMeasurementLeader>");
 			System.exit(-1);
 		}
