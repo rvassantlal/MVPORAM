@@ -1,6 +1,5 @@
 package oram.benchmark.direct;
 
-import oram.benchmark.OngoingDirectAccessContext;
 import oram.client.structure.*;
 import oram.messages.GetPathMaps;
 import oram.security.EncryptionManager;

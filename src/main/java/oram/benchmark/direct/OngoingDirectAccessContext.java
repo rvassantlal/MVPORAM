@@ -1,4 +1,4 @@
-package oram.benchmark;
+package oram.benchmark.direct;
 
 import oram.client.structure.PathMaps;
 import oram.client.structure.Stash;
