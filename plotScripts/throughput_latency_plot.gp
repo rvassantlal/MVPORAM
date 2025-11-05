@@ -4,7 +4,7 @@ if (!exists("O") || !exists("L") || !exists("Z") || !exists("B") || !exists("A")
 	exit 1
 }
 
-data_dir = O . "/processed_data/"
+data_dir = O . "/output/processed_data/"
 
 f_0_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 f_1_data = sprintf("%sf_1_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)

@@ -4,7 +4,7 @@ if (!exists("O") || !exists("L") || !exists("Z") || !exists("B") || !exists("c_m
 	exit 1
 }
 
-data_dir = O . "/processed_data/"
+data_dir = O . "/output/processed_data/"
 
 stash_zipf_1_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_0.000001_c_max_%s_clients_15_stashes.dat", data_dir, L, Z, B, c_max)
 stash_zipf_2_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_1.0_c_max_%s_clients_15_stashes.dat", data_dir, L, Z, B, c_max)
