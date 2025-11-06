@@ -20,7 +20,7 @@ if [ ! -d "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
 fi
 
-echo "$LOG_DIR"
+echo "Log directory: $LOG_DIR"
 
 echo "Launching $N workers..."
 
