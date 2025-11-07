@@ -9,14 +9,14 @@ data_dir = O . "/output/processed_data/"
 f_0_data = sprintf("%sf_0_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 f_1_data = sprintf("%sf_1_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 f_2_data = sprintf("%sf_2_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
-f_3_data = sprintf("%sf_3_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
+#f_3_data = sprintf("%sf_3_height_%s_bucket_%s_block_%s_zipf_%s_c_max_%s_throughput_latency_results.dat", data_dir, L, Z, B, A, c_max)
 
 output_dir = O . "/output/plots"
 system "mkdir -p " . output_dir
 
 
 set terminal pdf  size 15cm, 6cm enhanced
-set output output_dir . "/E2.pdf"
+set output output_dir . "/E4.pdf"
 
 set grid
 set multiplot
@@ -36,8 +36,8 @@ set origin 0,0
 set ylabel "Throughput (ops/s)"
 plot f_0_data using 1:2:3 with errorlines title "n = 1" dt 1 lw 2 pt 4 ps 0.5, \
 	f_1_data using 1:2:3 with errorlines title "n = 4" dt 2 lw 2 pt 5 ps 0.5, \
-	f_2_data using 1:2:3 with errorlines title "n = 7" dt 4 lw 2 pt 9 ps 0.5, \
-	f_3_data using 1:2:3 with errorlines title "n = 10" dt 5 lw 2 pt 7 ps 0.5
+	f_2_data using 1:2:3 with errorlines title "n = 7" dt 4 lw 2 pt 9 ps 0.5
+#	f_3_data using 1:2:3 with errorlines title "n = 10" dt 5 lw 2 pt 7 ps 0.5
 
 unset label
 
@@ -48,7 +48,7 @@ set title ""
 set ylabel "Latency (ms)"
 plot f_0_data using 1:4:5 with errorlines title "n = 1" dt 1 lw 2 pt 4 ps 0.5, \
 	f_1_data using 1:4:5 with errorlines title "n = 4" dt 2 lw 2 pt 5 ps 0.5, \
-	f_2_data using 1:4:5 with errorlines title "n = 7" dt 4 lw 2 pt 9 ps 0.5, \
-	f_3_data using 1:4:5 with errorlines title "n = 10" dt 5 lw 2 pt 7 ps 0.5
+	f_2_data using 1:4:5 with errorlines title "n = 7" dt 4 lw 2 pt 9 ps 0.5
+#	f_3_data using 1:4:5 with errorlines title "n = 10" dt 5 lw 2 pt 7 ps 0.5
 
 unset multiplot
