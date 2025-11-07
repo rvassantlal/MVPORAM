@@ -25,8 +25,7 @@ public class TVDSigmaBenchmarkStrategy implements IBenchmarkStrategy, IWorkerSta
 	@Override
 	public void executeBenchmark(WorkerHandler[] workerHandlers, Properties benchmarkParameters) {
 		int[] treeHeights = Arrays.stream(benchmarkParameters.getProperty("tree_heights").split(" ")).mapToInt(Integer::parseInt).toArray();
-		String[] zipfParametersStr = benchmarkParameters.getProperty("zipf_parameters").split(" ");
-		String[] accessThresholdsStr = benchmarkParameters.getProperty("access_thresholds").split(" ");
+		String accessThresholdsTuples = benchmarkParameters.getProperty("access_thresholds");
 		int[] clientsPerRound = Arrays.stream(benchmarkParameters.getProperty("clients_per_round").split(" ")).mapToInt(Integer::parseInt).toArray();
 		int[] sigmas = Arrays.stream(benchmarkParameters.getProperty("sigmas").split(" ")).mapToInt(Integer::parseInt).toArray();
 		String outputPath = benchmarkParameters.getProperty("output.path", ".");
@@ -35,34 +34,47 @@ public class TVDSigmaBenchmarkStrategy implements IBenchmarkStrategy, IWorkerSta
 		processedDataDir = new File(outputDir, "processed_data");
 		createFolderIfNotExist(processedDataDir);
 
+		accessThresholdsTuples = accessThresholdsTuples.trim();
+		accessThresholdsTuples = accessThresholdsTuples.substring(1, accessThresholdsTuples.length() - 1);
+		accessThresholdsTuples = accessThresholdsTuples.replaceAll(" ", "");
+		String[] accessThresholdsStrArray = accessThresholdsTuples.split("\\)\\(");
+		int nAccessThresholds = accessThresholdsStrArray.length;
+		String[] zipfParametersStr = new String[nAccessThresholds];
+		String[] accessThresholdsStr = new String[nAccessThresholds];
+		for (int i = 0; i < nAccessThresholds; i++) {
+			String[] pair = accessThresholdsStrArray[i].split(",");
+			zipfParametersStr[i] = pair[0];
+			accessThresholdsStr[i] = pair[1];
+		}
+
 		TVDBenchmarkClient tvdClient = new TVDBenchmarkClient();
 
 		int strategyParameterIndex = 1;
-		int nStrategyParameters = treeHeights.length * zipfParametersStr.length * accessThresholdsStr.length;
+		int nStrategyParameters = treeHeights.length * nAccessThresholds;
 		for (int treeHeight : treeHeights) {
-			for (String zipfParameterStr : zipfParametersStr) {
+			for (int i = 0; i < nAccessThresholds; i++) {
+				String zipfParameterStr = zipfParametersStr[i];
+				String thresholdStr = accessThresholdsStr[i];
 				double zipfParameter = Double.parseDouble(zipfParameterStr);
-				for (String thresholdStr : accessThresholdsStr) {
-					double threshold = Double.parseDouble(thresholdStr);
+				double threshold = Double.parseDouble(thresholdStr);
 
-					logger.info("============ Strategy Parameters: {} out of {} ============",
-							strategyParameterIndex, nStrategyParameters);
-					strategyParameterIndex++;
-					logger.info("Tree Height: {}", treeHeight);
-					logger.info("Zipf Parameter: {}", zipfParameter);
-					logger.info("Access Threshold: {}", threshold);
-					logger.info("Clients: {}", Arrays.toString(clientsPerRound));
-					logger.info("Sigmas: {}", Arrays.toString(sigmas));
+				logger.info("============ Strategy Parameters: {} out of {} ============",
+						strategyParameterIndex, nStrategyParameters);
+				strategyParameterIndex++;
+				logger.info("Tree Height: {}", treeHeight);
+				logger.info("Zipf Parameter: {}", zipfParameter);
+				logger.info("Access Threshold: {}", threshold);
+				logger.info("Clients: {}", Arrays.toString(clientsPerRound));
+				logger.info("Sigmas: {}", Arrays.toString(sigmas));
 
-					logger.info("Calculating statistical distance...");
+				logger.info("Calculating statistical distance...");
 
-					BigDecimal[][] tvd = tvdClient.calculateStrongMVPORAMTVD(clientsPerRound,
-							treeHeight, zipfParameter, threshold, sigmas);
+				BigDecimal[][] tvd = tvdClient.calculateStrongMVPORAMTVD(clientsPerRound,
+						treeHeight, zipfParameter, threshold, sigmas);
 
-					String fileName = String.format("tvd_sigma_height_%d_zipf_%s_threshold_%s.dat", treeHeight, zipfParameterStr, thresholdStr);
+				String fileName = String.format("tvd_sigma_height_%d_zipf_%s_threshold_%s.dat", treeHeight, zipfParameterStr, thresholdStr);
 
-					storeTVD(tvd, clientsPerRound, sigmas, fileName);
-				}
+				storeTVD(tvd, clientsPerRound, sigmas, fileName);
 			}
 		}
 	}
