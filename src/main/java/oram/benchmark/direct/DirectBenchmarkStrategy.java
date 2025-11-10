@@ -17,6 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
@@ -30,22 +31,18 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 	private final Condition sleepCondition;
 	private final String clientCommand;
 	private final String sarCommand;
-	private int treeHeight;
-	private int bucketSize;
-	private int blockSize;
-	private double zipfParameter;
 	private WorkerHandler worker;
 	private CountDownLatch workersReadyCounter;
 	private CountDownLatch measurementDeliveredCounter;
 	private String storageFileNamePrefix;
 	private final Semaphore loadORAMSemaphore;
-	private String resultsPath;
+	private File rawDataDir;
 
 	public DirectBenchmarkStrategy() {
 		this.lock = new ReentrantLock(true);
 		this.loadORAMSemaphore = new Semaphore(0);
 		this.sleepCondition = lock.newCondition();
-		String initialCommand = "java -Xmx60g -Djava.security.properties=./config/java" +
+		String initialCommand = "java -Xmx30g -Djava.security.properties=./config/java" +
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 		this.clientCommand = initialCommand + "oram.benchmark.direct.DirectBenchmarkClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";
@@ -53,92 +50,116 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 
 	@Override
 	public void executeBenchmark(WorkerHandler[] workers, Properties benchmarkParameters) {
-		String[] tokens = benchmarkParameters.getProperty("experiment.clients_per_round").split(" ");
-		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("experiment.measure_resources"));
-		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("experiment.measurement_duration"));
-		zipfParameter = Double.parseDouble(benchmarkParameters.getProperty("experiment.zipf_parameter"));
-		resultsPath = benchmarkParameters.getProperty("controller.results.path");
+		long startTime = System.currentTimeMillis();
 
-		File resultsDir = new File(resultsPath);
-		if (!resultsDir.exists()) {
-			boolean isCreated = resultsDir.mkdirs();
-			if (!isCreated) {
-				logger.error("Could not create results directory: {}", resultsDir);
-				return;
-			}
-		}
+		int[] clientsPerRound = Arrays.stream(benchmarkParameters.getProperty("clients_per_round").split(" ")).mapToInt(Integer::parseInt).toArray();
+		boolean measureResources = Boolean.parseBoolean(benchmarkParameters.getProperty("measure_resources"));
+		int measurementDuration = Integer.parseInt(benchmarkParameters.getProperty("measurement_duration"));
+		int[] treeHeights = Arrays.stream(benchmarkParameters.getProperty("tree_heights").split(" ")).mapToInt(Integer::parseInt).toArray();
+		int[] bucketSizes = Arrays.stream(benchmarkParameters.getProperty("bucket_sizes").split(" ")).mapToInt(Integer::parseInt).toArray();
+		int[] blockSizes = Arrays.stream(benchmarkParameters.getProperty("block_sizes").split(" ")).mapToInt(Integer::parseInt).toArray();
+		String[] zipfParametersStr = benchmarkParameters.getProperty("zipf_parameters").split(" ");
+		String outputPath = benchmarkParameters.getProperty("output.path", ".");
+
+		File outputDir = new File(outputPath, "output");
+		rawDataDir = new File(outputDir, "raw_data");
+		createFolderIfNotExist(rawDataDir);
 
 		int nRequests = 2_000_000_000;
 		int sleepBetweenRounds = 30;
-		int[] clientsPerRound = new int[tokens.length];
-		for (int i = 0; i < tokens.length; i++) {
-			clientsPerRound[i] = Integer.parseInt(tokens[i]);
-		}
 		worker = workers[0];
 
-		treeHeight = Integer.parseInt(benchmarkParameters.getProperty("experiment.tree_height"));
-		bucketSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.bucket_size"));
-		blockSize = Integer.parseInt(benchmarkParameters.getProperty("experiment.block_size"));
+		int strategyParameterIndex = 1;
+		int nStrategyParameters = treeHeights.length * bucketSizes.length * blockSizes.length * zipfParametersStr.length;
 
-		long startTime = System.currentTimeMillis();
-		logger.info("============ Strategy Parameters ============");
-		logger.info("Tree height: {}", treeHeight);
-		logger.info("Bucket size: {}", bucketSize);
-		logger.info("Block size: {}", blockSize);
-		logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
-		logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
-		logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
-		logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
-		logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
-		logger.info("Zipf parameter: {}", zipfParameter);
+		try {
+			for (int treeHeightIndex = 0; treeHeightIndex < treeHeights.length; treeHeightIndex++) {
+				int treeHeight = treeHeights[treeHeightIndex];
+				for (int bucketSizeIndex = 0; bucketSizeIndex < bucketSizes.length; bucketSizeIndex++) {
+					int bucketSize = bucketSizes[bucketSizeIndex];
+					for (int blockSizeIndex = 0; blockSizeIndex < blockSizes.length; blockSizeIndex++) {
+						int blockSize = blockSizes[blockSizeIndex];
+						for (int zipfParameterStrIndex = 0; zipfParameterStrIndex < zipfParametersStr.length; zipfParameterStrIndex++) {
+							String zipfParameterStr = zipfParametersStr[zipfParameterStrIndex];
+							double zipfParameter = Double.parseDouble(zipfParameterStr);
+							logger.info("============ Strategy Parameters: {} out of {} ============",
+									strategyParameterIndex, nStrategyParameters);							logger.info("Tree height: {}", treeHeight);
+							logger.info("Bucket size: {}", bucketSize);
+							logger.info("Block size: {}", blockSize);
+							logger.info("Zipf parameter: {}", zipfParameter);
+							logger.info("Slots: {}", ORAMUtils.computeNumberOfSlots(treeHeight, bucketSize));
+							logger.info("ORAM size: {} blocks", ORAMUtils.computeNumberOfNodes(treeHeight));
+							logger.info("Database size: {} bytes", ORAMUtils.computeDatabaseSize(treeHeight, blockSize));
+							logger.info("Path length: {} slots", ORAMUtils.computePathLength(treeHeight, bucketSize));
+							logger.info("Path size: {} bytes", ORAMUtils.computePathSize(treeHeight, bucketSize, blockSize));
 
-		int nRounds = clientsPerRound.length;
+							int nRounds = clientsPerRound.length;
 
-		int round = 1;
-		while (true) {
-			try {
-				lock.lock();
-				logger.info("============ Round: {} ============", round);
-				int nClients = clientsPerRound[round - 1];
-				logger.info("Number of clients: {}", nClients);
-				storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_clients_%d_", 0,
-						treeHeight, bucketSize, blockSize, nClients);
+							int round = 1;
+							while (true) {
+								try {
+									lock.lock();
+									logger.info("============ Round: {} out of {}  ============", round, nRounds);									int nClients = clientsPerRound[round - 1];
+									logger.info("Number of clients: {}", nClients);
+									storageFileNamePrefix = String.format("f_%d_height_%d_bucket_%d_block_%d_zipf_%s_clients_%d_", 0,
+											treeHeight, bucketSize, blockSize, zipfParameterStr, nClients);
 
-				//Start experiment
-				startExperiment(worker, nClients, nRequests);
+									//Start experiment
+									startExperiment(worker, nClients, nRequests, treeHeight, bucketSize, blockSize, zipfParameter);
 
-				//Start resource measurement
-				if (measureResources) {
-					startResourceMeasurements();
+									//Start resource measurement
+									if (measureResources) {
+										startResourceMeasurements();
+									}
+
+									//Wait for system to stabilize
+									logger.info("Waiting 5s...");
+									sleepSeconds(5);
+
+									//Get measurements
+									getMeasurements(measureResources, measurementDuration);
+
+									//Stop processes
+									Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
+
+									//Wait between round
+									if (treeHeightIndex < treeHeights.length - 1 ||
+											bucketSizeIndex < bucketSizes.length - 1 ||
+											blockSizeIndex < blockSizes.length - 1 ||
+											zipfParameterStrIndex < zipfParametersStr.length - 1 ||
+											round < nRounds) {
+										logger.info("Waiting {}s before new round", sleepBetweenRounds);
+										sleepSeconds(sleepBetweenRounds);
+									}
+
+									if (round == nRounds) {
+										break;
+									}
+
+									round++;
+								} finally {
+									lock.unlock();
+								}
+							}
+						}
+					}
 				}
+			}
+		} catch (InterruptedException e) {
+			logger.error("Benchmark interrupted", e);
+		}
 
-				//Wait for system to stabilize
-				logger.info("Waiting 5s...");
-				sleepSeconds(5);
+		long endTime = System.currentTimeMillis();
+		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
+	}
 
-				//Get measurements
-				getMeasurements(measureResources, measurementDuration);
-
-				//Stop processes
-				Arrays.stream(workers).forEach(WorkerHandler::stopWorker);
-
-				if (round == nRounds) {
-					break;
-				}
-
-				//Wait between round
-				logger.info("Waiting {}s before new round", sleepBetweenRounds);
-				sleepSeconds(sleepBetweenRounds);
-				round++;
-			} catch (InterruptedException e) {
-				break;
-			} finally {
-				lock.unlock();
+	private void createFolderIfNotExist(File dir) {
+		if (!dir.exists()) {
+			boolean isCreated = dir.mkdirs();
+			if (!isCreated) {
+				logger.error("Could not create results directory: {}", dir);
 			}
 		}
-		long endTime = System.currentTimeMillis();
-
-		logger.info("Execution duration: {}s", (endTime - startTime) / 1000);
 	}
 
 	private void startResourceMeasurements() throws InterruptedException {
@@ -152,7 +173,8 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 		workersReadyCounter.await();
 	}
 
-	private void startExperiment(WorkerHandler worker, int nClients, int nRequests) throws InterruptedException {
+	private void startExperiment(WorkerHandler worker, int nClients, int nRequests, int treeHeight, int bucketSize,
+								 int blockSize, double zipfParameter) throws InterruptedException {
 		logger.info("Starting experiment...");
 		workersReadyCounter = new CountDownLatch(1);
 		String command = clientCommand + nClients + " " + nRequests + " " + treeHeight + " "
@@ -274,8 +296,8 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 	}
 
 	private void saveResourcesMeasurements(String fileName, long[]... data) {
-		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
-				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
+		Path path = Paths.get(rawDataDir.toString(), fileName);
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(path)))) {
 			OptionalInt min = Arrays.stream(data).mapToInt(v -> v.length).min();
 			if (!min.isPresent() || min.getAsInt() == 0) {
 				throw new IllegalStateException("Resources measurements are empty");
@@ -384,8 +406,8 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 	}
 
 	private void saveGlobalMeasurements(String fileName, String header, PrimitiveIterator.OfLong[] dataIterators) {
-		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(
-				Files.newOutputStream(Paths.get(resultsPath, fileName))))) {
+		Path path = Paths.get(rawDataDir.toString(), fileName);
+		try (BufferedWriter resultFile = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(path)))) {
 			resultFile.write(header + "\n");
 			boolean hasData = true;
 			while(true) {
