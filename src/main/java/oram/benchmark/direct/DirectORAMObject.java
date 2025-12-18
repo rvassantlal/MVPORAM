@@ -46,6 +46,10 @@ public class DirectORAMObject {
 		this.uniformDistribution = new UniformIntegerDistribution(0, pathCapacity - 1);// -1 because upper bound is inclusive
 	}
 
+	public OngoingDirectAccessContext getOngoingAccessContext() {
+		return ongoingAccessContext;
+	}
+
 	/**
 	 * Read the memory address.
 	 *
@@ -55,8 +59,7 @@ public class DirectORAMObject {
 	public byte[] readMemory(int address) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		accessStepOne(Operation.READ, address, null);
-		accessStepTwo();
+		accessStepOneAndTwo(Operation.READ, address, null);
 		return accessStepThree();
 	}
 
@@ -70,14 +73,13 @@ public class DirectORAMObject {
 	public byte[] writeMemory(int address, byte[] content) {
 		if (address < 0 || oramContext.getTreeSize() <= address)
 			return null;
-		accessStepOne(Operation.WRITE, address, content);
-		accessStepTwo();
+		accessStepOneAndTwo(Operation.WRITE, address, content);
 		return accessStepThree();
 	}
 
-	public void accessStepOne(Operation op, int address, byte[] newContent) {
+	public void accessStepOneAndTwo(Operation op, int address, byte[] newContent) {
 		reset();
-		ongoingAccessContext = new OngoingDirectAccessContext(op, address, newContent);
+		ongoingAccessContext = new OngoingDirectAccessContext(address);
 
 		//Reading path maps and obtaining a sequence/version number
 		PathMaps pathMapsHistory = getPathMaps();
@@ -113,10 +115,7 @@ public class DirectORAMObject {
 
 		logger.debug("Getting bucket {} (path {}) for address {} (WV: {}, AV: {})", bucketId, pathId, address,
 				positionMap.getVersion(address), positionMap.getAccess(address));
-	}
 
-	public void accessStepTwo() {
-		int pathId = ongoingAccessContext.getAccessedPathId();
 		StashesAndPaths stashesAndPaths = getStashesAndPaths(pathId);
 		if (stashesAndPaths == null) {
 			throw new IllegalStateException("States and paths are null");
@@ -124,11 +123,6 @@ public class DirectORAMObject {
 
 		Stash mergedStash = mergeStashesAndPaths(stashesAndPaths.getStashes(), stashesAndPaths.getPaths());
 		ongoingAccessContext.setMergedStash(mergedStash);
-
-		int address = ongoingAccessContext.getAddress();
-		Operation op = ongoingAccessContext.getOperation();
-		int opSequence = ongoingAccessContext.getOperationSequence();
-		byte[] newContent = ongoingAccessContext.getNewContent();
 
 		byte[] oldData = accessBlockAndPerformOperation(address, op, opSequence, newContent, mergedStash);
 		ongoingAccessContext.setOldData(oldData);
@@ -359,6 +353,7 @@ public class DirectORAMObject {
 		});
 
 		measurementLogger.info("M-sentPMLocations: {}", pathMap.getStoredAddresses().size());
+		ongoingAccessContext.setNewStash(newStash);
 
 		EncryptedStash encryptedStash = encryptionManager.encryptStash(newStash);
 		EncryptedPathMap encryptedPositionMap = encryptionManager.encryptPathMap(pathMap);

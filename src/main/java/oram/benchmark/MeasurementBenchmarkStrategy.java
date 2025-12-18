@@ -61,7 +61,7 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 		this.serverWorkersIds = new HashSet<>();
 		this.clientWorkersIds = new HashSet<>();
 		this.measurementWorkers = new HashMap<>();
-		this.initialCommand = "java -Xmx8g -Djava.security.properties=./config/java" +
+		this.initialCommand = "java -Xmx55g -Djava.security.properties=./config/java" +
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 
 		this.loadClientCommand = initialCommand + "oram.testers.LoadORAM ";
@@ -535,25 +535,17 @@ public class MeasurementBenchmarkStrategy implements IBenchmarkStrategy, IWorker
 
 	@Override
 	public void onError(int workerId, String errorMessage) {
-		if (errorMessage.contains("Impossible to connect to client")) {
-			return;
-		}
-		if (errorMessage.contains("Replica disconnected. Connection reset by peer.")) {
-			return;
-		}
-		if (errorMessage.contains("Connection reset by the client")) {
-			return;
-		}
-		if (errorMessage.contains("Connection refused")) {
+		if (errorMessage.contains("OutOfMemoryError")) {
+			logger.error("Worker {} ran out of memory!", workerId);
 			return;
 		}
 
 		if (serverWorkersIds.contains(workerId)) {
-			logger.error("Error in server worker {}: {}", workerId, errorMessage);
+			logger.debug("Error in server worker {}: {}", workerId, errorMessage);
 		} else if (clientWorkersIds.contains(workerId)) {
-			logger.error("Error in client worker {}: {}", workerId, errorMessage);
+			logger.debug("Error in client worker {}: {}", workerId, errorMessage);
 		} else {
-			logger.error("Error in unused worker {}: {}", workerId, errorMessage);
+			logger.debug("Error in unused worker {}: {}", workerId, errorMessage);
 		}
 	}
 

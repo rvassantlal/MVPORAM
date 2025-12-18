@@ -13,7 +13,7 @@ output_dir = O . "/output/plots"
 system "mkdir -p " . output_dir
 
 set terminal pdf size 15cm, 6.5cm enhanced
-set output output_dir . "/E1.pdf"
+set output output_dir . "/tvd_heights.pdf"
 
 set grid
 set multiplot

@@ -42,7 +42,7 @@ public class DirectBenchmarkStrategy implements IBenchmarkStrategy, IWorkerStatu
 		this.lock = new ReentrantLock(true);
 		this.loadORAMSemaphore = new Semaphore(0);
 		this.sleepCondition = lock.newCondition();
-		String initialCommand = "java -Xmx30g -Djava.security.properties=./config/java" +
+		String initialCommand = "java -Xmx60g -Djava.security.properties=./config/java" +
 				".security -Dlogback.configurationFile=./config/logback.xml -cp lib/* ";
 		this.clientCommand = initialCommand + "oram.benchmark.direct.DirectBenchmarkClient ";
 		this.sarCommand = "sar -u -r -n DEV 1";

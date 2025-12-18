@@ -3,12 +3,9 @@ package oram.benchmark.direct;
 import oram.client.structure.PathMaps;
 import oram.client.structure.Stash;
 import oram.utils.ORAMUtils;
-import oram.utils.Operation;
 
 public class OngoingDirectAccessContext {
-	private final Operation op;
 	private final int address;
-	private final byte[] newContent;
 	private int accessedPathId;
 	private boolean isRealAccess;
 	private int operationSequence;
@@ -16,26 +13,17 @@ public class OngoingDirectAccessContext {
 	private PathMaps pathMapsHistory;
 	private byte[] oldData;
 	private Stash mergedStash;
+	private Stash newStash;
 
-	public OngoingDirectAccessContext(Operation op, int address, byte[] newContent) {
-		this.op = op;
+	public OngoingDirectAccessContext(int address) {
 		this.address = address;
-		this.newContent = newContent;
 		this.isRealAccess = true;
 		this.accessedPathId = ORAMUtils.DUMMY_LOCATION;
 		this.operationSequence = ORAMUtils.DUMMY_VERSION;
 	}
 
-	public Operation getOperation() {
-		return op;
-	}
-
 	public int getAddress() {
 		return address;
-	}
-
-	public byte[] getNewContent() {
-		return newContent;
 	}
 
 	public void setAccessedPathId(int pathId) {
@@ -94,5 +82,13 @@ public class OngoingDirectAccessContext {
 
 	public Stash getMergedStash() {
 		return mergedStash;
+	}
+
+	public void setNewStash(Stash newStash) {
+		this.newStash = newStash;
+	}
+
+	public Stash getNewStash() {
+		return newStash;
 	}
 }
