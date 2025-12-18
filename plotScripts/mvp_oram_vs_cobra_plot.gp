@@ -39,8 +39,8 @@ set origin 0,0
 set ylabel "Throughput (ops/s)"
 plot mvp_f_1_data using 1:2 with linespoints title "n = 4 (MVP-ORAM)" dt 1 lw 2 pt 4 ps 0.5, \
 	mvp_f_2_data using 1:2 with linespoints title "n = 7 (MVP-ORAM)" dt 2 lw 2 pt 5 ps 0.5, \
-	cobra_f_1_data using 1:2 with linespoints title "n = 4 (QuORAM)" dt 4 lw 2 pt 9 ps 0.5, \
-	cobra_f_2_data using 1:2 with linespoints title "n = 7 (QuORAM)" dt 5 lw 2 pt 7 ps 0.5
+	cobra_f_1_data using 1:2 with linespoints title "n = 4 (COBRA)" dt 4 lw 2 pt 9 ps 0.5, \
+	cobra_f_2_data using 1:2 with linespoints title "n = 7 (COBRA)" dt 5 lw 2 pt 7 ps 0.5
 
 unset label
 
@@ -51,7 +51,7 @@ set title ""
 set ylabel "Latency (ms)"
 plot mvp_f_1_data using 1:4 with linespoints title "n = 4 (MVP-ORAM)" dt 1 lw 2 pt 4 ps 0.5, \
 	mvp_f_2_data using 1:4 with linespoints title "n = 7 (MVP-ORAM)" dt 2 lw 2 pt 5 ps 0.5, \
-	cobra_f_1_data using 1:3 with linespoints title "n = 4 (QuORAM)" dt 4 lw 2 pt 9 ps 0.5, \
-	cobra_f_2_data using 1:3 with linespoints title "n = 7 (QuORAM)" dt 5 lw 2 pt 7 ps 0.5
+	cobra_f_1_data using 1:3 with linespoints title "n = 4 (COBRA)" dt 4 lw 2 pt 9 ps 0.5, \
+	cobra_f_2_data using 1:3 with linespoints title "n = 7 (COBRA)" dt 5 lw 2 pt 7 ps 0.5
 
 unset multiplot
